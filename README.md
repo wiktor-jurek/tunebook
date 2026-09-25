@@ -9,10 +9,10 @@ Built with Next.js, PostgreSQL, Better Auth, Drizzle, and abcjs. The player show
 Requires Node.js 24 and access to a PostgreSQL server.
 
 1. Run `npm ci`.
-2. Copy `.env.example` to `.env`, set `DATABASE_URL` to your database, and set `BETTER_AUTH_SECRET` to a long random value. The local `.env` in this workspace already points to the separate `opensession` database; it is ignored by Git and Docker builds.
-3. Configure SMTP and Google OAuth credentials. Email/password signup requires working SMTP for verification; password reset uses the same service.
-4. Run `npm run db:migrate` for a new database. The `opensession` database already has the initial migration.
-5. Run `npm run catalog:sync` to populate a new search catalog from The Session dump. The `opensession` catalog already has 55,380 settings. Sync is idempotent and updates the catalog while each saved tune stays a snapshot.
+2. Copy `.env.example` to `.env`, set `DATABASE_URL` to an existing PostgreSQL database, and set `BETTER_AUTH_SECRET` to a long random value. Keep `.env` private.
+3. Configure SMTP for email/password signup and password reset. Configure Google OAuth if you want Google sign-in.
+4. Run `npm run db:migrate`.
+5. Run `npm run catalog:sync` to populate the search catalog from The Session dump. Sync is idempotent and updates the catalog while each saved tune stays a snapshot.
 6. Run `npm run dev` and visit `http://localhost:3000`.
 
 Google’s authorized redirect URI is `http://localhost:3000/api/auth/callback/google` locally. `BETTER_AUTH_URL` must match the public application URL in production. The SMTP account must be permitted to send from `SMTP_FROM`. Email/password signup requires verification; password reset uses the same SMTP settings.
@@ -22,10 +22,10 @@ The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com
 ## Coolify
 
 1. Create an application from this repository with Dockerfile deployment. Use port `3000` and `/api/health` as the health URL.
-2. Set runtime environment variables from `.env.example`. Set `DATABASE_URL` to the existing PostgreSQL server's `opensession` database URL. Set `BETTER_AUTH_URL` to the exact public HTTPS URL, and register `https://YOUR_DOMAIN/api/auth/callback/google` in Google Cloud Console.
+2. Set runtime environment variables from `.env.example`. Set `DATABASE_URL` to a PostgreSQL database reachable from Coolify. Set `BETTER_AUTH_URL` to the exact public HTTPS URL, and register `https://YOUR_DOMAIN/api/auth/callback/google` in Google Cloud Console if using Google sign-in.
 3. Ensure the Coolify host can reach the PostgreSQL server on its configured port.
 4. Deploy. The container applies committed Drizzle migrations before starting Next.js.
-5. The `opensession` catalog is already populated. To refresh it later, run `npm run catalog:sync` with the same `DATABASE_URL` from a trusted machine or task container.
+5. Run `npm run catalog:sync` with the production `DATABASE_URL` from a trusted machine or task container. Repeat to refresh the search catalog.
 
 The app image does not contain the full catalog. PostgreSQL stores the catalog and each user’s saved snapshots. Back up the existing PostgreSQL database using your server's backup process.
 
