@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
 import { BookIcon } from "@/components/book-icon";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { getLibrary } from "@/lib/library";
 
 type Library = Awaited<ReturnType<typeof getLibrary>>;
@@ -47,10 +48,14 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     finally { setBusy(false); }
   }
   const bookLink = (book: BookRow) => <div key={book.id} className={`nav-row nav-book-row ${path === `/books/${book.id}` ? "active" : ""}`}><BookIcon bookId={book.id} emoji={book.emoji} label={`Change icon for ${book.name}`} /><Link onClick={closeMobile} className="nav-link nav-book" aria-current={path === `/books/${book.id}` ? "page" : undefined} href={`/books/${book.id}`}><span>{book.name}</span></Link><button className="icon-button subtle" aria-label={`Manage ${book.name}`} onClick={() => launch({ operation: "renameBook", title: `Manage ${book.name}`, bookId: book.id, name: book.name, folderId: book.folderId, emoji: book.emoji })}><Settings2 size={14} /></button></div>;
-  const creationRow = (folderId: string | null) => <div className="nav-create-row"><button className="nav-add" onClick={() => launch({ operation: "createBook", title: "New tunebook", folderId })}><Plus size={12} /> New tunebook</button><button className="nav-add" onClick={() => launch({ operation: "createFolder", title: "New folder", parentId: folderId })}><Plus size={12} /> New folder</button></div>;
-  const renderFolder = (folder: FolderRow, depth: number): React.ReactNode => <div key={folder.id}>
-    <div className="nav-row" style={{ paddingLeft: depth * 12 }}><button className="nav-link nav-folder" aria-expanded={open[folder.id] ?? true} onClick={() => setOpen({ ...open, [folder.id]: !(open[folder.id] ?? true) })}>{open[folder.id] ?? true ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<Folder size={15} /><span>{folder.name}</span></button><button className="icon-button subtle" aria-label={`Manage ${folder.name}`} onClick={() => launch({ operation: "renameFolder", title: `Manage ${folder.name}`, folderId: folder.id, name: folder.name, parentId: folder.parentId })}><Settings2 size={14} /></button></div>
-    {(open[folder.id] ?? true) && <div className="nav-children">{foldersByParent(folder.id).map((child) => renderFolder(child, depth + 1))}{booksByFolder(folder.id).map(bookLink)}{creationRow(folder.id)}</div>}
+  const createInside = (next: Task, folder?: FolderRow) => {
+    if (folder) setOpen((current) => ({ ...current, [folder.id]: true }));
+    launch(next);
+  };
+  const creationMenu = (folder?: FolderRow) => <DropdownMenu><DropdownMenuTrigger asChild><button className={folder ? "icon-button subtle" : "nav-new-button"} aria-label={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"} title={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"}><Plus size={14} />{!folder && <span>New</span>}</button></DropdownMenuTrigger><DropdownMenuContent className="nav-create-menu" align="end"><DropdownMenuLabel>{folder ? `Inside ${folder.name}` : "Create"}</DropdownMenuLabel><DropdownMenuItem onSelect={() => createInside({ operation: "createBook", title: "New tunebook", folderId: folder?.id ?? null }, folder)}><BookOpen size={16} /><span>New tunebook</span></DropdownMenuItem><DropdownMenuItem onSelect={() => createInside({ operation: "createFolder", title: "New folder", parentId: folder?.id ?? null }, folder)}><Folder size={16} /><span>{folder ? "New subfolder" : "New folder"}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
+  const renderFolder = (folder: FolderRow): React.ReactNode => <div key={folder.id}>
+    <div className="nav-row"><button className="nav-link nav-folder" aria-expanded={open[folder.id] ?? true} onClick={() => setOpen({ ...open, [folder.id]: !(open[folder.id] ?? true) })}>{open[folder.id] ?? true ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<Folder size={15} /><span>{folder.name}</span></button>{creationMenu(folder)}<button className="icon-button subtle" aria-label={`Manage ${folder.name}`} onClick={() => launch({ operation: "renameFolder", title: `Manage ${folder.name}`, folderId: folder.id, name: folder.name, parentId: folder.parentId })}><Settings2 size={14} /></button></div>
+    {(open[folder.id] ?? true) && <div className="nav-children">{foldersByParent(folder.id).map(renderFolder)}{booksByFolder(folder.id).map(bookLink)}</div>}
   </div>;
   return <>
     <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><BookOpen size={18} /> Tunebook</button>
@@ -59,9 +64,8 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
       <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark">𝄞</span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
         <div className="nav-section"><Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link></div>
-        <div className="nav-label-row"><span>TUNEBOOKS</span></div>
-        <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map((folder) => renderFolder(folder, 0))}</div>
-        {creationRow(null)}
+        <div className="nav-label-row"><span>TUNEBOOKS</span>{creationMenu()}</div>
+        <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map(renderFolder)}</div>
       </nav>
       <div className="sidebar-bottom"><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></div>
     </aside>
