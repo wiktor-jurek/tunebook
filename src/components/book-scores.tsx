@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Score, pauseTune } from "@/components/score";
 import { TuneActions } from "@/components/tune-actions";
 import { SaveSharedBook } from "@/components/save-shared-book";
+import { TuneIcon } from "@/components/tune-icon";
 import { EntryControls, SetControls, SetTuneOrder } from "@/components/set-controls";
 import type { BookSection, getLibrary } from "@/lib/library";
 
@@ -31,13 +32,13 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, s
   const setCount = sections.filter((section) => section.kind === "set").length;
   const contentsTune = (section: BookSection, tune: ReturnType<typeof members>[number]) => {
     const instanceId = `${section.entryId}-${tune.id}`, index = positions.get(instanceId)!;
-    return <li key={instanceId}><a href={`#book-tune-${instanceId}`} onClick={() => { trackEvent("contents_navigated", { kind: "tune" }); setExpanded(instanceId, true); }}><span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="contents-title">{tune.title}</span><span className="contents-meta">{[tune.kind, tune.mode].filter(Boolean).join(" · ")}</span></a></li>;
+    return <li key={instanceId}><a href={`#book-tune-${instanceId}`} onClick={() => { trackEvent("contents_navigated", { kind: "tune" }); setExpanded(instanceId, true); }}><span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="contents-emoji" aria-hidden="true">{tune.emoji}</span><span className="contents-title">{tune.title}</span><span className="contents-meta">{[tune.kind, tune.mode].filter(Boolean).join(" · ")}</span></a></li>;
   };
   function renderTune(section: BookSection, sectionIndex: number, tune: ReturnType<typeof members>[number], memberIndex: number) {
     const instanceId = `${section.entryId}-${tune.id}`, expanded = !collapsed.has(instanceId), index = positions.get(instanceId)!;
     const Heading = section.kind === "set" ? "h3" : "h2";
     return <section className="book-tune" id={`book-tune-${instanceId}`} key={instanceId}>
-      <div className="book-tune-head"><Heading><button type="button" className="book-tune-toggle" id={`toggle-${instanceId}`} aria-expanded={expanded} aria-controls={`score-${instanceId}`} onClick={() => setExpanded(instanceId, !expanded)}>
+      <div className="book-tune-head"><TuneIcon tune={tune} readOnly={readOnly} size="book" /><Heading><button type="button" className="book-tune-toggle" id={`toggle-${instanceId}`} aria-expanded={expanded} aria-controls={`score-${instanceId}`} onClick={() => setExpanded(instanceId, !expanded)}>
         {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}<span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="book-tune-title">{tune.title}</span>
       </button></Heading><div className="book-tune-tools">{readOnly ? <SaveSharedBook bookId={bookId} tuneId={tune.id} signedIn={signedIn} alreadySaved={libraryTunes.some((saved) => saved.settingId === tune.settingId)} /> : section.kind === "set" ? <SetTuneOrder setId={section.setId} tuneId={tune.id} first={memberIndex === 0} last={memberIndex === section.tunes.length - 1} /> : <><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /><TuneActions tuneId={tune.id} currentBookId={bookId} /></>}</div></div>
       <div className="book-tune-panel" id={`score-${instanceId}`} role="region" aria-labelledby={`toggle-${instanceId}`} hidden={!expanded}><Score tune={tune} defaultSound={defaultSound} showTitle={false} playbackId={instanceId} /></div>

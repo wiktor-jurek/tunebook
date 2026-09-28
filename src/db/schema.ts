@@ -24,6 +24,7 @@ export const savedTunes = pgTable("saved_tunes", {
   settingId: integer("setting_id").notNull(),
   tuneId: integer("tune_id").notNull(),
   title: text("title").notNull(),
+  emojiOverride: text("emoji_override"),
   kind: text("kind"),
   meter: text("meter"),
   mode: text("mode"),
@@ -33,6 +34,13 @@ export const savedTunes = pgTable("saved_tunes", {
   sourceUrl: text("source_url").notNull(),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("saved_user_setting_idx").on(t.userId, t.settingId), index("saved_user_title_idx").on(t.userId, t.title)]);
+
+export const tuneEmojiSuggestions = pgTable("tune_emoji_suggestions", {
+  tuneId: integer("tune_id").primaryKey(),
+  emoji: text("emoji").notNull(),
+  matcherVersion: text("matcher_version").notNull(),
+  createdAt: createdAt(),
+});
 
 export const folders = pgTable("folders", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -36,10 +36,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
     [owner, stranger] = await state.db.insert(user).values([{ id: "owner", name: "Owner", email: "owner@example.test", emailVerified: true }, { id: "stranger", name: "Stranger", email: "stranger@example.test", emailVerified: true }]).returning();
     const books = await state.db.insert(tunebooks).values([{ userId: owner.id, name: "Original book", linkVisible: true }, { userId: owner.id, name: "Second book" }, { userId: stranger.id, name: "Private book" }]).returning();
     [sourceId, secondId, privateId] = books.map((book) => book.id);
-    tunes = await state.db.insert(savedTunes).values(["A", "B", "C", "D"].map((title, index) => ({ userId: owner.id, settingId: index + 1, tuneId: index + 1, title, abc: "X:1\nK:D\nDEFG|", sourceUrl: `https://thesession.org/tunes/${index + 1}` }))).returning();
-    // Seed the old shape first: the migration must retain pre-existing tunes and their order.
-    for (const [position, tune] of tunes.entries()) await pool.query("INSERT INTO book_tunes (book_id,tune_id,position) VALUES ($1,$2,$3)", [sourceId, tune.id, position]);
+    // Seed with SQL so this test still exercises the schema before newer tune columns exist.
+    for (const [position, title] of ["A", "B", "C", "D"].entries()) {
+      const tuneId = randomUUID();
+      await pool.query("INSERT INTO saved_tunes (id,user_id,setting_id,tune_id,title,abc,source_url) VALUES ($1,$2,$3,$3,$4,$5,$6)", [tuneId, owner.id, position + 1, title, "X:1\nK:D\nDEFG|", `https://thesession.org/tunes/${position + 1}`]);
+      await pool.query("INSERT INTO book_tunes (book_id,tune_id,position) VALUES ($1,$2,$3)", [sourceId, tuneId, position]);
+    }
     for (const file of migrations.filter((file) => file >= "0004")) await migrate(file);
+    tunes = await state.db.select().from(savedTunes).where(eq(savedTunes.userId, owner.id)).orderBy(asc(savedTunes.settingId));
   }, 30000);
   afterAll(async () => { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); });
 

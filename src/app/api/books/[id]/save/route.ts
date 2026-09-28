@@ -27,7 +27,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       for (const { tune } of selected) {
         if (ids.has(tune.id)) continue;
         const [saved] = await tx.insert(savedTunes).values({ userId: user.id, settingId: tune.settingId, tuneId: tune.tuneId,
-          title: tune.title, kind: tune.kind, meter: tune.meter, mode: tune.mode, abc: tune.abc,
+          title: tune.title, emojiOverride: tune.emojiOverride, kind: tune.kind, meter: tune.meter, mode: tune.mode, abc: tune.abc,
           contributor: tune.contributor, composer: tune.composer, sourceUrl: tune.sourceUrl })
           .onConflictDoUpdate({ target: [savedTunes.userId, savedTunes.settingId], set: { settingId: savedTunes.settingId } })
           .returning({ id: savedTunes.id });

@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bookEntries, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
+import { withTuneEmojis } from "@/lib/tune-emojis";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export class SetError extends Error {}
@@ -17,7 +18,9 @@ export async function getMySets(userId: string) {
       .innerJoin(tunebooks, eq(bookEntries.bookId, tunebooks.id))
       .where(and(inArray(bookEntries.setId, ids), eq(tunebooks.userId, userId))).orderBy(asc(tunebooks.name)),
   ]);
-  return sets.map((set) => ({ ...set, tunes: members.filter((row) => row.setId === set.id).map((row) => row.tune), books: books.filter((row) => row.setId === set.id).map(({ id, name }) => ({ id, name })) }));
+  const resolved = await withTuneEmojis(members.map((row) => row.tune));
+  const byId = new Map(resolved.map((tune) => [tune.id, tune]));
+  return sets.map((set) => ({ ...set, tunes: members.filter((row) => row.setId === set.id).map((row) => byId.get(row.tune.id)!), books: books.filter((row) => row.setId === set.id).map(({ id, name }) => ({ id, name })) }));
 }
 
 async function lockBook(tx: Transaction, userId: string, bookId: string) {

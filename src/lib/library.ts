@@ -4,8 +4,9 @@ import { bookShares, bookEntries, catalogSettings, folders, savedTunes, setTunes
 import { user } from "@/db/auth-schema";
 import { parseSessionUrl } from "@/lib/session-url";
 import { getMySets } from "@/lib/sets";
+import { getTuneEmojiSuggestion, withTuneEmojis, type TuneWithEmoji } from "@/lib/tune-emojis";
 
-type Tune = typeof savedTunes.$inferSelect;
+type Tune = TuneWithEmoji;
 export type BookSection = { kind: "tune"; entryId: string; tune: Tune } | { kind: "set"; entryId: string; setId: string; name: string; tunes: Tune[] };
 
 export async function getLibrary(userId: string) {
@@ -19,7 +20,7 @@ export async function getLibrary(userId: string) {
       .where(sql`${tunebooks.userId} <> ${userId}`).orderBy(asc(tunebooks.name)),
     getMySets(userId),
   ]);
-  return { folders: allFolders, books: allBooks, tunes: allTunes, sharedBooks, sets };
+  return { folders: allFolders, books: allBooks, tunes: await withTuneEmojis(allTunes), sharedBooks, sets };
 }
 
 export const isBookId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -42,14 +43,16 @@ export async function getBook(userId: string | null, id: string) {
       .innerJoin(savedTunes, eq(setTunes.tuneId, savedTunes.id))
       .where(and(inArray(setTunes.setId, setIds), eq(savedTunes.userId, book.userId))).orderBy(asc(setTunes.position)) : [],
   ]);
+  const resolved = await withTuneEmojis([...singles, ...members.map((row) => row.tune)]);
+  const byId = new Map(resolved.map((tune) => [tune.id, tune]));
   const sections: BookSection[] = [];
   for (const entry of entries) {
     if (entry.tuneId) {
-      const tune = singles.find((tune) => tune.id === entry.tuneId);
+      const tune = byId.get(entry.tuneId);
       if (tune) sections.push({ kind: "tune", entryId: entry.id, tune });
     } else {
       const set = sets.find((set) => set.id === entry.setId);
-      if (set) sections.push({ kind: "set", entryId: entry.id, setId: set.id, name: set.name, tunes: members.filter((row) => row.setId === set.id).map((row) => row.tune) });
+      if (set) sections.push({ kind: "set", entryId: entry.id, setId: set.id, name: set.name, tunes: members.filter((row) => row.setId === set.id).map((row) => byId.get(row.tune.id)!) });
     }
   }
   const tunes = sections.flatMap((section) => (section.kind === "tune" ? [section.tune] : section.tunes)
@@ -59,7 +62,7 @@ export async function getBook(userId: string | null, id: string) {
 
 export async function getSavedTune(userId: string, id: string) {
   const [tune] = await db.select().from(savedTunes).where(and(eq(savedTunes.userId, userId), eq(savedTunes.id, id))).limit(1);
-  return tune ?? null;
+  return tune ? (await withTuneEmojis([tune]))[0] : null;
 }
 
 export async function searchCatalog(query: string) {
@@ -80,6 +83,7 @@ export async function searchCatalog(query: string) {
 export async function saveCatalogSetting(userId: string, settingId: number) {
   const [source] = await db.select().from(catalogSettings).where(eq(catalogSettings.settingId, settingId)).limit(1);
   if (!source) throw new Error("Setting not found in the catalog");
+  await getTuneEmojiSuggestion(source.tuneId, source.title);
   const [saved] = await db.insert(savedTunes).values({
     userId,
     settingId: source.settingId,

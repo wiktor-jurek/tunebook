@@ -31,6 +31,16 @@ The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com
 
 The app image does not contain the full catalog. PostgreSQL stores the catalog and each user’s saved snapshots. Back up the existing PostgreSQL database using your server's backup process.
 
+## Smart tune emojis
+
+Saving a tune assigns an emoji using [emojilib](https://github.com/muan/emojilib), a local English keyword dataset, with related concepts for occupations and older words. Matching normalizes punctuation, accents, and plurals, prefers specific concepts, and falls back to 🎵 for opaque titles. This is keyword and synonym matching, not an embedding model or an LLM; there are no API calls or model downloads. Examples: Calliope House → 🏠, A Tailor I Am → 👔, Father O’Flynn → 👴, The Hag at the Churn → 🧙‍♀️.
+
+The `tune_emoji_suggestions` table caches one default per The Session **tune ID**, shared by all settings and users. The first search uses the earliest catalog setting’s title; subsequent saves and placements reuse the cached result, including fallback results. PostgreSQL locks prevent concurrent first saves from running the matcher more than once. Existing saved tunes get their suggestions lazily when opened. The cache records the matcher version and survives deletion of a user’s saved copy.
+
+Click a tune’s icon in Tunes, its score page, or an owned tunebook to override it. **Use suggested icon** removes the override. Overrides belong to a saved setting in your library and follow that copy into all your tunebooks and sets; they do not change the shared default, another setting, or anyone else’s saved copy. Shared views show the owner’s icons without editing controls. Saving a shared copy preserves its custom icon, while a setting you already saved keeps your own choice. `emoji-regex` validates single Unicode emoji, including flags, skin tones, and joined sequences. Analytics records `tune_icon_changed` with `outcome` and suggested/custom `source`, without recording the title or emoji.
+
+Run `npm run test:emojis` for PostgreSQL cache, concurrency, ownership, reset, shared-copy, and legacy-data checks in a temporary schema.
+
 ## Sets
 
 Create a set inside a tunebook with **Group tunes into a set**. Select at least two individual tunes, name the set, and arrange its playing order. The contents list and scores show the group together, and it appears in **My sets**. My sets lists and edits existing sets; new sets start inside tunebooks.
