@@ -17,6 +17,8 @@ Requires Node.js 24 and access to a PostgreSQL server.
 
 Google’s authorized redirect URI is `http://localhost:3000/api/auth/callback/google` locally. `BETTER_AUTH_URL` must match the public application URL in production. The SMTP account must be permitted to send from `SMTP_FROM`. Email/password signup requires verification; password reset uses the same SMTP settings.
 
+The SMTP defaults in `.env.example` use Purelymail at `smtp.purelymail.com:465` with TLS, authenticating and sending as `hello@libresession.com`. Fill in `SMTP_PASSWORD` with that mailbox’s password in your private `.env` or deployment environment, then restart the app.
+
 The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com/adactio/TheSession-data). Set `THESESSION_CSV_URL` to another compatible CSV URL if needed. It expects the dump’s `tune_id`, `setting_id`, `name`, `type`, `meter`, `mode`, `abc`, `username`, and `composer` fields. The app does not send tune content to an LLM.
 
 ## Coolify
