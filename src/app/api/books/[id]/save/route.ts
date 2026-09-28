@@ -38,7 +38,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       for (const [position, section] of data.sections.entries()) {
         if (section.kind === "tune") await tx.insert(bookEntries).values({ bookId: copy.id, tuneId: ids.get(section.tune.id)!, position });
         else {
-          const [set] = await tx.insert(tuneSets).values({ userId: user.id, name: section.name }).returning({ id: tuneSets.id });
+          const [set] = await tx.insert(tuneSets).values({ userId: user.id, name: section.name, autoName: section.autoName }).returning({ id: tuneSets.id });
           if (section.tunes.length) await tx.insert(setTunes).values(section.tunes.map((tune, position) => ({ setId: set.id, tuneId: ids.get(tune.id)!, position })));
           await tx.insert(bookEntries).values({ bookId: copy.id, setId: set.id, position });
         }

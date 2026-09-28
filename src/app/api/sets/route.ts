@@ -3,7 +3,7 @@ import { z } from "zod";
 import { currentUser } from "@/lib/session";
 import { addSet, changeEntry, deleteSet, editSet, groupTunes, moveSetTune, SetError } from "@/lib/sets";
 
-const name = z.string().trim().min(1).max(80);
+const name = z.string().trim().max(80).optional();
 const inputSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("group"), bookId: z.uuid(), name, entryIds: z.array(z.uuid()).min(2).max(100) }),
   z.object({ operation: z.literal("add"), bookId: z.uuid(), setId: z.uuid() }),
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Choose a name of 1–80 characters and at least two different tunes" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Choose at least two different tunes; custom names can have up to 80 characters" }, { status: 400 });
   try {
     const input = parsed.data;
     switch (input.operation) {

@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bookEntries, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
 import { withTuneEmojis } from "@/lib/tune-emojis";
+import { defaultSetName, displaySetName } from "@/lib/set-name";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export class SetError extends Error {}
@@ -20,7 +21,10 @@ export async function getMySets(userId: string) {
   ]);
   const resolved = await withTuneEmojis(members.map((row) => row.tune));
   const byId = new Map(resolved.map((tune) => [tune.id, tune]));
-  return sets.map((set) => ({ ...set, tunes: members.filter((row) => row.setId === set.id).map((row) => byId.get(row.tune.id)!), books: books.filter((row) => row.setId === set.id).map(({ id, name }) => ({ id, name })) }));
+  return sets.map((set) => {
+    const tunes = members.filter((row) => row.setId === set.id).map((row) => byId.get(row.tune.id)!);
+    return { ...set, name: displaySetName(set, tunes), tunes, books: books.filter((row) => row.setId === set.id).map(({ id, name }) => ({ id, name })) };
+  }).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
 async function lockBook(tx: Transaction, userId: string, bookId: string) {
@@ -37,23 +41,30 @@ async function ownSet(tx: Transaction, userId: string, setId: string) {
 
 async function ownTunes(tx: Transaction, userId: string, tuneIds: string[]) {
   if (tuneIds.length < 2 || tuneIds.length > 100 || new Set(tuneIds).size !== tuneIds.length) throw new SetError("Choose 2–100 different tunes for a set");
-  const tunes = await tx.select({ id: savedTunes.id }).from(savedTunes).where(and(eq(savedTunes.userId, userId), inArray(savedTunes.id, tuneIds)));
+  const tunes = await tx.select({ id: savedTunes.id, title: savedTunes.title }).from(savedTunes).where(and(eq(savedTunes.userId, userId), inArray(savedTunes.id, tuneIds)));
   if (tunes.length !== tuneIds.length) throw new SetError("Some tunes are not in your library");
+  return tuneIds.map((id) => tunes.find((tune) => tune.id === id)!);
+}
+
+function setNaming(name: string | undefined, tunes: { title: string }[]) {
+  const custom = name?.trim();
+  if (custom && custom.length > 80) throw new SetError("Custom set names can have up to 80 characters");
+  return { name: custom || defaultSetName(tunes), autoName: !custom };
 }
 
 async function reorderEntries(tx: Transaction, ids: string[]) {
   for (const [position, id] of ids.entries()) await tx.update(bookEntries).set({ position }).where(eq(bookEntries.id, id));
 }
 
-export async function groupTunes(userId: string, bookId: string, name: string, entryIds: string[]) {
+export async function groupTunes(userId: string, bookId: string, name: string | undefined, entryIds: string[]) {
   return db.transaction(async (tx) => {
     const entries = await lockBook(tx, userId, bookId);
     const selected = entryIds.map((id) => entries.find((entry) => entry.id === id));
     if (selected.some((entry) => !entry?.tuneId || entry.setId)) throw new SetError("Choose individual tunes from this tunebook");
     const tuneIds = selected.map((entry) => entry!.tuneId!);
-    await ownTunes(tx, userId, tuneIds);
+    const tunes = await ownTunes(tx, userId, tuneIds);
     if (new Set(entryIds).size !== entryIds.length) throw new SetError("Choose each tune once");
-    const [set] = await tx.insert(tuneSets).values({ userId, name }).returning();
+    const [set] = await tx.insert(tuneSets).values({ userId, ...setNaming(name, tunes) }).returning();
     await tx.insert(setTunes).values(tuneIds.map((tuneId, position) => ({ setId: set.id, tuneId, position })));
     const selectedIds = new Set(entryIds);
     const first = entries.findIndex((entry) => selectedIds.has(entry.id));
@@ -80,11 +91,11 @@ export async function addSet(userId: string, bookId: string, setId: string) {
   });
 }
 
-export async function editSet(userId: string, setId: string, name: string, tuneIds: string[]) {
+export async function editSet(userId: string, setId: string, name: string | undefined, tuneIds: string[]) {
   return db.transaction(async (tx) => {
     await ownSet(tx, userId, setId);
-    await ownTunes(tx, userId, tuneIds);
-    await tx.update(tuneSets).set({ name }).where(eq(tuneSets.id, setId));
+    const tunes = await ownTunes(tx, userId, tuneIds);
+    await tx.update(tuneSets).set(setNaming(name, tunes)).where(eq(tuneSets.id, setId));
     await tx.delete(setTunes).where(eq(setTunes.setId, setId));
     await tx.insert(setTunes).values(tuneIds.map((tuneId, position) => ({ setId, tuneId, position })));
   });

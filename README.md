@@ -45,7 +45,7 @@ Click a tune’s icon in Tunes, its score page, or an owned tunebook to override
 
 ## Sets
 
-Create a set inside a tunebook with **Group tunes into a set**. Select at least two individual tunes, name the set, and arrange its playing order. The contents list and scores show the group together, and it appears in **My sets**. My sets lists and edits existing sets; new sets start inside tunebooks.
+Create a set inside a tunebook with **Group tunes into a set**. Select at least two individual tunes and arrange its playing order. The default name joins their titles with ** / **, for example **Calliope House / Father O’Flynn**, and follows later changes to the playing order or membership across every linked tunebook. Enter a custom name to override it, or choose **Use tune names** to return to automatic naming. Generated names keep every full title; custom names allow up to 80 characters. Existing set names are preserved by the migration, and private copies of shared sets retain their naming mode. The contents list and scores show the group together, and it appears in **My sets**. My sets lists and edits existing sets; new sets start inside tunebooks.
 
 Use **Add set** to reuse one in another tunebook. It inserts the tunes as a group and absorbs any existing individual entries for those tunes. Move a set as one item, or reorder tunes within it. Membership, name, and internal order are shared across all linked tunebooks. **Ungroup** keeps the tunes in that book as individual entries; removing a set from a book leaves it available in My sets. Deleting a set ungroups its tunes in every linked book without deleting the saved tunes.
 

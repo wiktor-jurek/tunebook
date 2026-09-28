@@ -1,0 +1,1 @@
+ALTER TABLE "tune_sets" ADD COLUMN "auto_name" boolean DEFAULT false NOT NULL;

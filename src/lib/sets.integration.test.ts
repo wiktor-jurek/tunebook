@@ -23,6 +23,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
   let owner: typeof user.$inferSelect, stranger: typeof user.$inferSelect;
   let tunes: (typeof savedTunes.$inferSelect)[], sourceId: string, secondId: string, privateId: string;
   let setId: string;
+  const legacySetId = randomUUID();
   const request = (body: unknown) => new Request("http://localhost:3000/api/sets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const book = (id = sourceId) => getBook(owner.id, id);
   const titles = async (id = sourceId) => (await book(id))!.tunes.map(({ tune }) => tune.title);
@@ -42,7 +43,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
       await pool.query("INSERT INTO saved_tunes (id,user_id,setting_id,tune_id,title,abc,source_url) VALUES ($1,$2,$3,$3,$4,$5,$6)", [tuneId, owner.id, position + 1, title, "X:1\nK:D\nDEFG|", `https://thesession.org/tunes/${position + 1}`]);
       await pool.query("INSERT INTO book_tunes (book_id,tune_id,position) VALUES ($1,$2,$3)", [sourceId, tuneId, position]);
     }
-    for (const file of migrations.filter((file) => file >= "0004")) await migrate(file);
+    for (const file of migrations.filter((file) => file >= "0004")) {
+      if (file.startsWith("0006")) await pool.query("INSERT INTO tune_sets (id,user_id,name) VALUES ($1,$2,$3)", [legacySetId, owner.id, "An existing custom name"]);
+      await migrate(file);
+    }
     tunes = await state.db.select().from(savedTunes).where(eq(savedTunes.userId, owner.id)).orderBy(asc(savedTunes.settingId));
   }, 30000);
   afterAll(async () => { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); });
@@ -50,6 +54,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
   it("migrates existing individual tunes without changing their order", async () => {
     expect(await titles()).toEqual(["A", "B", "C", "D"]);
     expect((await book())!.sections.every((section) => section.kind === "tune" && !!section.entryId)).toBe(true);
+    const [legacy] = await state.db.select().from(tuneSets).where(eq(tuneSets.id, legacySetId));
+    expect(legacy).toMatchObject({ name: "An existing custom name", autoName: false });
+    await state.db.delete(tuneSets).where(eq(tuneSets.id, legacySetId));
   });
 
   it("groups chosen entries in their specified order at the first selected position", async () => {
@@ -160,5 +167,50 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
     await state.db.insert(bookEntries).values({ bookId: book.id, setId: set.id, position: 0 });
     await state.db.delete(user).where(eq(user.id, id));
     expect(await state.db.select().from(tuneSets).where(eq(tuneSets.id, set.id))).toEqual([]);
+  });
+
+  it("defaults to slash-separated playing order, follows changes across books, and preserves the mode in shared copies", async () => {
+    state.user = owner;
+    const [autoBook] = await state.db.insert(tunebooks).values({ userId: owner.id, name: "Automatic names", linkVisible: true }).returning();
+    const entries = await state.db.insert(bookEntries).values(tunes.slice(0, 3).map((tune, position) => ({ bookId: autoBook.id, tuneId: tune.id, position }))).returning();
+    const grouped = await setsRoute(request({ operation: "group", bookId: autoBook.id, entryIds: [entries[2].id, entries[0].id] }));
+    expect(grouped.status).toBe(200);
+    const { setId: autoSetId } = await grouped.json();
+    expect((await book(autoBook.id))!.sections[0]).toMatchObject({ name: "C / A", autoName: true });
+    await addSet(owner.id, secondId, autoSetId);
+    await moveSetTune(owner.id, autoSetId, tunes[0].id, "up");
+    expect((await getMySets(owner.id)).find((set) => set.id === autoSetId)?.name).toBe("A / C");
+    expect((await book(secondId))!.sections.find((section) => section.kind === "set")).toMatchObject({ name: "A / C", autoName: true });
+    expect((await getBook(null, autoBook.id))!.sections[0]).toMatchObject({ name: "A / C" });
+    state.user = stranger;
+    const response = await saveBook(request({ operation: "book" }), { params: Promise.resolve({ id: autoBook.id }) });
+    expect(response.status).toBe(200);
+    const { bookId: copyId } = await response.json();
+    const copiedSet = (await getBook(stranger.id, copyId))!.sections[0];
+    expect(copiedSet).toMatchObject({ name: "A / C", autoName: true });
+    if (copiedSet.kind !== "set") throw new Error("Missing copied set");
+    await moveSetTune(stranger.id, copiedSet.setId, copiedSet.tunes[1].id, "up");
+    expect((await getBook(stranger.id, copyId))!.sections[0]).toMatchObject({ name: "C / A", autoName: true });
+    expect((await book(autoBook.id))!.sections[0]).toMatchObject({ name: "A / C" });
+    state.user = owner;
+    const override = await setsRoute(request({ operation: "edit", setId: autoSetId, name: "Friday jigs", tuneIds: [tunes[0].id, tunes[2].id] }));
+    expect(override.status).toBe(200);
+    await moveSetTune(owner.id, autoSetId, tunes[2].id, "up");
+    expect((await book(autoBook.id))!.sections[0]).toMatchObject({ name: "Friday jigs", autoName: false });
+    expect((await getMySets(owner.id)).find((set) => set.id === autoSetId)?.name).toBe("Friday jigs");
+    const reset = await setsRoute(request({ operation: "edit", setId: autoSetId, name: "", tuneIds: [tunes[2].id, tunes[0].id, tunes[1].id] }));
+    expect(reset.status).toBe(200);
+    expect((await book(autoBook.id))!.sections[0]).toMatchObject({ name: "C / A / B", autoName: true });
+  }, 15000);
+
+  it("keeps full generated names longer than the custom-name limit and validates custom overrides", async () => {
+    const longTitle = "A long traditional tune title that should never be truncated in the name of its set";
+    const [longTune] = await state.db.insert(savedTunes).values({ userId: owner.id, settingId: 101, tuneId: 101, title: longTitle, abc: "K:D\nDEFG|", sourceUrl: "https://thesession.org/tunes/101" }).returning();
+    const [longBook] = await state.db.insert(tunebooks).values({ userId: owner.id, name: "Long names" }).returning();
+    const entries = await state.db.insert(bookEntries).values([{ bookId: longBook.id, tuneId: longTune.id, position: 0 }, { bookId: longBook.id, tuneId: tunes[0].id, position: 1 }]).returning();
+    state.user = owner;
+    expect((await setsRoute(request({ operation: "group", bookId: longBook.id, name: "x".repeat(81), entryIds: entries.map((entry) => entry.id) }))).status).toBe(400);
+    expect((await setsRoute(request({ operation: "group", bookId: longBook.id, name: "   ", entryIds: entries.map((entry) => entry.id) }))).status).toBe(200);
+    expect((await book(longBook.id))!.sections[0]).toMatchObject({ name: `${longTitle} / A`, autoName: true });
   });
 });

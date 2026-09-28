@@ -70,6 +70,7 @@ export const tuneSets = pgTable("tune_sets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  autoName: boolean("auto_name").notNull().default(false),
   createdAt: createdAt(),
 }, (t) => [index("set_user_idx").on(t.userId)]);
 

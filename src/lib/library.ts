@@ -4,10 +4,11 @@ import { bookShares, bookEntries, catalogSettings, folders, savedTunes, setTunes
 import { user } from "@/db/auth-schema";
 import { parseSessionUrl } from "@/lib/session-url";
 import { getMySets } from "@/lib/sets";
+import { displaySetName } from "@/lib/set-name";
 import { getTuneEmojiSuggestion, withTuneEmojis, type TuneWithEmoji } from "@/lib/tune-emojis";
 
 type Tune = TuneWithEmoji;
-export type BookSection = { kind: "tune"; entryId: string; tune: Tune } | { kind: "set"; entryId: string; setId: string; name: string; tunes: Tune[] };
+export type BookSection = { kind: "tune"; entryId: string; tune: Tune } | { kind: "set"; entryId: string; setId: string; name: string; autoName: boolean; tunes: Tune[] };
 
 export async function getLibrary(userId: string) {
   const [allFolders, allBooks, allTunes, sharedBooks, sets] = await Promise.all([
@@ -52,7 +53,10 @@ export async function getBook(userId: string | null, id: string) {
       if (tune) sections.push({ kind: "tune", entryId: entry.id, tune });
     } else {
       const set = sets.find((set) => set.id === entry.setId);
-      if (set) sections.push({ kind: "set", entryId: entry.id, setId: set.id, name: set.name, tunes: members.filter((row) => row.setId === set.id).map((row) => byId.get(row.tune.id)!) });
+      if (set) {
+        const tunes = members.filter((row) => row.setId === set.id).map((row) => byId.get(row.tune.id)!);
+        sections.push({ kind: "set", entryId: entry.id, setId: set.id, name: displaySetName(set, tunes), autoName: set.autoName, tunes });
+      }
     }
   }
   const tunes = sections.flatMap((section) => (section.kind === "tune" ? [section.tune] : section.tunes)

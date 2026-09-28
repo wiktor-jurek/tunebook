@@ -43,6 +43,13 @@
       "when": 1790616647722,
       "tag": "0005_last_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790620904246,
+      "tag": "0006_heavy_orphan",
+      "breakpoints": true
     }
   ]
 }
