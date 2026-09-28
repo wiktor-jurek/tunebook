@@ -1,5 +1,6 @@
 "use client";
 
+import { trackEvent } from "@/lib/analytics";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -67,7 +68,7 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
         <div className="nav-label-row nav-shared-label"><span>SHARED WITH ME</span></div>
         <div>{library.sharedBooks.map((book) => <Link key={book.id} onClick={closeMobile} href={`/books/${book.id}`} className={`nav-link nav-shared-book ${path === `/books/${book.id}` ? "active" : ""}`} aria-current={path === `/books/${book.id}` ? "page" : undefined}><BookIcon bookId={book.id} emoji={book.emoji} label="Tunebook icon" readOnly /><span>{book.name}</span></Link>)}{!library.sharedBooks.length && <p className="nav-empty">Tunebooks shared with you appear here.</p>}</div>
       </nav>
-      <div className="sidebar-bottom">{guest ? <Link onClick={closeMobile} href={signIn} className="nav-link">Log in to Tunebook</Link> : <><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></>}</div>
+      <div className="sidebar-bottom">{guest ? <Link onClick={closeMobile} href={signIn} className="nav-link">Log in to Tunebook</Link> : <><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { const result = await authClient.signOut(); trackEvent("signed_out", { outcome: result.error ? "error" : "success" }); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></>}</div>
     </aside>
     {task && <LibraryDialog key={`${task.operation}-${task.bookId ?? task.folderId ?? "root"}`} task={task} library={library} onClose={() => setTask(null)} onMove={revealDestination} onReturnFocus={() => { requestAnimationFrame(() => { if (returnFocus.current?.isConnected) returnFocus.current.focus(); else newButton.current?.focus(); }); }} />}
   </>;

@@ -1,5 +1,6 @@
 "use client";
 
+import { trackLibraryAction } from "@/lib/analytics";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -33,9 +34,10 @@ export function BookIcon({ emoji, label, size = "nav", bookId, onChange, readOnl
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not update icon");
+      trackLibraryAction("setBookEmoji", "success");
       setOpen(false);
       router.refresh();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not update icon"); }
+    } catch (cause) { trackLibraryAction("setBookEmoji", "error"); setError(cause instanceof Error ? cause.message : "Could not update icon"); }
     finally { setBusy(false); }
   }
 

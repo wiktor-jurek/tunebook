@@ -1,5 +1,6 @@
 "use client";
 
+import { trackLibraryAction } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BookOpen, ChevronDown, Plus, Trash2 } from "lucide-react";
@@ -24,16 +25,17 @@ export function TuneActions({ tuneId, currentBookId }: { tuneId: string; current
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load tunebooks"); }
     finally { setLoading(false); }
   }
-  async function action(operation: string, bookId?: string) {
+  async function action(operation: "addToBook" | "removeFromBook" | "deleteSavedTune", bookId?: string) {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, bookId, tuneId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not update tune");
+      trackLibraryAction(operation, "success");
       if (bookId) setBooks((current) => current.map((book) => book.id === bookId ? { ...book, inBook: operation === "addToBook" } : book));
       router.refresh();
       if (operation === "deleteSavedTune") router.push("/");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Request failed"); }
+    } catch (cause) { trackLibraryAction(operation, "error"); setError(cause instanceof Error ? cause.message : "Request failed"); }
     finally { setBusy(false); }
   }
   return <div className="tune-actions">

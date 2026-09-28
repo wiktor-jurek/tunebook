@@ -1,5 +1,6 @@
 "use client";
 
+import { trackEvent } from "@/lib/analytics";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -19,8 +20,9 @@ export function ProfilePreferences({ userName, defaultSound }: { userName: strin
       const response = await fetch("/api/preferences", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ defaultSound: sound }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save preferences");
+      trackEvent("preferences_saved", { outcome: "success", instrument: sound });
       setOpen(false); router.refresh();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save preferences"); }
+    } catch (cause) { trackEvent("preferences_saved", { outcome: "error", instrument: sound }); setError(cause instanceof Error ? cause.message : "Could not save preferences"); }
     finally { setBusy(false); }
   }
 

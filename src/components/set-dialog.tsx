@@ -1,5 +1,6 @@
 "use client";
 
+import { trackEvent } from "@/lib/analytics";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -22,6 +23,11 @@ export function SetDialog({ task, choices, onClose }: { task: SetTask; choices: 
   function move(index: number, offset: number) {
     setOrdered((current) => { const next = [...current]; [next[index], next[index + offset]] = [next[index + offset], next[index]]; return next; });
   }
+  function trackResult(outcome: "success" | "error") {
+    if (task.mode === "group") trackEvent("set_created", { outcome, tune_count: ordered.length });
+    else if (task.mode === "edit") trackEvent("set_updated", { outcome, tune_count: ordered.length, book_count: task.bookCount });
+    else trackEvent("set_deleted", { outcome, book_count: task.bookCount });
+  }
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
@@ -32,8 +38,8 @@ export function SetDialog({ task, choices, onClose }: { task: SetTask; choices: 
       const response = await fetch("/api/sets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save the set");
-      onClose(); router.refresh();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save the set"); setBusy(false); }
+      trackResult("success"); onClose(); router.refresh();
+    } catch (cause) { trackResult("error"); setError(cause instanceof Error ? cause.message : "Could not save the set"); setBusy(false); }
   }
   return <Dialog.Root open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog-content library-dialog set-dialog" onOpenAutoFocus={(event) => { event.preventDefault(); if (deleting) cancelRef.current?.focus(); else nameRef.current?.focus(); }} onPointerDownOutside={(event) => { if (busy || deleting) event.preventDefault(); }} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
     <form onSubmit={submit}><header className="library-dialog-head"><div><Dialog.Title className="dialog-title">{deleting ? `Delete “${task.name}”?` : task.mode === "group" ? "Group tunes into a set" : "Edit set"}</Dialog.Title><Dialog.Description className="library-dialog-description">{deleting ? "Tunes stay in your library and are ungrouped in every linked tunebook." : task.mode === "group" ? "Choose tunes in playing order. Your set will also appear in My sets." : `Changes update this set in all ${task.bookCount} linked tunebooks.`}</Dialog.Description></div><Dialog.Close asChild><button type="button" className="icon-button" disabled={busy} aria-label="Close set dialog"><X size={18} /></button></Dialog.Close></header>

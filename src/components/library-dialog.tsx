@@ -1,5 +1,6 @@
 "use client";
 
+import { trackLibraryAction } from "@/lib/analytics";
 import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -60,13 +61,14 @@ export function LibraryDialog({ task, library, onClose, onReturnFocus, onMove }:
       const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save changes");
+      trackLibraryAction(task.operation, "success");
       if (isMove) onMove(destination);
       const deletedCurrentBook = task.operation === "deleteBook" && path === `/books/${task.bookId}`;
       const deletedCurrentFolder = task.operation === "deleteFolder" && library.books.some((book) => book.folderId && excluded.has(book.folderId) && path === `/books/${book.id}`);
       onClose();
       if (deletedCurrentBook || deletedCurrentFolder) router.push("/");
       router.refresh();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save changes"); setBusy(false); }
+    } catch (cause) { trackLibraryAction(task.operation, "error"); setError(cause instanceof Error ? cause.message : "Could not save changes"); setBusy(false); }
   }
 
   return <Dialog.Root open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><Dialog.Portal>

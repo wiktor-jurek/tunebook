@@ -1,5 +1,6 @@
 "use client";
 
+import { trackEvent } from "@/lib/analytics";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -19,23 +20,29 @@ export function InlineTuneImport() {
   const [message, setMessage] = useState("");
 
   async function saveSetting(settingId: number) {
-    const response = await fetch("/api/catalog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settingId }) });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Could not save the tune");
-    setOpen(false); setQuery(""); setSettings([]); setMessage("Tune saved to your library."); router.refresh();
+    try {
+      const response = await fetch("/api/catalog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settingId }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not save the tune");
+      trackEvent("tune_saved", { outcome: "success" });
+      setOpen(false); setQuery(""); setSettings([]); setMessage("Tune saved to your library."); router.refresh();
+    } catch (cause) { trackEvent("tune_saved", { outcome: "error" }); throw cause; }
   }
 
   async function lookup(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); setMessage("");
+    let lookedUp = false;
     try {
       const response = await fetch(`/api/catalog?q=${encodeURIComponent(query)}`, { cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not find the tune");
       const found: Setting[] = result.settings;
+      lookedUp = true;
+      trackEvent("tune_lookup", { source: /^https?:\/\//i.test(query.trim()) ? "url" : "title", outcome: "success", result_count: found.length });
       if (!found.length) throw new Error("No settings found. Try a tune title or another The Session URL.");
       if (found.length === 1) await saveSetting(found[0].settingId);
       else { setSettings(found); setOpen(true); }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not find the tune"); }
+    } catch (cause) { if (!lookedUp) trackEvent("tune_lookup", { source: /^https?:\/\//i.test(query.trim()) ? "url" : "title", outcome: "error" }); setError(cause instanceof Error ? cause.message : "Could not find the tune"); }
     finally { setBusy(false); }
   }
 

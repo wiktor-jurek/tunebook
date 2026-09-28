@@ -53,6 +53,23 @@ Imported settings retain their source link and contributor. The app displays att
 
 abcjs generates audio using General MIDI soundfonts. The whistle-like preset uses a recorder sound; it is an approximation. The [FluidR3_GM soundfont](https://github.com/gleitz/midi-js-soundfonts) is available under CC BY 3.0 and is provided by its authors. Internet access is required for instrument samples unless a compatible soundfont is hosted locally and configured in the player.
 
+## Analytics
+
+Production pages load the Umami tracker from `https://analytics.jurek.dev/script.js` for website `48e712da-7618-450e-8c2f-88ba9f613eb7`. Tracking is restricted to `libresession.com` and `www.libresession.com`, honors Do Not Track and Umami’s `umami.disabled` local-storage opt-out, and stays disabled during development. Pageviews are sent once on initial load and on client-side pathname changes, including browser back/forward navigation. Automatic tracking is disabled so every pageview and event uses a sanitized URL and title: book/tune IDs become `:id`, queries and fragments are omitted, and external referrers contain only their origin. Events never include emails, names, passwords, tokens, search text, notation, or tune/book/set titles. No user identification is sent.
+
+The event schema is in `src/lib/analytics.ts`. Mutation events have an `outcome` of `success` or `error`; use **success** when measuring completed actions. Other properties contain fixed categories, counts, or instrument/tempo values.
+
+| Flow | Events and useful properties |
+| --- | --- |
+| Authentication | `auth_submitted`, `auth_completed` (`mode`, `outcome`), `google_sign_in_started`, `google_sign_in_failed`, `signed_out`. Signup success means the verification email step was reached; Google start means a redirect was requested. |
+| Tune discovery | `tune_lookup` (`source`: url/title, `result_count`, `outcome`), `tune_saved`, `tune_deleted`, `tune_added_to_book`, `tune_removed_from_book`. Saving an already-saved setting counts as a successful save action. |
+| Library | `tunebook_created/renamed/moved/deleted`, `folder_created/renamed/moved/deleted`, `tunebook_icon_changed`. |
+| Sets | `set_created/updated/deleted` (tune/book counts), `set_added_to_book`, `book_entry_changed` (`kind`, `action`), `set_tune_reordered` (`direction`). |
+| Sharing | `tunebook_opened` (`access`: owner/viewer, `signed_in`, tune/set counts), `share_dialog_opened`, `book_shared_by_email` (`delivery`: sent/warning), `book_share_removed`, `book_visibility_changed` (`visibility`), `book_link_copied`, `shared_tune_saved`, `shared_book_saved`, `guest_save_sign_in` (`kind`). |
+| Playing and reading | `playback_started` (`instrument`, `tempo`), `playback_paused/completed/failed/restarted`, `playback_sound_changed`, `playback_tempo_changed`, `playback_seeked`, `notation_opened`, `tune_source_opened`, `scores_toggled`, `contents_navigated`, `print_requested`, `preferences_saved`. Playback starts count actual starts, excluding automatic restarts after seeking or changing sound/tempo. Print records a request, not confirmed printing. |
+
+Events that happen before the tracker loads are queued in memory (up to 50). A blocked or unavailable tracker never blocks an app action. To verify production, open Libresession with tracking allowed, check the request to `analytics.jurek.dev/api/send`, and inspect Events in Umami. Suggested funnels: `auth_submitted` → successful `auth_completed` → successful `tune_saved` → successful `tunebook_created` → successful `set_created`; and `tunebook_opened` with viewer access → `guest_save_sign_in` → successful `shared_book_saved`.
+
 ## Checks
 
 Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. Run `npm run test:sharing` for PostgreSQL sharing tests and `npm run test:sets` for migration, grouping, reuse, ordering, ownership, private copies, and tune relationships. Those tests use a temporary schema in `TEST_DATABASE_URL` (or `DATABASE_URL` from `.env`) and remove it afterward; the database role needs permission to create schemas. The server runs migrations automatically in the production container; local development runs them explicitly.
