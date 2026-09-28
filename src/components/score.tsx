@@ -5,7 +5,7 @@ import abcjs from "abcjs";
 import { Pause, Play, RotateCcw, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { savedTunes } from "@/db/schema";
-import { abcForTune, noteNames } from "@/lib/notation";
+import { abcForScore, abcForTune, noteNames } from "@/lib/notation";
 import { DEFAULT_SOUND, SOUND_OPTIONS } from "@/lib/sounds";
 
 type Tune = typeof savedTunes.$inferSelect;
@@ -35,7 +35,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND }: { tune: Tune; defa
   useEffect(() => {
     if (!paperRef.current) return;
     const player = playerRef.current;
-    const result = abcjs.renderAbc(paperRef.current, abcForTune(tune), { responsive: "resize", add_classes: true, staffwidth: 760, paddingtop: 0, paddingbottom: 0 });
+    const result = abcjs.renderAbc(paperRef.current, abcForScore(tune), { responsive: "resize", add_classes: true, staffwidth: 760, paddingtop: 0, paddingbottom: 0 });
     visualRef.current = result[0] || null;
     setReady(Boolean(result[0]));
     return () => {

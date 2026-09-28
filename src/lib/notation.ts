@@ -8,6 +8,10 @@ export function abcForTune(tune: Tune) {
   return `X:1\nT:${line(tune.title, "Untitled")}\nR:${line(tune.kind, "tune")}\nM:${line(tune.meter, "4/4")}\nL:1/8\nQ:1/4=100\nK:${line(tune.mode, "D")}\n${tune.abc}`;
 }
 
+export function abcForScore(tune: Tune) {
+  return abcForTune(tune).replace(/^T\s*:[^\r\n]*(?:\r?\n|$)/gm, "");
+}
+
 export function noteNames(pitches: Array<{ pitch: number }> | undefined) {
   if (!pitches?.length) return "—";
   const names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
