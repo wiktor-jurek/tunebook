@@ -48,9 +48,10 @@ export function Sidebar({ library, userName }: { library: Library; userName: str
     finally { setBusy(false); }
   }
   const bookLink = (book: BookRow) => <div key={book.id} className="nav-row"><Link onClick={closeMobile} className={`nav-link nav-book ${path === `/books/${book.id}` ? "active" : ""}`} href={`/books/${book.id}`}>{book.emoji ? <span className="book-emoji" aria-hidden="true">{book.emoji}</span> : <BookOpen size={15} />} <span>{book.name}</span></Link><button className="icon-button subtle" aria-label={`Manage ${book.name}`} onClick={() => launch({ operation: "renameBook", title: `Manage ${book.name}`, bookId: book.id, name: book.name, folderId: book.folderId, emoji: book.emoji })}><Settings2 size={14} /></button></div>;
+  const creationRow = (folderId: string | null) => <div className="nav-create-row"><button className="nav-add" onClick={() => launch({ operation: "createBook", title: "New tunebook", folderId })}><Plus size={12} /> New tunebook</button><button className="nav-add" onClick={() => launch({ operation: "createFolder", title: "New folder", parentId: folderId })}><Plus size={12} /> New folder</button></div>;
   const renderFolder = (folder: FolderRow, depth: number): React.ReactNode => <div key={folder.id}>
     <div className="nav-row" style={{ paddingLeft: depth * 12 }}><button className="nav-link nav-folder" aria-expanded={open[folder.id] ?? true} onClick={() => setOpen({ ...open, [folder.id]: !(open[folder.id] ?? true) })}>{open[folder.id] ?? true ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<Folder size={15} /><span>{folder.name}</span></button><button className="icon-button subtle" aria-label={`Manage ${folder.name}`} onClick={() => launch({ operation: "renameFolder", title: `Manage ${folder.name}`, folderId: folder.id, name: folder.name, parentId: folder.parentId })}><Settings2 size={14} /></button></div>
-    {(open[folder.id] ?? true) && <div className="nav-children">{foldersByParent(folder.id).map((child) => renderFolder(child, depth + 1))}{booksByFolder(folder.id).map(bookLink)}<button className="nav-add nested" onClick={() => launch({ operation: "createBook", title: "New tunebook", folderId: folder.id })}><Plus size={13} /> New tunebook</button><button className="nav-add nested" onClick={() => launch({ operation: "createFolder", title: "New folder", parentId: folder.id })}><Plus size={13} /> New folder</button></div>}
+    {(open[folder.id] ?? true) && <div className="nav-children">{foldersByParent(folder.id).map((child) => renderFolder(child, depth + 1))}{booksByFolder(folder.id).map(bookLink)}{creationRow(folder.id)}</div>}
   </div>;
   return <>
     <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><BookOpen size={18} /> Tunebook</button>
@@ -59,9 +60,9 @@ export function Sidebar({ library, userName }: { library: Library; userName: str
       <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark">𝄞</span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
         <div className="nav-section"><Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Home size={16} /> Home <span className="nav-count">{library.tunes.length}</span></Link><Link onClick={closeMobile} href="/import" className={`nav-link ${path === "/import" ? "active" : ""}`}><Search size={16} /> Import tunes</Link></div>
-        <div className="nav-label-row"><span>TUNEBOOKS</span><button className="icon-button" aria-label="New tunebook" onClick={() => launch({ operation: "createBook", title: "New tunebook" })}><Plus size={16} /></button></div>
+        <div className="nav-label-row"><span>TUNEBOOKS</span></div>
         <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map((folder) => renderFolder(folder, 0))}</div>
-        <button className="nav-add" onClick={() => launch({ operation: "createFolder", title: "New folder" })}><Plus size={14} /> New folder</button>
+        {creationRow(null)}
       </nav>
       <div className="sidebar-bottom"><span className="user-initial">{userName.charAt(0).toUpperCase()}</span><span className="user-name">{userName}</span><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></div>
     </aside>
