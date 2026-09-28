@@ -1,23 +1,35 @@
-import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, eq, exists, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { bookTunes, catalogSettings, folders, savedTunes, tunebooks } from "@/db/schema";
+import { bookShares, bookTunes, catalogSettings, folders, savedTunes, tunebooks } from "@/db/schema";
+import { user } from "@/db/auth-schema";
 import { parseSessionUrl } from "@/lib/session-url";
 
 export async function getLibrary(userId: string) {
-  const [allFolders, allBooks, allTunes] = await Promise.all([
+  const [allFolders, allBooks, allTunes, sharedBooks] = await Promise.all([
     db.select().from(folders).where(eq(folders.userId, userId)).orderBy(asc(folders.name)),
     db.select().from(tunebooks).where(eq(tunebooks.userId, userId)).orderBy(asc(tunebooks.name)),
     db.select().from(savedTunes).where(eq(savedTunes.userId, userId)).orderBy(asc(savedTunes.title)),
+    db.select({ id: tunebooks.id, name: tunebooks.name, emoji: tunebooks.emoji })
+      .from(tunebooks).innerJoin(bookShares, eq(bookShares.bookId, tunebooks.id))
+      .innerJoin(user, and(eq(user.id, userId), eq(user.emailVerified, true), eq(bookShares.email, sql`lower(${user.email})`)))
+      .where(sql`${tunebooks.userId} <> ${userId}`).orderBy(asc(tunebooks.name)),
   ]);
-  return { folders: allFolders, books: allBooks, tunes: allTunes };
+  return { folders: allFolders, books: allBooks, tunes: allTunes, sharedBooks };
 }
 
-export async function getBook(userId: string, id: string) {
-  const [book] = await db.select().from(tunebooks).where(and(eq(tunebooks.userId, userId), eq(tunebooks.id, id))).limit(1);
+export const isBookId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+export async function getBook(userId: string | null, id: string) {
+  if (!isBookId(id)) return null;
+  const invited = userId ? exists(db.select({ id: bookShares.bookId }).from(bookShares)
+    .innerJoin(user, and(eq(user.id, userId), eq(user.emailVerified, true), eq(bookShares.email, sql`lower(${user.email})`)))
+    .where(eq(bookShares.bookId, tunebooks.id))) : undefined;
+  const [book] = await db.select().from(tunebooks).where(and(eq(tunebooks.id, id),
+    or(eq(tunebooks.linkVisible, true), ...(userId ? [eq(tunebooks.userId, userId), invited!] : [])))).limit(1);
   if (!book) return null;
   const tunes = await db.select({ position: bookTunes.position, tune: savedTunes })
     .from(bookTunes).innerJoin(savedTunes, eq(bookTunes.tuneId, savedTunes.id))
-    .where(and(eq(bookTunes.bookId, id), eq(savedTunes.userId, userId)))
+    .where(and(eq(bookTunes.bookId, id), eq(savedTunes.userId, book.userId)))
     .orderBy(asc(bookTunes.position));
   return { book, tunes };
 }

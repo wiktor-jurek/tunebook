@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -48,8 +48,15 @@ export const tunebooks = pgTable("tunebooks", {
   folderId: uuid("folder_id"),
   name: text("name").notNull(),
   emoji: text("emoji"),
+  linkVisible: boolean("link_visible").notNull().default(false),
   createdAt: createdAt(),
 }, (t) => [index("book_folder_idx").on(t.userId, t.folderId)]);
+
+export const bookShares = pgTable("book_shares", {
+  bookId: uuid("book_id").notNull().references(() => tunebooks.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.bookId, t.email] }), index("book_share_email_idx").on(t.email)]);
 
 export const bookTunes = pgTable("book_tunes", {
   bookId: uuid("book_id").notNull().references(() => tunebooks.id, { onDelete: "cascade" }),

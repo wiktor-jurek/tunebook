@@ -7,7 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function AuthForm({ mode, token }: { mode: "sign-in" | "sign-up" | "forgot" | "reset"; token?: string }) {
+export function AuthForm({ mode, token, returnTo = "/" }: { mode: "sign-in" | "sign-up" | "forgot" | "reset"; token?: string; returnTo?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -19,11 +19,11 @@ export function AuthForm({ mode, token }: { mode: "sign-in" | "sign-up" | "forgo
     const password = String(data.get("password") || "");
     try {
       if (mode === "sign-in") {
-        const result = await authClient.signIn.email({ email, password });
+        const result = await authClient.signIn.email({ email, password, callbackURL: returnTo });
         if (result.error) throw new Error(result.error.message);
-        router.push("/"); router.refresh();
+        router.push(returnTo); router.refresh();
       } else if (mode === "sign-up") {
-        const result = await authClient.signUp.email({ email, password, name: String(data.get("name") || "") });
+        const result = await authClient.signUp.email({ email, password, name: String(data.get("name") || ""), callbackURL: returnTo });
         if (result.error) throw new Error(result.error.message);
         setMessage("Check your email for a verification link before signing in.");
       } else if (mode === "forgot") {
@@ -48,7 +48,7 @@ export function AuthForm({ mode, token }: { mode: "sign-in" | "sign-up" | "forgo
       {error && <p className="form-error" role="alert">{error}</p>}{message && <p className="form-success" role="status">{message}</p>}
       <Button disabled={busy} className="auth-submit">{busy ? "Working…" : mode === "sign-in" ? "Sign in" : mode === "sign-up" ? "Create account" : mode === "forgot" ? "Send reset link" : "Set password"}</Button>
     </form>
-    {(mode === "sign-in" || mode === "sign-up") && <><div className="auth-divider">or</div><Button variant="outline" className="auth-submit" onClick={async () => { const result = await authClient.signIn.social({ provider: "google", callbackURL: "/" }); if (result.error) setError(result.error.message || "Google sign-in failed"); }}>Continue with Google</Button></>}
-    <div className="auth-links">{mode === "sign-in" ? <><Link href="/forgot-password">Forgot password?</Link><span>New here? <Link href="/sign-up">Create account</Link></span></> : <Link href="/sign-in">Back to sign in</Link>}</div>
+    {(mode === "sign-in" || mode === "sign-up") && <><div className="auth-divider">or</div><Button variant="outline" className="auth-submit" onClick={async () => { const result = await authClient.signIn.social({ provider: "google", callbackURL: returnTo }); if (result.error) setError(result.error.message || "Google sign-in failed"); }}>Continue with Google</Button></>}
+    <div className="auth-links">{mode === "sign-in" ? <><Link href="/forgot-password">Forgot password?</Link><span>New here? <Link href={`/sign-up?next=${encodeURIComponent(returnTo)}`}>Create account</Link></span></> : <Link href={`/sign-in?next=${encodeURIComponent(returnTo)}`}>Back to sign in</Link>}</div>
   </div></main>;
 }

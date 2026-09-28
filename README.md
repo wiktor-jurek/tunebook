@@ -29,6 +29,14 @@ The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com
 
 The app image does not contain the full catalog. PostgreSQL stores the catalog and each user’s saved snapshots. Back up the existing PostgreSQL database using your server's backup process.
 
+## Sharing tunebooks
+
+Open a tunebook and choose **Share** to add viewers by email or set general access to **Anyone with the link**. Email shares appear under **Shared with me** after the recipient signs in with that verified email, including accounts created after the invitation. Invitations use the same SMTP configuration as account emails. If delivery fails, access is still granted and the dialog prompts you to send the link yourself.
+
+Link sharing lets visitors read scores, play tunes, and print without signing in. Shared books are view-only; signed-in viewers can save individual tunes or a private copy of the book into their own library. Owners can remove email access or return general access to **Restricted** at any time. Removing an email grant does not block a viewer while anyone-with-the-link access remains enabled, and previously saved copies remain in their recipients’ libraries.
+
+Run `npm run db:migrate` when updating an existing local database. Production containers apply the sharing migration on startup.
+
 ## Content and sounds
 
 Imported settings retain their source link and contributor. The app displays attribution to The Session and its [database license](https://github.com/adactio/TheSession-data/blob/main/LICENSE.md). Check that license before redistributing a catalog export or changing how tune data is used.
@@ -37,7 +45,7 @@ abcjs generates audio using General MIDI soundfonts. The whistle-like preset use
 
 ## Checks
 
-Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. The server runs migrations automatically in the production container; local development runs them explicitly.
+Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. Run `npm run test:sharing` for PostgreSQL integration tests covering invitations, public access, revocation, owner-only mutations, and saving copies. Those tests use a temporary schema in `TEST_DATABASE_URL` (or `DATABASE_URL` from `.env`) and remove it afterward; the database role needs permission to create schemas. The server runs migrations automatically in the production container; local development runs them explicitly.
 
 ## Commits and releases
 

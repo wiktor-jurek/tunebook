@@ -14,13 +14,15 @@ import type { getLibrary } from "@/lib/library";
 type Library = Awaited<ReturnType<typeof getLibrary>>;
 type FolderRow = Library["folders"][number];
 type BookRow = Library["books"][number];
-export function Sidebar({ library, userName, defaultSound }: { library: Library; userName: string; defaultSound: number }) {
+export function Sidebar({ library, userName, defaultSound }: { library: Library; userName?: string; defaultSound: number }) {
   const path = usePathname(), router = useRouter();
   const [task, setTask] = useState<Task | null>(null);
   const returnFocus = useRef<HTMLButtonElement | null>(null);
   const newButton = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [mobileOpen, setMobileOpen] = useState(false);
+  const guest = userName === undefined;
+  const signIn = `/sign-in?next=${encodeURIComponent(path)}`;
   const foldersByParent = (parent: string | null) => library.folders.filter((f) => f.parentId === parent);
   const booksByFolder = (folder: string | null) => library.books.filter((b) => b.folderId === folder);
   const launch = (next: Task) => setTask(next);
@@ -58,11 +60,13 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark">𝄞</span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
-        <div className="nav-section"><Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link></div>
-        <div className="nav-label-row"><span>TUNEBOOKS</span>{creationMenu()}</div>
-        <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map(renderFolder)}</div>
+        <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link>}</div>
+        <div className="nav-label-row"><span>TUNEBOOKS</span>{!guest && creationMenu()}</div>
+        {guest ? <Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunebooks</Link> : <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map(renderFolder)}</div>}
+        <div className="nav-label-row nav-shared-label"><span>SHARED WITH ME</span></div>
+        <div>{library.sharedBooks.map((book) => <Link key={book.id} onClick={closeMobile} href={`/books/${book.id}`} className={`nav-link nav-shared-book ${path === `/books/${book.id}` ? "active" : ""}`} aria-current={path === `/books/${book.id}` ? "page" : undefined}><BookIcon bookId={book.id} emoji={book.emoji} label="Tunebook icon" readOnly /><span>{book.name}</span></Link>)}{!library.sharedBooks.length && <p className="nav-empty">Tunebooks shared with you appear here.</p>}</div>
       </nav>
-      <div className="sidebar-bottom"><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></div>
+      <div className="sidebar-bottom">{guest ? <Link onClick={closeMobile} href={signIn} className="nav-link">Log in to Tunebook</Link> : <><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></>}</div>
     </aside>
     {task && <LibraryDialog key={`${task.operation}-${task.bookId ?? task.folderId ?? "root"}`} task={task} library={library} onClose={() => setTask(null)} onMove={revealDestination} onReturnFocus={() => { requestAnimationFrame(() => { if (returnFocus.current?.isConnected) returnFocus.current.focus(); else newButton.current?.focus(); }); }} />}
   </>;

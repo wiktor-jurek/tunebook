@@ -14,7 +14,8 @@
     "catalog:sync": "tsx scripts/sync-catalog.ts",
     "commitlint": "commitlint",
     "hooks:install": "git config core.hooksPath .githooks",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:sharing": "node --env-file=.env scripts/test-sharing.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

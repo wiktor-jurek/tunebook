@@ -1,2 +1,6 @@
 import { AuthForm } from "@/components/auth-form";
-export default function SignIn() { return <AuthForm mode="sign-in" />; }
+import { authReturnPath } from "@/lib/auth-redirect";
+export default async function SignIn({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
+  return <AuthForm mode="sign-in" returnTo={authReturnPath(next)} />;
+}

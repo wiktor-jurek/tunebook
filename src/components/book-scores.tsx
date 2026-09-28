@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Score, pauseTune } from "@/components/score";
 import { BookTuneControls } from "@/components/book-tune-controls";
 import { TuneActions } from "@/components/tune-actions";
+import { SaveSharedBook } from "@/components/save-shared-book";
 import type { savedTunes } from "@/db/schema";
 
 type Tune = typeof savedTunes.$inferSelect;
 
-export function BookScores({ bookId, tunes, defaultSound }: { bookId: string; tunes: Tune[]; defaultSound: number }) {
+export function BookScores({ bookId, tunes, defaultSound, readOnly = false, signedIn = true, savedSettingIds = [] }: { bookId: string; tunes: Tune[]; defaultSound: number; readOnly?: boolean; signedIn?: boolean; savedSettingIds?: number[] }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   function setExpanded(tuneId: string, expanded: boolean) {
     if (!expanded) pauseTune(tuneId);
@@ -36,11 +37,11 @@ export function BookScores({ bookId, tunes, defaultSound }: { bookId: string; tu
       return <section className="book-tune" id={`book-tune-${tune.id}`} key={tune.id}>
         <div className="book-tune-head"><h2><button type="button" className="book-tune-toggle" id={`toggle-${tune.id}`} aria-expanded={expanded} aria-controls={`score-${tune.id}`} onClick={() => setExpanded(tune.id, !expanded)}>
           {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}<span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="book-tune-title">{tune.title}</span>
-        </button></h2><div className="book-tune-tools">
+        </button></h2>{!readOnly && <div className="book-tune-tools">
           <BookTuneControls bookId={bookId} tuneId={tune.id} direction={index ? "up" : undefined} icon={<ArrowUp size={15} />} />
           <BookTuneControls bookId={bookId} tuneId={tune.id} direction={index < tunes.length - 1 ? "down" : undefined} icon={<ArrowDown size={15} />} />
           <TuneActions tuneId={tune.id} currentBookId={bookId} />
-        </div></div>
+        </div>}{readOnly && <div className="book-tune-tools"><SaveSharedBook bookId={bookId} tuneId={tune.id} signedIn={signedIn} alreadySaved={savedSettingIds.includes(tune.settingId)} /></div>}</div>
         <div className="book-tune-panel" id={`score-${tune.id}`} role="region" aria-labelledby={`toggle-${tune.id}`} hidden={!expanded}>
           <Score tune={tune} defaultSound={defaultSound} showTitle={false} />
         </div>

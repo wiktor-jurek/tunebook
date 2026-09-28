@@ -12,10 +12,10 @@ const EmojiPicker = dynamic(() => import("@/components/emoji-picker"), {
 });
 
 type Props = { emoji: string | null; label: string; size?: "nav" | "page" | "draft" } & (
-  { bookId: string; onChange?: never } | { bookId?: never; onChange: (emoji: string | null) => void }
+  { bookId: string; onChange?: never; readOnly?: boolean } | { bookId?: never; onChange: (emoji: string | null) => void; readOnly?: never }
 );
 
-export function BookIcon({ emoji, label, size = "nav", bookId, onChange }: Props) {
+export function BookIcon({ emoji, label, size = "nav", bookId, onChange, readOnly }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -38,6 +38,8 @@ export function BookIcon({ emoji, label, size = "nav", bookId, onChange }: Props
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not update icon"); }
     finally { setBusy(false); }
   }
+
+  if (readOnly) return <span className={`book-icon book-icon-${size}`} role="img" aria-label={label}>{emoji ? <span aria-hidden="true">{emoji}</span> : <BookOpen aria-hidden="true" />}</span>;
 
   return <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); setError(""); }}>
     <Popover.Trigger asChild>

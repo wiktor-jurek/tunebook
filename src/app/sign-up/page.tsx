@@ -1,2 +1,6 @@
 import { AuthForm } from "@/components/auth-form";
-export default function SignUp() { return <AuthForm mode="sign-up" />; }
+import { authReturnPath } from "@/lib/auth-redirect";
+export default async function SignUp({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
+  return <AuthForm mode="sign-up" returnTo={authReturnPath(next)} />;
+}
