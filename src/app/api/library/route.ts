@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { bookTunes, folders, savedTunes, tunebooks } from "@/db/schema";
+import { bookEntries, folders, savedTunes, setTunes, tunebooks } from "@/db/schema";
 import { currentUser } from "@/lib/session";
 
 class ClientError extends Error {}
@@ -28,8 +28,9 @@ export async function GET(request: Request) {
     const tuneId = id(new URL(request.url).searchParams.get("tuneId"));
     const [tune] = await db.select({ id: savedTunes.id }).from(savedTunes).where(and(eq(savedTunes.userId, user.id), eq(savedTunes.id, tuneId))).limit(1);
     if (!tune) return NextResponse.json({ error: "Tune not found" }, { status: 404 });
-    const books = await db.select({ id: tunebooks.id, name: tunebooks.name, emoji: tunebooks.emoji, inBook: sql<boolean>`${bookTunes.tuneId} is not null` })
-      .from(tunebooks).leftJoin(bookTunes, and(eq(bookTunes.bookId, tunebooks.id), eq(bookTunes.tuneId, tuneId)))
+    const books = await db.select({ id: tunebooks.id, name: tunebooks.name, emoji: tunebooks.emoji,
+      inBook: exists(db.select({ id: bookEntries.id }).from(bookEntries).where(and(eq(bookEntries.bookId, tunebooks.id), eq(bookEntries.tuneId, tuneId)))) })
+      .from(tunebooks)
       .where(eq(tunebooks.userId, user.id)).orderBy(asc(tunebooks.name));
     return NextResponse.json({ books });
   } catch (error) {
@@ -132,14 +133,19 @@ export async function POST(request: Request) {
       case "addToBook": {
         const bookId = id(input.bookId), tuneId = id(input.tuneId);
         await ownBook(bookId); await ownTune(tuneId);
-        const [last] = await db.select({ position: bookTunes.position }).from(bookTunes).where(eq(bookTunes.bookId, bookId)).orderBy(sql`${bookTunes.position} desc`).limit(1);
-        await db.insert(bookTunes).values({ bookId, tuneId, position: (last?.position ?? -1) + 1 }).onConflictDoNothing();
+        await db.transaction(async (tx) => {
+          await tx.select({ id: tunebooks.id }).from(tunebooks).where(eq(tunebooks.id, bookId)).for("update");
+          const [existing] = await tx.select({ id: bookEntries.id }).from(bookEntries).where(and(eq(bookEntries.bookId, bookId), eq(bookEntries.tuneId, tuneId))).limit(1);
+          if (existing) return;
+          const [last] = await tx.select({ position: bookEntries.position }).from(bookEntries).where(eq(bookEntries.bookId, bookId)).orderBy(sql`${bookEntries.position} desc`).limit(1);
+          await tx.insert(bookEntries).values({ bookId, tuneId, position: (last?.position ?? -1) + 1 });
+        });
         break;
       }
       case "removeFromBook": {
         const bookId = id(input.bookId), tuneId = id(input.tuneId);
         await ownBook(bookId);
-        await db.delete(bookTunes).where(and(eq(bookTunes.bookId, bookId), eq(bookTunes.tuneId, tuneId)));
+        await db.delete(bookEntries).where(and(eq(bookEntries.bookId, bookId), eq(bookEntries.tuneId, tuneId)));
         break;
       }
       case "moveTune": {
@@ -147,18 +153,25 @@ export async function POST(request: Request) {
         if (direction !== "up" && direction !== "down") throw new ClientError("Invalid direction");
         await ownBook(bookId);
         await db.transaction(async (tx) => {
-          const rows = await tx.select().from(bookTunes).where(eq(bookTunes.bookId, bookId)).orderBy(asc(bookTunes.position));
+          await tx.select({ id: tunebooks.id }).from(tunebooks).where(eq(tunebooks.id, bookId)).for("update");
+          const rows = await tx.select().from(bookEntries).where(eq(bookEntries.bookId, bookId)).orderBy(asc(bookEntries.position));
           const index = rows.findIndex((row) => row.tuneId === tuneId);
           const next = index + (direction === "up" ? -1 : 1);
           if (index < 0 || next < 0 || next >= rows.length) return;
-          await tx.update(bookTunes).set({ position: rows[next].position }).where(and(eq(bookTunes.bookId, bookId), eq(bookTunes.tuneId, tuneId)));
-          await tx.update(bookTunes).set({ position: rows[index].position }).where(and(eq(bookTunes.bookId, bookId), eq(bookTunes.tuneId, rows[next].tuneId)));
+          await tx.update(bookEntries).set({ position: rows[next].position }).where(eq(bookEntries.id, rows[index].id));
+          await tx.update(bookEntries).set({ position: rows[index].position }).where(eq(bookEntries.id, rows[next].id));
         });
         break;
       }
       case "deleteSavedTune": {
-        const result = await db.delete(savedTunes).where(and(eq(savedTunes.userId, userId), eq(savedTunes.id, id(input.tuneId)))).returning({ id: savedTunes.id });
-        if (!result.length) throw new ClientError("Tune not found");
+        const tuneId = id(input.tuneId);
+        await db.transaction(async (tx) => {
+          const [tune] = await tx.select({ id: savedTunes.id }).from(savedTunes).where(and(eq(savedTunes.userId, userId), eq(savedTunes.id, tuneId))).for("update");
+          if (!tune) throw new ClientError("Tune not found");
+          const [membership] = await tx.select({ setId: setTunes.setId }).from(setTunes).where(eq(setTunes.tuneId, tuneId)).limit(1);
+          if (membership) throw new ClientError("This tune belongs to a set. Edit the set to remove it before deleting the tune.");
+          await tx.delete(savedTunes).where(eq(savedTunes.id, tuneId));
+        });
         break;
       }
       default: throw new ClientError("Unknown operation");

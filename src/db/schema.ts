@@ -58,11 +58,27 @@ export const bookShares = pgTable("book_shares", {
   createdAt: createdAt(),
 }, (t) => [primaryKey({ columns: [t.bookId, t.email] }), index("book_share_email_idx").on(t.email)]);
 
-export const bookTunes = pgTable("book_tunes", {
-  bookId: uuid("book_id").notNull().references(() => tunebooks.id, { onDelete: "cascade" }),
+export const tuneSets = pgTable("tune_sets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("set_user_idx").on(t.userId)]);
+
+export const setTunes = pgTable("set_tunes", {
+  setId: uuid("set_id").notNull().references(() => tuneSets.id, { onDelete: "cascade" }),
   tuneId: uuid("tune_id").notNull().references(() => savedTunes.id, { onDelete: "cascade" }),
   position: integer("position").notNull(),
-}, (t) => [primaryKey({ columns: [t.bookId, t.tuneId] }), index("book_tune_order_idx").on(t.bookId, t.position), check("position_nonnegative", sql`${t.position} >= 0`)]);
+}, (t) => [primaryKey({ columns: [t.setId, t.tuneId] }), index("set_tune_order_idx").on(t.setId, t.position), index("set_tune_membership_idx").on(t.tuneId), check("set_position_nonnegative", sql`${t.position} >= 0`)]);
+
+// Keep the existing table and migrate its individual tunes into ordered entries.
+export const bookEntries = pgTable("book_tunes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bookId: uuid("book_id").notNull().references(() => tunebooks.id, { onDelete: "cascade" }),
+  tuneId: uuid("tune_id").references(() => savedTunes.id, { onDelete: "cascade" }),
+  setId: uuid("set_id").references(() => tuneSets.id, { onDelete: "cascade" }),
+  position: integer("position").notNull(),
+}, (t) => [index("book_tune_order_idx").on(t.bookId, t.position), uniqueIndex("book_set_idx").on(t.bookId, t.setId), check("position_nonnegative", sql`${t.position} >= 0`), check("book_entry_one_kind", sql`(${t.tuneId} IS NULL) <> (${t.setId} IS NULL)`)]);
 
 export const userPreferences = pgTable("user_preferences", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),

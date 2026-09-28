@@ -18,7 +18,7 @@ export function pauseTune(tuneId: string) {
   window.dispatchEvent(new CustomEvent("tunebook:pause", { detail: tuneId }));
 }
 
-export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true }: { tune: Tune; defaultSound?: number; showTitle?: boolean }) {
+export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, playbackId }: { tune: Tune; defaultSound?: number; showTitle?: boolean; playbackId?: string }) {
   const paperRef = useRef<HTMLDivElement>(null);
   const visualRef = useRef<Visual | null>(null);
   const playerRef = useRef<Player>({ startedAt: 0, offset: 0, playing: false, token: 0 });
@@ -33,7 +33,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true }: 
   const [progress, setProgress] = useState(0);
   const [note, setNote] = useState("—");
   const [activeElements, setActiveElements] = useState<HTMLElement[]>([]);
-  const scoreId = tune.id;
+  const scoreId = playbackId ?? tune.id;
 
   useEffect(() => {
     if (!paperRef.current) return;

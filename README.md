@@ -31,6 +31,14 @@ The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com
 
 The app image does not contain the full catalog. PostgreSQL stores the catalog and each user’s saved snapshots. Back up the existing PostgreSQL database using your server's backup process.
 
+## Sets
+
+Create a set inside a tunebook with **Group tunes into a set**. Select at least two individual tunes, name the set, and arrange its playing order. The contents list and scores show the group together, and it appears in **My sets**. My sets lists and edits existing sets; new sets start inside tunebooks.
+
+Use **Add set** to reuse one in another tunebook. It inserts the tunes as a group and absorbs any existing individual entries for those tunes. Move a set as one item, or reorder tunes within it. Membership, name, and internal order are shared across all linked tunebooks. **Ungroup** keeps the tunes in that book as individual entries; removing a set from a book leaves it available in My sets. Deleting a set ungroups its tunes in every linked book without deleting the saved tunes.
+
+Shared books display the same set headings and order. Saving a shared book makes private copies of its sets and tunes. The database stores reusable set identities, ordered memberships, and tunebook placements separately; `getOftenPlayedWith` counts distinct sets containing each pair of catalog tunes, so reusing a set in several books does not inflate the count.
+
 ## Sharing tunebooks
 
 Open a tunebook and choose **Share** to add viewers by email or set general access to **Anyone with the link**. Email shares appear under **Shared with me** after the recipient signs in with that verified email, including accounts created after the invitation. Invitations use the same SMTP configuration as account emails. If delivery fails, access is still granted and the dialog prompts you to send the link yourself.
@@ -47,7 +55,7 @@ abcjs generates audio using General MIDI soundfonts. The whistle-like preset use
 
 ## Checks
 
-Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. Run `npm run test:sharing` for PostgreSQL integration tests covering invitations, public access, revocation, owner-only mutations, and saving copies. Those tests use a temporary schema in `TEST_DATABASE_URL` (or `DATABASE_URL` from `.env`) and remove it afterward; the database role needs permission to create schemas. The server runs migrations automatically in the production container; local development runs them explicitly.
+Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. Run `npm run test:sharing` for PostgreSQL sharing tests and `npm run test:sets` for migration, grouping, reuse, ordering, ownership, private copies, and tune relationships. Those tests use a temporary schema in `TEST_DATABASE_URL` (or `DATABASE_URL` from `.env`) and remove it afterward; the database role needs permission to create schemas. The server runs migrations automatically in the production container; local development runs them explicitly.
 
 ## Commits and releases
 

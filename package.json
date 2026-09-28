@@ -15,7 +15,8 @@
     "commitlint": "commitlint",
     "hooks:install": "git config core.hooksPath .githooks",
     "test": "vitest run",
-    "test:sharing": "node --env-file=.env scripts/test-sharing.mjs"
+    "test:sharing": "node --env-file=.env scripts/test-sharing.mjs",
+    "test:sets": "node --env-file=.env scripts/test-sets.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

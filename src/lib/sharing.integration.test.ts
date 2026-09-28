@@ -5,7 +5,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { user } from "@/db/auth-schema";
-import { bookShares, bookTunes, savedTunes, tunebooks } from "@/db/schema";
+import { bookShares, bookEntries, savedTunes, tunebooks } from "@/db/schema";
 
 const state = vi.hoisted(() => ({ db: null as unknown as NodePgDatabase, user: null as typeof user.$inferSelect | null }));
 vi.mock("@/db", () => ({ get db() { return state.db; } }));
@@ -45,7 +45,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("tunebook sharing (PostgreSQL)",
       { userId: owner.id, settingId: 1, tuneId: 1, title: "First tune", abc: "X:1\nT:First tune\nM:4/4\nL:1/8\nK:D\nDEFG ABcd|", sourceUrl: "https://thesession.org/tunes/1#setting1" },
       { userId: owner.id, settingId: 2, tuneId: 2, title: "Private tune", abc: "X:1\nK:D\nDEFG|", sourceUrl: "https://thesession.org/tunes/2#setting2" },
     ]).returning();
-    await state.db.insert(bookTunes).values([{ bookId: book.id, tuneId: tune.id, position: 0 }, { bookId: otherBook.id, tuneId: otherTune.id, position: 0 }]);
+    await state.db.insert(bookEntries).values([{ bookId: book.id, tuneId: tune.id, position: 0 }, { bookId: otherBook.id, tuneId: otherTune.id, position: 0 }]);
   }, 30000);
 
   afterAll(async () => { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); });
