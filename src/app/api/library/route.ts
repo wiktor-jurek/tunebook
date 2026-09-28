@@ -112,6 +112,12 @@ export async function POST(request: Request) {
         if (!result.length) throw new ClientError("Tunebook not found");
         break;
       }
+      case "setBookEmoji": {
+        const result = await db.update(tunebooks).set({ emoji: bookEmoji(input.emoji) })
+          .where(and(eq(tunebooks.userId, userId), eq(tunebooks.id, id(input.bookId)))).returning({ id: tunebooks.id });
+        if (!result.length) throw new ClientError("Tunebook not found");
+        break;
+      }
       case "moveBook": {
         const bookId = id(input.bookId), folderId = optionalId(input.folderId);
         await ownBook(bookId); await folderExists(folderId);
