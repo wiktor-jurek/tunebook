@@ -21,6 +21,22 @@ function bookEmoji(value: unknown) {
   return value;
 }
 
+export async function GET(request: Request) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  try {
+    const tuneId = id(new URL(request.url).searchParams.get("tuneId"));
+    const [tune] = await db.select({ id: savedTunes.id }).from(savedTunes).where(and(eq(savedTunes.userId, user.id), eq(savedTunes.id, tuneId))).limit(1);
+    if (!tune) return NextResponse.json({ error: "Tune not found" }, { status: 404 });
+    const books = await db.select({ id: tunebooks.id, name: tunebooks.name, emoji: tunebooks.emoji, inBook: sql<boolean>`${bookTunes.tuneId} is not null` })
+      .from(tunebooks).leftJoin(bookTunes, and(eq(bookTunes.bookId, tunebooks.id), eq(bookTunes.tuneId, tuneId)))
+      .where(eq(tunebooks.userId, user.id)).orderBy(asc(tunebooks.name));
+    return NextResponse.json({ books });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof ClientError ? error.message : "Could not load tunebooks" }, { status: error instanceof ClientError ? 400 : 500 });
+  }
+}
+
 export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
