@@ -56,3 +56,8 @@ export const bookTunes = pgTable("book_tunes", {
   tuneId: uuid("tune_id").notNull().references(() => savedTunes.id, { onDelete: "cascade" }),
   position: integer("position").notNull(),
 }, (t) => [primaryKey({ columns: [t.bookId, t.tuneId] }), index("book_tune_order_idx").on(t.bookId, t.position), check("position_nonnegative", sql`${t.position} >= 0`)]);
+
+export const userPreferences = pgTable("user_preferences", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  defaultSound: integer("default_sound").notNull().default(74),
+});

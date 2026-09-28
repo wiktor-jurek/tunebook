@@ -9,6 +9,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { ProfilePreferences } from "@/components/profile-preferences";
 import type { getLibrary } from "@/lib/library";
 
 type Library = Awaited<ReturnType<typeof getLibrary>>;
@@ -23,7 +24,7 @@ async function mutate(body: Record<string, unknown>) {
   if (!response.ok) throw new Error(result.error || "Could not save changes");
 }
 
-export function Sidebar({ library, userName }: { library: Library; userName: string }) {
+export function Sidebar({ library, userName, defaultSound }: { library: Library; userName: string; defaultSound: number }) {
   const path = usePathname(), router = useRouter();
   const [task, setTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,7 +65,7 @@ export function Sidebar({ library, userName }: { library: Library; userName: str
         <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map((folder) => renderFolder(folder, 0))}</div>
         {creationRow(null)}
       </nav>
-      <div className="sidebar-bottom"><span className="user-initial">{userName.charAt(0).toUpperCase()}</span><span className="user-name">{userName}</span><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></div>
+      <div className="sidebar-bottom"><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></div>
     </aside>
     <Dialog.Root open={Boolean(task)} onOpenChange={(value) => { if (!value) setTask(null); }}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog-content"><Dialog.Title className="dialog-title">{task?.title}</Dialog.Title><Dialog.Description className="sr-only">Manage a folder or tunebook.</Dialog.Description><form onSubmit={submit}>
       {task?.operation.startsWith("create") || task?.operation.startsWith("rename") ? <label className="field-label">Name<Input name="name" defaultValue={task.name || ""} required maxLength={80} autoFocus /></label> : null}

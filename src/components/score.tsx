@@ -6,19 +6,15 @@ import { Pause, Play, RotateCcw, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { savedTunes } from "@/db/schema";
 import { abcForTune, noteNames } from "@/lib/notation";
+import { DEFAULT_SOUND, SOUND_OPTIONS } from "@/lib/sounds";
 
 type Tune = typeof savedTunes.$inferSelect;
 type Visual = ReturnType<typeof abcjs.renderAbc>[number];
 type Player = { buffer?: AudioBuffer; key?: string; source?: AudioBufferSourceNode; gain?: GainNode; startedAt: number; offset: number; timer?: abcjs.TimingCallbacks; raf?: number; playing: boolean };
 let sharedContext: AudioContext | null = null;
-const instruments = [
-  { label: "Whistle-like · recorder", program: 74 },
-  { label: "Accordion", program: 21 },
-  { label: "Flute", program: 73 },
-  { label: "Piano", program: 0 },
-];
+const instruments = SOUND_OPTIONS;
 
-export function Score({ tune }: { tune: Tune }) {
+export function Score({ tune, defaultSound = DEFAULT_SOUND }: { tune: Tune; defaultSound?: number }) {
   const paperRef = useRef<HTMLDivElement>(null);
   const visualRef = useRef<Visual | null>(null);
   const playerRef = useRef<Player>({ startedAt: 0, offset: 0, playing: false });
@@ -27,7 +23,8 @@ export function Score({ tune }: { tune: Tune }) {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [instrument, setInstrument] = useState(74);
+  const [soundOverride, setInstrument] = useState<number | null>(null);
+  const instrument = soundOverride ?? defaultSound;
   const [speed, setSpeed] = useState(100);
   const [volume, setVolume] = useState(75);
   const [progress, setProgress] = useState(0);

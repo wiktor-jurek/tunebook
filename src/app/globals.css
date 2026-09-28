@@ -8,3 +8,5 @@
 .book-emoji{display:inline-flex;align-items:center;justify-content:center;flex:none;width:15px;font-size:16px;line-height:1}.emoji-choice{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:6px}.emoji-preview{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px solid var(--border);border-radius:8px;background:white;font-size:23px;cursor:pointer}.emoji-picker{width:min(350px,100%);margin-top:10px}
 
 .nav-create-row{display:grid;grid-template-columns:1fr 1fr;margin:5px 0;border:1px solid var(--border);border-radius:6px;overflow:hidden}.nav-create-row .nav-add{width:auto;min-width:0;margin:0;padding:8px 5px;gap:4px;font-size:10px;justify-content:center;white-space:nowrap}.nav-create-row .nav-add+.nav-add{border-left:1px solid var(--border)}
+
+.profile-button{display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:0;background:none;padding:0;text-align:left;cursor:pointer}.profile-button:hover .user-name{text-decoration:underline}
