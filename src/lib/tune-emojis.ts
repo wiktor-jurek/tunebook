@@ -8,16 +8,17 @@ export class TuneEmojiError extends Error {}
 
 export async function getTuneEmojiSuggestion(tuneId: number, title: string): Promise<string> {
   const [cached] = await db.select().from(tuneEmojiSuggestions).where(eq(tuneEmojiSuggestions.tuneId, tuneId)).limit(1);
-  if (cached) return cached.emoji;
+  if (cached?.matcherVersion === SMART_EMOJI_VERSION) return cached.emoji;
   return db.transaction(async (tx) => {
     // Serialize first-time suggestions across requests/processes, without blocking cached reads.
     await tx.execute(sql`select pg_advisory_xact_lock(63157, ${tuneId})`);
     const [existing] = await tx.select().from(tuneEmojiSuggestions).where(eq(tuneEmojiSuggestions.tuneId, tuneId)).limit(1);
-    if (existing) return existing.emoji;
+    if (existing?.matcherVersion === SMART_EMOJI_VERSION) return existing.emoji;
     const [canonical] = await tx.select({ title: catalogSettings.title }).from(catalogSettings)
       .where(eq(catalogSettings.tuneId, tuneId)).orderBy(asc(catalogSettings.settingId)).limit(1);
-    const emoji = suggestTuneEmoji(canonical?.title ?? title);
-    await tx.insert(tuneEmojiSuggestions).values({ tuneId, emoji, matcherVersion: SMART_EMOJI_VERSION });
+    const emoji = await suggestTuneEmoji(canonical?.title ?? title);
+    await tx.insert(tuneEmojiSuggestions).values({ tuneId, emoji, matcherVersion: SMART_EMOJI_VERSION })
+      .onConflictDoUpdate({ target: tuneEmojiSuggestions.tuneId, set: { emoji, matcherVersion: SMART_EMOJI_VERSION, createdAt: new Date() } });
     return emoji;
   });
 }
@@ -26,7 +27,7 @@ export async function withTuneEmojis<T extends { tuneId: number; title: string; 
   if (!tunes.length) return [] as (T & { emoji: string; suggestedEmoji: string })[];
   const unique = new Map(tunes.map((tune) => [tune.tuneId, tune.title]));
   const cached = await db.select().from(tuneEmojiSuggestions).where(inArray(tuneEmojiSuggestions.tuneId, [...unique.keys()]));
-  const suggestions = new Map(cached.map((row) => [row.tuneId, row.emoji]));
+  const suggestions = new Map(cached.filter((row) => row.matcherVersion === SMART_EMOJI_VERSION).map((row) => [row.tuneId, row.emoji]));
   // Existing saved tunes are filled lazily, once per catalog tune; no catalog-wide migration is needed.
   for (const [tuneId, title] of unique) if (!suggestions.has(tuneId)) suggestions.set(tuneId, await getTuneEmojiSuggestion(tuneId, title));
   return tunes.map((tune) => ({ ...tune, suggestedEmoji: suggestions.get(tune.tuneId)!, emoji: tune.emojiOverride ?? suggestions.get(tune.tuneId)! }));

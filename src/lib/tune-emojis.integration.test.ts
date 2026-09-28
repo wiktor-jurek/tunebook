@@ -15,7 +15,7 @@ vi.mock("./smart-emoji", async (original) => {
   return { ...actual, suggestTuneEmoji: vi.fn(actual.suggestTuneEmoji) };
 });
 
-import { suggestTuneEmoji } from "./smart-emoji";
+import { SMART_EMOJI_VERSION, suggestTuneEmoji } from "./smart-emoji";
 import { getTuneEmojiSuggestion, withTuneEmojis } from "./tune-emojis";
 import { getBook, getLibrary, getSavedTune, saveCatalogSetting } from "./library";
 import { POST as changeEmoji } from "@/app/api/tunes/[id]/emoji/route";
@@ -127,5 +127,31 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("cached tune emojis (PostgreSQL)
     await state.db.delete(savedTunes).where(and(eq(savedTunes.userId, owner.id), eq(savedTunes.id, id)));
     await saveCatalogSetting(owner.id, 3);
     expect(suggestTuneEmoji).not.toHaveBeenCalled();
+  });
+
+  it("refreshes stale keyword defaults once across concurrent readers and keeps personal overrides", async () => {
+    const [legacy] = await state.db.insert(savedTunes).values({ userId: owner.id, settingId: 60, tuneId: 400, title: "The Stallion", emojiOverride: "🎻", abc: "K:D\nDEFG|", sourceUrl: "https://thesession.org/tunes/400" }).returning();
+    const oldDate = new Date("2020-01-01T00:00:00Z");
+    await state.db.insert(tuneEmojiSuggestions).values({ tuneId: 400, emoji: "🎵", matcherVersion: "emojilib-4.0.3-v1", createdAt: oldDate });
+    const [batch, ...suggestions] = await Promise.all([
+      withTuneEmojis([legacy, legacy]),
+      ...Array.from({ length: 5 }, () => getTuneEmojiSuggestion(400, "The Stallion")),
+    ]);
+    expect(batch).toEqual([expect.objectContaining({ emoji: "🎻", suggestedEmoji: "🐎" }), expect.objectContaining({ emoji: "🎻", suggestedEmoji: "🐎" })]);
+    expect(suggestions).toEqual(Array(5).fill("🐎"));
+    expect(suggestTuneEmoji).toHaveBeenCalledTimes(1);
+    const [cache] = await state.db.select().from(tuneEmojiSuggestions).where(eq(tuneEmojiSuggestions.tuneId, 400));
+    expect(cache).toMatchObject({ emoji: "🐎", matcherVersion: SMART_EMOJI_VERSION });
+    expect(cache.createdAt.getTime()).toBeGreaterThan(oldDate.getTime());
+    expect((await getSavedTune(owner.id, legacy.id))?.emojiOverride).toBe("🎻");
+    expect(suggestTuneEmoji).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not persist a failed inference and retries on the next request", async () => {
+    vi.mocked(suggestTuneEmoji).mockRejectedValueOnce(new Error("Model unavailable"));
+    await expect(getTuneEmojiSuggestion(500, "The Seamstress")).rejects.toThrow("Model unavailable");
+    expect(await state.db.select().from(tuneEmojiSuggestions).where(eq(tuneEmojiSuggestions.tuneId, 500))).toHaveLength(0);
+    expect(await getTuneEmojiSuggestion(500, "The Seamstress")).toBe("🪡");
+    expect(suggestTuneEmoji).toHaveBeenCalledTimes(2);
   });
 });

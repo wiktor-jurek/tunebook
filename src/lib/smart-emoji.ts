@@ -1,6 +1,6 @@
 import keywords from "emojilib";
 
-export const SMART_EMOJI_VERSION = "emojilib-4.0.3-v1";
+export const SMART_EMOJI_VERSION = "potion-8m-1.0.4-emojilib-4.0.3-v1";
 export const FALLBACK_TUNE_EMOJI = "🎵";
 
 const stopWords = new Set("a an the and or of at in on to for from by with i am is are my your his her our their me it its o s re jig reel hornpipe polka waltz slip slide tune traditional".split(" "));
@@ -38,18 +38,36 @@ const index = Object.entries(keywords).map(([emoji, words]) => ({
 const frequency = new Map<string, number>();
 for (const entry of index) for (const word of entry.words) frequency.set(word, (frequency.get(word) ?? 0) + 1);
 
-export function suggestTuneEmoji(title: string): string {
+// The package includes the model weights; inference never downloads or sends titles.
+// Share the initialization promise so simultaneous first requests load the model once.
+let semanticIndex: Promise<{ embed: typeof import("@yarflam/potion-base-8m").embed; vectors: Float32Array[] }> | undefined;
+function getSemanticIndex() {
+  return semanticIndex ??= (async () => {
+    const { embed } = await import("@yarflam/potion-base-8m");
+    const vectors = await embed(Object.values(keywords).map((words) => [...new Set(words.map(normalize))].join(" ")));
+    return { embed, vectors };
+  })().catch((error) => { semanticIndex = undefined; throw error; });
+}
+
+export async function suggestTuneEmoji(title: string): Promise<string> {
   const normalized = normalize(title.slice(0, 300));
   const words = [...new Set(normalized.split(" ").map(singular).filter((word) => word.length > 1 && !stopWords.has(word)))];
   if (!words.length) return FALLBACK_TUNE_EMOJI;
-  let best = FALLBACK_TUNE_EMOJI, bestScore = 0;
-  for (const entry of index) {
-    let score = 0;
+  const { embed, vectors } = await getSemanticIndex();
+  const [query] = await embed(words.join(" "));
+  // This is a similarity cutoff, not a probability. Avoid arbitrary icons for names
+  // with no convincing match; exact vocabulary is a useful prior for short titles.
+  let best = FALLBACK_TUNE_EMOJI, bestScore = 0.4;
+  for (const [i, entry] of index.entries()) {
+    let lexical = 0;
     for (const word of words) {
-      if (entry.words.has(word)) score += Math.log(1 + index.length / (frequency.get(word) ?? 1)) + (entry.primary === word ? 4 : 0);
-      for (const concept of related[word] ?? []) if (entry.phrases.has(concept)) score += 14 + (entry.primary === concept ? 6 : 0);
+      if (entry.words.has(word)) lexical += Math.log(1 + index.length / (frequency.get(word) ?? 1)) + (entry.primary === word ? 4 : 0);
+      for (const concept of related[word] ?? []) if (entry.phrases.has(concept)) lexical += 14 + (entry.primary === concept ? 6 : 0);
     }
-    if (entry.primary.length > 2 && ` ${normalized} `.includes(` ${entry.primary} `)) score += 8;
+    if (entry.primary.length > 2 && ` ${normalized} `.includes(` ${entry.primary} `)) lexical += 8;
+    // Potion produces L2-normalized vectors, so their dot product is cosine similarity.
+    const similarity = query.reduce((sum, value, j) => sum + value * vectors[i][j], 0);
+    const score = similarity + Math.min(lexical / 40, 0.6);
     // Dataset ordering provides a stable tie-break, favoring the basic emoji variants.
     if (score > bestScore) { bestScore = score; best = entry.emoji; }
   }
