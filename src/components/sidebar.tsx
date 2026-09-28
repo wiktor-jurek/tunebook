@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, Folder, Music2, LogOut, Plus, Search, Settings2, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Folder, Music2, LogOut, Plus, Settings2, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +60,7 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark">𝄞</span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
-        <div className="nav-section"><Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link><Link onClick={closeMobile} href="/import" className={`nav-link ${path === "/import" ? "active" : ""}`}><Search size={16} /> Import tunes</Link></div>
+        <div className="nav-section"><Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link></div>
         <div className="nav-label-row"><span>TUNEBOOKS</span></div>
         <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map((folder) => renderFolder(folder, 0))}</div>
         {creationRow(null)}
