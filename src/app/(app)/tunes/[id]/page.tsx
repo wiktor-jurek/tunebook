@@ -12,5 +12,5 @@ export default async function TunePage({ params }: { params: Promise<{ id: strin
   const user = await requireUser();
   const [tune, defaultSound] = await Promise.all([getSavedTune(user.id, id), getDefaultSound(user.id)]);
   if (!tune) notFound();
-  return <div className="page-wrap tune-page"><Link className="back-link" href="/"><ArrowLeft size={15} /> All tunes</Link><Score tune={tune} defaultSound={defaultSound} /><TuneActions tuneId={tune.id} /></div>;
+  return <div className="page-wrap tune-page"><Link className="back-link" href="/"><ArrowLeft size={15} /> Tunes</Link><Score tune={tune} defaultSound={defaultSound} /><TuneActions tuneId={tune.id} /></div>;
 }

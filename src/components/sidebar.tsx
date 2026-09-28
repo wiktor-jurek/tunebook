@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, Folder, Home, LogOut, Plus, Search, Settings2, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Folder, Music2, LogOut, Plus, Search, Settings2, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +60,7 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark">𝄞</span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
-        <div className="nav-section"><Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Home size={16} /> Home <span className="nav-count">{library.tunes.length}</span></Link><Link onClick={closeMobile} href="/import" className={`nav-link ${path === "/import" ? "active" : ""}`}><Search size={16} /> Import tunes</Link></div>
+        <div className="nav-section"><Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link><Link onClick={closeMobile} href="/import" className={`nav-link ${path === "/import" ? "active" : ""}`}><Search size={16} /> Import tunes</Link></div>
         <div className="nav-label-row"><span>TUNEBOOKS</span></div>
         <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map((folder) => renderFolder(folder, 0))}</div>
         {creationRow(null)}
@@ -74,7 +74,7 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
       {task?.operation === "renameBook" && <div className="manage-actions"><Button type="button" variant="outline" onClick={() => setTask({ ...task, operation: "moveBook", title: `Move ${task.name}` })}>Move</Button><Button type="button" variant="danger" onClick={() => setTask({ ...task, operation: "deleteBook", title: `Delete ${task.name}?`, danger: true })}>Delete</Button></div>}
       {task?.operation === "moveFolder" && <label className="field-label">Parent folder<select className="input" name="parentId" defaultValue={task.parentId || ""}><option value="">Root</option>{library.folders.filter((f) => f.id !== task.folderId).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
       {task?.operation === "moveBook" && <label className="field-label">Folder<select className="input" name="folderId" defaultValue={task.folderId || ""}><option value="">Root</option>{library.folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
-      {task?.danger && <p className="muted">{task.operation === "deleteFolder" ? "This also deletes nested folders and tunebooks. Saved tunes stay in Home." : "This removes the tunebook. Saved tunes stay in Home."}</p>}
+      {task?.danger && <p className="muted">{task.operation === "deleteFolder" ? "This also deletes nested folders and tunebooks. Saved tunes stay in Tunes." : "This removes the tunebook. Saved tunes stay in Tunes."}</p>}
       {error && <p role="alert" className="form-error">{error}</p>}
       <div className="dialog-actions"><Dialog.Close asChild><Button type="button" variant="outline">Cancel</Button></Dialog.Close><Button disabled={busy} variant={task?.danger ? "danger" : "default"}>{busy ? "Saving…" : task?.danger ? "Delete" : "Save"}</Button></div>
     </form></Dialog.Content></Dialog.Portal></Dialog.Root>
