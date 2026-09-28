@@ -47,6 +47,7 @@ export const tunebooks = pgTable("tunebooks", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   folderId: uuid("folder_id"),
   name: text("name").notNull(),
+  emoji: text("emoji"),
   createdAt: createdAt(),
 }, (t) => [index("book_folder_idx").on(t.userId, t.folderId)]);
 

@@ -1,0 +1,1 @@
+ALTER TABLE "tunebooks" ADD COLUMN "emoji" text;

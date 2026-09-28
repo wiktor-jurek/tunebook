@@ -15,6 +15,11 @@ function id(value: unknown) {
   return value;
 }
 function optionalId(value: unknown) { return value === null || value === "" || value === undefined ? null : id(value); }
+function bookEmoji(value: unknown) {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || value.length > 32 || [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value)].length !== 1) throw new ClientError("Choose one emoji");
+  return value;
+}
 
 export async function POST(request: Request) {
   const user = await currentUser();
@@ -82,11 +87,12 @@ export async function POST(request: Request) {
       case "createBook": {
         const folderId = optionalId(input.folderId);
         await folderExists(folderId);
-        await db.insert(tunebooks).values({ userId, folderId, name: name(input.name) });
+        await db.insert(tunebooks).values({ userId, folderId, name: name(input.name), emoji: bookEmoji(input.emoji ?? null) });
         break;
       }
       case "renameBook": {
-        const result = await db.update(tunebooks).set({ name: name(input.name) }).where(and(eq(tunebooks.userId, userId), eq(tunebooks.id, id(input.bookId)))).returning({ id: tunebooks.id });
+        const updates = { name: name(input.name), ...("emoji" in input ? { emoji: bookEmoji(input.emoji) } : {}) };
+        const result = await db.update(tunebooks).set(updates).where(and(eq(tunebooks.userId, userId), eq(tunebooks.id, id(input.bookId)))).returning({ id: tunebooks.id });
         if (!result.length) throw new ClientError("Tunebook not found");
         break;
       }
