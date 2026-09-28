@@ -2,59 +2,54 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, Folder, Music2, LogOut, Plus, Settings2, X } from "lucide-react";
-import * as Dialog from "@radix-ui/react-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useRef, useState } from "react";
+import { BookOpen, ChevronDown, ChevronRight, Folder, Music2, LogOut, Plus, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
 import { BookIcon } from "@/components/book-icon";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { LibraryDialog, type LibraryTask as Task } from "@/components/library-dialog";
 import type { getLibrary } from "@/lib/library";
 
 type Library = Awaited<ReturnType<typeof getLibrary>>;
 type FolderRow = Library["folders"][number];
 type BookRow = Library["books"][number];
-type Task = { operation: string; title: string; name?: string; folderId?: string | null; bookId?: string; parentId?: string | null; emoji?: string | null; danger?: boolean };
-
-async function mutate(body: Record<string, unknown>) {
-  const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Could not save changes");
-}
-
 export function Sidebar({ library, userName, defaultSound }: { library: Library; userName: string; defaultSound: number }) {
   const path = usePathname(), router = useRouter();
   const [task, setTask] = useState<Task | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const returnFocus = useRef<HTMLButtonElement | null>(null);
+  const newButton = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [mobileOpen, setMobileOpen] = useState(false);
   const foldersByParent = (parent: string | null) => library.folders.filter((f) => f.parentId === parent);
   const booksByFolder = (folder: string | null) => library.books.filter((b) => b.folderId === folder);
-  const launch = (next: Task) => { setError(""); setTask(next); };
+  const launch = (next: Task) => setTask(next);
   const closeMobile = () => setMobileOpen(false);
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!task) return;
-    const data = new FormData(event.currentTarget);
-    setBusy(true); setError("");
-    try {
-      await mutate({ ...task, name: data.get("name") || task.name, parentId: data.has("parentId") ? data.get("parentId") : task.parentId, folderId: data.has("folderId") ? data.get("folderId") : task.folderId });
-      setTask(null); router.refresh();
-      if (task.operation === "deleteBook" && path === `/books/${task.bookId}`) router.push("/");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Request failed"); }
-    finally { setBusy(false); }
+  const managementMenu = (name: string, target: { bookId: string; folderId: string | null } | { folderId: string; parentId: string | null }) => {
+    const kind = "bookId" in target ? "Book" : "Folder";
+    return <DropdownMenu><DropdownMenuTrigger asChild><button className="icon-button subtle" aria-label={`Actions for ${name}`} title={`Actions for ${name}`} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger><DropdownMenuContent className="nav-action-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{name}</DropdownMenuLabel>
+      <DropdownMenuItem onSelect={() => launch({ ...target, operation: `rename${kind}`, title: "Rename", name })}><Pencil size={15} /><span>Rename</span></DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => launch({ ...target, operation: `move${kind}`, title: "Move", name })}><FolderInput size={16} /><span>Move to…</span></DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem className="dropdown-danger" onSelect={() => launch({ ...target, operation: `delete${kind}`, title: "Delete", name })}><Trash2 size={15} /><span>Delete</span></DropdownMenuItem>
+    </DropdownMenuContent></DropdownMenu>;
+  };
+  function revealDestination(folderId: string | null) {
+    const parents: string[] = [];
+    let cursor = folderId;
+    while (cursor && !parents.includes(cursor)) {
+      parents.push(cursor); cursor = library.folders.find((folder) => folder.id === cursor)?.parentId ?? null;
+    }
+    setOpen((current) => ({ ...current, ...Object.fromEntries(parents.map((id) => [id, true])) }));
   }
-  const bookLink = (book: BookRow) => <div key={book.id} className={`nav-row nav-book-row ${path === `/books/${book.id}` ? "active" : ""}`}><BookIcon bookId={book.id} emoji={book.emoji} label={`Change icon for ${book.name}`} /><Link onClick={closeMobile} className="nav-link nav-book" aria-current={path === `/books/${book.id}` ? "page" : undefined} href={`/books/${book.id}`}><span>{book.name}</span></Link><button className="icon-button subtle" aria-label={`Manage ${book.name}`} onClick={() => launch({ operation: "renameBook", title: `Manage ${book.name}`, bookId: book.id, name: book.name, folderId: book.folderId, emoji: book.emoji })}><Settings2 size={14} /></button></div>;
+  const bookLink = (book: BookRow) => <div key={book.id} className={`nav-row nav-book-row ${path === `/books/${book.id}` ? "active" : ""}`}><BookIcon bookId={book.id} emoji={book.emoji} label={`Change icon for ${book.name}`} /><Link onClick={closeMobile} className="nav-link nav-book" aria-current={path === `/books/${book.id}` ? "page" : undefined} href={`/books/${book.id}`}><span>{book.name}</span></Link>{managementMenu(book.name, { bookId: book.id, folderId: book.folderId })}</div>;
   const createInside = (next: Task, folder?: FolderRow) => {
     if (folder) setOpen((current) => ({ ...current, [folder.id]: true }));
     launch(next);
   };
-  const creationMenu = (folder?: FolderRow) => <DropdownMenu><DropdownMenuTrigger asChild><button className={folder ? "icon-button subtle" : "nav-new-button"} aria-label={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"} title={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"}><Plus size={14} />{!folder && <span>New</span>}</button></DropdownMenuTrigger><DropdownMenuContent className="nav-create-menu" align="end"><DropdownMenuLabel>{folder ? `Inside ${folder.name}` : "Create"}</DropdownMenuLabel><DropdownMenuItem onSelect={() => createInside({ operation: "createBook", title: "New tunebook", folderId: folder?.id ?? null }, folder)}><BookOpen size={16} /><span>New tunebook</span></DropdownMenuItem><DropdownMenuItem onSelect={() => createInside({ operation: "createFolder", title: "New folder", parentId: folder?.id ?? null }, folder)}><Folder size={16} /><span>{folder ? "New subfolder" : "New folder"}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
+  const creationMenu = (folder?: FolderRow) => <DropdownMenu><DropdownMenuTrigger asChild><button ref={folder ? undefined : newButton} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }} className={folder ? "icon-button subtle" : "nav-new-button"} aria-label={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"} title={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"}><Plus size={14} />{!folder && <span>New</span>}</button></DropdownMenuTrigger><DropdownMenuContent className="nav-create-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{folder ? `Inside ${folder.name}` : "Create"}</DropdownMenuLabel><DropdownMenuItem onSelect={() => createInside({ operation: "createBook", title: "New tunebook", folderId: folder?.id ?? null }, folder)}><BookOpen size={16} /><span>New tunebook</span></DropdownMenuItem><DropdownMenuItem onSelect={() => createInside({ operation: "createFolder", title: "New folder", parentId: folder?.id ?? null }, folder)}><Folder size={16} /><span>{folder ? "New subfolder" : "New folder"}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
   const renderFolder = (folder: FolderRow): React.ReactNode => <div key={folder.id}>
-    <div className="nav-row"><button className="nav-link nav-folder" aria-expanded={open[folder.id] ?? true} onClick={() => setOpen({ ...open, [folder.id]: !(open[folder.id] ?? true) })}>{open[folder.id] ?? true ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<Folder size={15} /><span>{folder.name}</span></button>{creationMenu(folder)}<button className="icon-button subtle" aria-label={`Manage ${folder.name}`} onClick={() => launch({ operation: "renameFolder", title: `Manage ${folder.name}`, folderId: folder.id, name: folder.name, parentId: folder.parentId })}><Settings2 size={14} /></button></div>
+    <div className="nav-row"><button className="nav-link nav-folder" aria-expanded={open[folder.id] ?? true} onClick={() => setOpen({ ...open, [folder.id]: !(open[folder.id] ?? true) })}>{open[folder.id] ?? true ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<Folder size={15} /><span>{folder.name}</span></button>{creationMenu(folder)}{managementMenu(folder.name, { folderId: folder.id, parentId: folder.parentId })}</div>
     {(open[folder.id] ?? true) && <div className="nav-children">{foldersByParent(folder.id).map(renderFolder)}{booksByFolder(folder.id).map(bookLink)}</div>}
   </div>;
   return <>
@@ -69,16 +64,6 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
       </nav>
       <div className="sidebar-bottom"><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await authClient.signOut(); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></div>
     </aside>
-    <Dialog.Root open={Boolean(task)} onOpenChange={(value) => { if (!value) setTask(null); }}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog-content"><Dialog.Title className="dialog-title">{task?.title}</Dialog.Title><Dialog.Description className="sr-only">Manage a folder or tunebook.</Dialog.Description><form onSubmit={submit}>
-      {task?.operation.startsWith("create") || task?.operation.startsWith("rename") ? <label className="field-label">Name<Input name="name" defaultValue={task.name || ""} required maxLength={80} autoFocus /></label> : null}
-      {(task?.operation === "createBook" || task?.operation === "renameBook") && <div className="field-label"><span>Icon</span><BookIcon size="draft" emoji={task.emoji ?? null} label="Change tunebook icon" onChange={(emoji) => setTask({ ...task, emoji })} /></div>}
-      {task?.operation === "renameFolder" && <div className="manage-actions"><Button type="button" variant="outline" onClick={() => setTask({ ...task, operation: "moveFolder", title: `Move ${task.name}` })}>Move</Button><Button type="button" variant="danger" onClick={() => setTask({ ...task, operation: "deleteFolder", title: `Delete ${task.name}?`, danger: true })}>Delete</Button></div>}
-      {task?.operation === "renameBook" && <div className="manage-actions"><Button type="button" variant="outline" onClick={() => setTask({ ...task, operation: "moveBook", title: `Move ${task.name}` })}>Move</Button><Button type="button" variant="danger" onClick={() => setTask({ ...task, operation: "deleteBook", title: `Delete ${task.name}?`, danger: true })}>Delete</Button></div>}
-      {task?.operation === "moveFolder" && <label className="field-label">Parent folder<select className="input" name="parentId" defaultValue={task.parentId || ""}><option value="">Root</option>{library.folders.filter((f) => f.id !== task.folderId).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
-      {task?.operation === "moveBook" && <label className="field-label">Folder<select className="input" name="folderId" defaultValue={task.folderId || ""}><option value="">Root</option>{library.folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
-      {task?.danger && <p className="muted">{task.operation === "deleteFolder" ? "This also deletes nested folders and tunebooks. Saved tunes stay in Tunes." : "This removes the tunebook. Saved tunes stay in Tunes."}</p>}
-      {error && <p role="alert" className="form-error">{error}</p>}
-      <div className="dialog-actions"><Dialog.Close asChild><Button type="button" variant="outline">Cancel</Button></Dialog.Close><Button disabled={busy} variant={task?.danger ? "danger" : "default"}>{busy ? "Saving…" : task?.danger ? "Delete" : "Save"}</Button></div>
-    </form></Dialog.Content></Dialog.Portal></Dialog.Root>
+    {task && <LibraryDialog key={`${task.operation}-${task.bookId ?? task.folderId ?? "root"}`} task={task} library={library} onClose={() => setTask(null)} onMove={revealDestination} onReturnFocus={() => { requestAnimationFrame(() => { if (returnFocus.current?.isConnected) returnFocus.current.focus(); else newButton.current?.focus(); }); }} />}
   </>;
 }

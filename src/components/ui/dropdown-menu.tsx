@@ -16,6 +16,9 @@ export function DropdownMenuLabel({ className, ...props }: React.ComponentProps<
 export function DropdownMenuItem({ className, ...props }: React.ComponentProps<typeof Primitive.Item>) {
   return <Primitive.Item data-slot="dropdown-menu-item" className={cn("dropdown-item", className)} {...props} />;
 }
+export function DropdownMenuSeparator() {
+  return <Primitive.Separator className="dropdown-separator" />;
+}
 export function DropdownMenuCheckboxItem({ children, className, ...props }: React.ComponentProps<typeof Primitive.CheckboxItem>) {
   return <Primitive.CheckboxItem data-slot="dropdown-menu-checkbox-item" className={cn("dropdown-checkbox", className)} {...props}><span className="dropdown-indicator"><Primitive.ItemIndicator><Check size={14} /></Primitive.ItemIndicator></span>{children}</Primitive.CheckboxItem>;
 }
