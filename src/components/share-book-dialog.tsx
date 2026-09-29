@@ -64,13 +64,13 @@ export function ShareBookDialog({ bookId, name, ownerName, ownerEmail }: { bookI
     <Dialog.Trigger asChild><Button variant="outline"><Share2 size={15} />Share</Button></Dialog.Trigger>
     <Dialog.Portal><Dialog.Overlay className="dialog-overlay" />
       <Dialog.Content className="dialog-content share-dialog" onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
-        <header className="library-dialog-head"><div><Dialog.Title className="dialog-title">Share “{name}”</Dialog.Title><Dialog.Description className="library-dialog-description">Share scores and playback. People you share with can view this tunebook.</Dialog.Description></div><Dialog.Close asChild><button className="icon-button" disabled={busy} aria-label="Close sharing dialog"><X size={18} /></button></Dialog.Close></header>
+        <header className="library-dialog-head"><div><Dialog.Title className="dialog-title">Share {name}</Dialog.Title><Dialog.Description className="library-dialog-description">Share scores and playback. People you share with can view this tunebook.</Dialog.Description></div><Dialog.Close asChild><button className="icon-button" disabled={busy} aria-label="Close sharing dialog"><X size={18} /></button></Dialog.Close></header>
         <div className="share-dialog-body">
           <form className="share-invite-form" onSubmit={(event) => { event.preventDefault(); void update({ operation: "invite", email: email.trim() }); }}>
             <label className="field-label">Share by email<Input type="email" autoComplete="email" placeholder="Add an email address" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} disabled={busy || !settings} /></label>
             <Button disabled={busy || !settings || !email.trim()} type="submit">Share</Button>
           </form>
-          {!settings && !error && <p className="muted" role="status">Loading sharing settings…</p>}
+          {!settings && !error && <p className="muted" role="status">Loading sharing settings</p>}
           {settings && <>
             <section className="share-people" aria-labelledby="share-people-title"><h2 id="share-people-title">People with access</h2>
               <div className="share-person"><span className="share-avatar"><UserRound size={18} /></span><div><strong>{ownerName} (you)</strong><span>{ownerEmail}</span></div><span className="share-role">Owner</span></div>
@@ -81,7 +81,7 @@ export function ShareBookDialog({ bookId, name, ownerName, ownerEmail }: { bookI
           {error && <p role="alert" className="form-error">{error}{!settings && <Button variant="ghost" size="sm" onClick={() => { setError(""); setReload((value) => value + 1); }}>Try again</Button>}</p>}
           {message && <p role="status" className="muted">{message}</p>}
         </div>
-        <footer className="library-dialog-footer share-dialog-footer"><Button variant="outline" disabled={busy || !settings} onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/books/${bookId}`); trackEvent("book_link_copied", { outcome: "success" }); setCopied(true); setError(""); } catch { trackEvent("book_link_copied", { outcome: "error" }); setError("Could not copy the link. Copy this page’s address from your browser."); } }}>{copied ? <Check size={15} /> : <Copy size={15} />}{copied ? "Copied" : "Copy link"}</Button><span className="sr-only" role="status">{copied ? "Link copied to clipboard" : ""}</span><Dialog.Close asChild><Button disabled={busy}>Done</Button></Dialog.Close></footer>
+        <footer className="library-dialog-footer share-dialog-footer"><Button variant="outline" disabled={busy || !settings} onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/books/${bookId}`); trackEvent("book_link_copied", { outcome: "success" }); setCopied(true); setError(""); } catch { trackEvent("book_link_copied", { outcome: "error" }); setError("Could not copy the link. Copy this page's address from your browser."); } }}>{copied ? <Check size={15} /> : <Copy size={15} />}{copied ? "Copied" : "Copy link"}</Button><span className="sr-only" role="status">{copied ? "Link copied to clipboard" : ""}</span><Dialog.Close asChild><Button disabled={busy}>Done</Button></Dialog.Close></footer>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;

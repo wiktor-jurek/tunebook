@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { bookEntries, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
+import { bookEntries, bookPopularTunes, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
 import { currentUser } from "@/lib/session";
 import { getBook } from "@/lib/library";
 
@@ -35,6 +35,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
       if (input.operation === "tune") return { tuneId: ids.get(input.tuneId) };
       const [copy] = await tx.insert(tunebooks).values({ userId: user.id, name: data.book.name, emoji: data.book.emoji }).returning({ id: tunebooks.id });
+      const popularIds = [...new Set(data.tunes.filter(({ tune }) => tune.oftenPlayed).map(({ tune }) => tune.tuneId))];
+      if (popularIds.length) await tx.insert(bookPopularTunes).values(popularIds.map((tuneId) => ({ bookId: copy.id, tuneId })));
       for (const [position, section] of data.sections.entries()) {
         if (section.kind === "tune") await tx.insert(bookEntries).values({ bookId: copy.id, tuneId: ids.get(section.tune.id)!, position });
         else {

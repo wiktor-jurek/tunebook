@@ -51,6 +51,14 @@ Use **Add set** to reuse one in another tunebook. It inserts the tunes as a grou
 
 Shared books display the same set headings and order. Saving a shared book makes private copies of its sets and tunes. The database stores reusable set identities, ordered memberships, and tunebook placements separately; `getOftenPlayedWith` counts distinct sets containing each pair of catalog tunes, so reusing a set in several books does not inflate the count.
 
+## Often played in a session
+
+Each tunebook has an **Often played** repertoire. The owner can star a tune in the contents or beside its score, then use **Often played** to filter the contents and scores. Guests and shared-book viewers see the same stars and can use the filter.
+
+Stars belong to the tunebook and The Session tune ID, so alternate settings and repeated placements share the same status inside that book. Reusing a tune or set in another book does not carry its stars over. Grouping, ungrouping, and reordering preserve them; removing and later re-adding a tune restores its status for that session. Saving a whole shared book copies its repertoire into an independent book. Saving an individual tune does not create a personal favourite.
+
+The `book_popular_tunes` table stores these shared markers and removes them when the book is deleted. Run `npm run db:migrate` locally; production applies the migration at startup. Run `npm run test:popularity` for PostgreSQL checks of session isolation, alternate settings, shared views, ownership, grouping, concurrency, and copies.
+
 ## Practice and ability
 
 Each saved tune has a quiet four-bar ability indicator. Click it in Tunes, a score, or an owned tunebook to choose a manual level, return to **From speed**, or reset progress. The four levels are **Unlearned** (no recorded speed), **Learning** (50–99%), **Learned** (100–124%), and **Mastered** (125–150%). Manual levels can be set without recording a speed and take precedence over speed-derived levels.

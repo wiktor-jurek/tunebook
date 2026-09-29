@@ -56,7 +56,7 @@ export async function POST(request: Request, context: Context) {
         const url = new URL(`/books/${access.book.id}`, process.env.BETTER_AUTH_URL || request.url).href;
         try {
           await sendEmail(input.email, `${access.user.name} shared a tunebook with you`,
-            `${access.user.name} shared “${access.book.name}” with you.\n\nOpen the tunebook: ${url}\n\nSign in or create an account using ${input.email}. Once your email is verified, the tunebook will appear under Shared with me. You have view-only access.`);
+            `${access.user.name} shared ${access.book.name} with you.\n\nOpen the tunebook: ${url}\n\nSign in or create an account using ${input.email}. Once your email is verified, the tunebook will appear under Shared with me. You have view-only access.`);
         } catch {
           warning = "Access granted, but the invitation email could not be sent. Copy the link and send it to them.";
         }

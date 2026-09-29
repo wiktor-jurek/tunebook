@@ -32,7 +32,7 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     const kind = "bookId" in target ? "Book" : "Folder";
     return <DropdownMenu><DropdownMenuTrigger asChild><button className="icon-button subtle" aria-label={`Actions for ${name}`} title={`Actions for ${name}`} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger><DropdownMenuContent className="nav-action-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{name}</DropdownMenuLabel>
       <DropdownMenuItem onSelect={() => launch({ ...target, operation: `rename${kind}`, title: "Rename", name })}><Pencil size={15} /><span>Rename</span></DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => launch({ ...target, operation: `move${kind}`, title: "Move", name })}><FolderInput size={16} /><span>Move to…</span></DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => launch({ ...target, operation: `move${kind}`, title: "Move", name })}><FolderInput size={16} /><span>Move to</span></DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem className="dropdown-danger" onSelect={() => launch({ ...target, operation: `delete${kind}`, title: "Delete", name })}><Trash2 size={15} /><span>Delete</span></DropdownMenuItem>
     </DropdownMenuContent></DropdownMenu>;
@@ -59,7 +59,7 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><BookOpen size={18} /> Tunebook</button>
     {mobileOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={closeMobile} />}
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
-      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark">𝄞</span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
+      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark"><Music2 size={20} aria-hidden="true" /></span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
         <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link>}</div>
         {!guest && <Link onClick={closeMobile} href="/sets" className={`nav-link nav-my-sets ${path === "/sets" ? "active" : ""}`} aria-current={path === "/sets" ? "page" : undefined}><ListMusic size={16} /> My sets <span className="nav-count">{library.sets.length}</span></Link>}

@@ -57,6 +57,13 @@
       "when": 1790627161263,
       "tag": "0007_purple_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790686936862,
+      "tag": "0008_milky_rachel_grey",
+      "breakpoints": true
     }
   ]
 }

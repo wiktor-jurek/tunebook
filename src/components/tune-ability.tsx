@@ -42,13 +42,13 @@ export function TuneAbility({ tune, editable = true }: { tune: Tune; editable?: 
     <p>{tune.practice.playableTempo ? `Best recorded speed: ${tune.practice.playableTempo}%` : "No speed recorded yet. Confirm a speed while practising."}</p>
     <label className="field-label" htmlFor={selectId}>Ability level</label>
     <select id={selectId} value={tune.practice.levelOverride ?? "auto"} disabled={busy} onChange={(event) => void update({ operation: "level", level: event.target.value === "auto" ? null : event.target.value as AbilityLevel })}>
-      <option value="auto">From speed · {ABILITY_LABELS[abilityFromTempo(tune.practice.playableTempo)]}</option>
+      <option value="auto">From speed, {ABILITY_LABELS[abilityFromTempo(tune.practice.playableTempo)]}</option>
       {ABILITY_LEVELS.map((level) => <option key={level} value={level}>{ABILITY_LABELS[level]}</option>)}
     </select>
-    <p className="ability-help">Unlearned: no speed recorded. Learning: 50–99%. Learned: 100–124%. Mastered: 125–150%. You can choose any level yourself.</p>
-    <p className="ability-help">Progress is private and follows your settings of this tune. Speeds are relative to the score’s normal tempo.</p>
+    <p className="ability-help">Unlearned: no speed recorded. Learning: 50-99%. Learned: 100-124%. Mastered: 125-150%. You can choose any level yourself.</p>
+    <p className="ability-help">Progress is private and follows your settings of this tune. Speeds are relative to the normal tempo of the score.</p>
     <button type="button" className="ability-reset" disabled={busy || (tune.practice.playableTempo === null && tune.practice.levelOverride === null)} onClick={() => void update({ operation: "reset" })}>Reset progress</button>
-    <span role="status" className="ability-status">{busy ? "Saving…" : message}</span>{error && <p className="form-error" role="alert">{error}</p>}
+    <span role="status" className="ability-status">{busy ? "Saving" : message}</span>{error && <p className="form-error" role="alert">{error}</p>}
   </Popover.Content></Popover.Portal></Popover.Root>;
 }
 
@@ -56,7 +56,7 @@ export function PracticeSpeed({ tune, speed }: { tune: Tune; speed: number }) {
   const { busy, error, message, update } = usePracticeUpdate(tune);
   return <div className="practice-speed">
     <button type="button" className="practice-confirm" disabled={busy} onClick={() => void update({ operation: "tempo", tempo: speed })}>Can play at {speed}%</button>
-    <span className="practice-recorded">{tune.practice.playableTempo ? `Best: ${tune.practice.playableTempo}%` : "No speed recorded"}{tune.practice.levelOverride && " · level set manually"}</span>
-    <span className="ability-status" role="status">{busy ? "Saving…" : message}</span>{error && <p className="form-error" role="alert">{error}</p>}
+    <span className="practice-recorded">{tune.practice.playableTempo ? `Best: ${tune.practice.playableTempo}%` : "No speed recorded"}{tune.practice.levelOverride && ", level set manually"}</span>
+    <span className="ability-status" role="status">{busy ? "Saving" : message}</span>{error && <p className="form-error" role="alert">{error}</p>}
   </div>;
 }

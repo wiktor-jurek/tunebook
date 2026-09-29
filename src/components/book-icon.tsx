@@ -9,7 +9,7 @@ import { BookOpen, X } from "lucide-react";
 
 const EmojiPicker = dynamic(() => import("@/components/emoji-picker"), {
   ssr: false,
-  loading: () => <p className="emoji-loading">Loading emojis…</p>,
+  loading: () => <p className="emoji-loading">Loading emojis</p>,
 });
 
 type Props = { emoji: string | null; label: string; size?: "nav" | "page" | "draft" } & (
@@ -52,7 +52,7 @@ export function BookIcon({ emoji, label, size = "nav", bookId, onChange, readOnl
     <Popover.Portal><Popover.Content className="emoji-popover" align="start" sideOffset={6} collisionPadding={12} aria-label="Choose a tunebook icon">
       <div className="emoji-popover-head"><span>Choose an icon</span><Popover.Close asChild><button type="button" className="icon-button" aria-label="Close emoji picker"><X size={15} /></button></Popover.Close></div>
       <div className="emoji-popover-picker" aria-busy={busy} inert={busy || undefined}><EmojiPicker onSelect={(next) => void choose(next)} /></div>
-      <div className="emoji-popover-footer"><button type="button" className="emoji-reset" disabled={busy || !emoji} onClick={() => void choose(null)}><BookOpen size={14} /> Use default icon</button>{busy && <span role="status">Saving…</span>}</div>
+      <div className="emoji-popover-footer"><button type="button" className="emoji-reset" disabled={busy || !emoji} onClick={() => void choose(null)}><BookOpen size={14} /> Use default icon</button>{busy && <span role="status">Saving</span>}</div>
       {error && <p role="alert" className="form-error">{error}</p>}
     </Popover.Content></Popover.Portal>
   </Popover.Root>;

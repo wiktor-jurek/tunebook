@@ -7,7 +7,7 @@ import { currentUser } from "@/lib/session";
 class ClientError extends Error {}
 
 function name(value: unknown) {
-  if (typeof value !== "string" || !value.trim() || value.trim().length > 80) throw new ClientError("Name must be 1–80 characters");
+  if (typeof value !== "string" || !value.trim() || value.trim().length > 80) throw new ClientError("Name must be 1-80 characters");
   return value.trim();
 }
 function id(value: unknown) {

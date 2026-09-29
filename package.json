@@ -18,7 +18,8 @@
     "test:sharing": "node --env-file=.env scripts/test-sharing.mjs",
     "test:sets": "node --env-file=.env scripts/test-sets.mjs",
     "test:emojis": "node --env-file=.env scripts/test-emojis.mjs",
-    "test:practice": "node --env-file=.env scripts/test-practice.mjs"
+    "test:practice": "node --env-file=.env scripts/test-practice.mjs",
+    "test:popularity": "node --env-file=.env scripts/test-popularity.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

@@ -41,7 +41,7 @@ async function ownSet(tx: Transaction, userId: string, setId: string) {
 }
 
 async function ownTunes(tx: Transaction, userId: string, tuneIds: string[]) {
-  if (tuneIds.length < 2 || tuneIds.length > 100 || new Set(tuneIds).size !== tuneIds.length) throw new SetError("Choose 2–100 different tunes for a set");
+  if (tuneIds.length < 2 || tuneIds.length > 100 || new Set(tuneIds).size !== tuneIds.length) throw new SetError("Choose 2-100 different tunes for a set");
   const tunes = await tx.select({ id: savedTunes.id, title: savedTunes.title }).from(savedTunes).where(and(eq(savedTunes.userId, userId), inArray(savedTunes.id, tuneIds)));
   if (tunes.length !== tuneIds.length) throw new SetError("Some tunes are not in your library");
   return tuneIds.map((id) => tunes.find((tune) => tune.id === id)!);

@@ -13,7 +13,7 @@ export function abcForScore(tune: Tune) {
 }
 
 export function noteNames(pitches: Array<{ pitch: number }> | undefined) {
-  if (!pitches?.length) return "—";
-  const names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
-  return pitches.map(({ pitch }) => `${names[(pitch % 12 + 12) % 12]}${Math.floor(pitch / 12) - 1}`).join(" · ");
+  if (!pitches?.length) return "-";
+  const names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+  return pitches.map(({ pitch }) => `${names[(pitch % 12 + 12) % 12]}${Math.floor(pitch / 12) - 1}`).join(", ");
 }

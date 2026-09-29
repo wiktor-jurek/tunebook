@@ -79,6 +79,12 @@ export const bookShares = pgTable("book_shares", {
   createdAt: createdAt(),
 }, (t) => [primaryKey({ columns: [t.bookId, t.email] }), index("book_share_email_idx").on(t.email)]);
 
+// Session repertoire, shared by every viewer of a book and all settings of a tune.
+export const bookPopularTunes = pgTable("book_popular_tunes", {
+  bookId: uuid("book_id").notNull().references(() => tunebooks.id, { onDelete: "cascade" }),
+  tuneId: integer("tune_id").notNull(),
+}, (t) => [primaryKey({ columns: [t.bookId, t.tuneId] })]);
+
 export const tuneSets = pgTable("tune_sets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),

@@ -45,10 +45,10 @@ export function LibraryDialog({ task, library, onClose, onReturnFocus, onMove }:
   const unchanged = isRename ? name.trim() === task.name : isMove ? destination === currentFolderId : false;
   const action = isCreate ? `Create ${noun}` : isRename ? "Rename" : isMove ? "Move here" : `Delete ${noun}`;
   const description = isCreate ? (isBook ? "Collect tunes into a set you can make your own." : "Group your tunebooks in one place.")
-    : isRename ? `Give “${task.name}” a new name.`
-    : isMove ? `Choose where “${task.name}” belongs.`
-    : isBook ? `“${task.name}” will be deleted. Your saved tunes will stay in Tunes.`
-    : `“${task.name}” and its nested folders and tunebooks will be deleted. Your saved tunes will stay in Tunes.`;
+    : isRename ? `Give ${task.name} a new name.`
+    : isMove ? `Choose where ${task.name} belongs.`
+    : isBook ? `${task.name} will be deleted. Your saved tunes will stay in Tunes.`
+    : `${task.name} and its nested folders and tunebooks will be deleted. Your saved tunes will stay in Tunes.`;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -85,12 +85,12 @@ export function LibraryDialog({ task, library, onClose, onReturnFocus, onMove }:
           {task.operation === "createBook" && <div className="library-create-icon" inert={busy || undefined}><BookIcon size="draft" emoji={emoji} label="Change tunebook icon" onChange={setEmoji} /><span>Choose an icon</span></div>}
           {isMove && <>
             <p className="move-current">Currently in <strong>{folderPath(currentFolderId)}</strong></p>
-            <div className="folder-search"><Search size={16} /><Input ref={searchRef} aria-label="Find a folder" placeholder="Find a folder…" value={query} onChange={(event) => setQuery(event.target.value)} disabled={busy} /></div>
+            <div className="folder-search"><Search size={16} /><Input ref={searchRef} aria-label="Find a folder" placeholder="Find a folder" value={query} onChange={(event) => setQuery(event.target.value)} disabled={busy} /></div>
             <fieldset className="folder-destinations" disabled={busy}><legend className="sr-only">Destination folder</legend>{destinations.map((folder) => <label key={folder.id ?? "root"} className={`folder-destination ${destination === folder.id ? "selected" : ""}`}><input type="radio" name="destination" value={folder.id ?? ""} checked={destination === folder.id} onChange={() => setDestination(folder.id)} />{folder.id ? <Folder size={16} /> : <Layers size={16} />}<span>{folder.label}</span>{folder.id === currentFolderId && <small>Current</small>}</label>)}{!destinations.length && <p className="muted">No folders match your search.</p>}</fieldset>
           </>}
           {error && <p role="alert" className="form-error">{error}</p>}
         </div>
-        <footer className="library-dialog-footer"><Dialog.Close asChild><Button ref={cancelRef} type="button" variant="outline" disabled={busy}>Cancel</Button></Dialog.Close><Button disabled={busy || unchanged || ((isCreate || isRename) && !name.trim())} variant={isDelete ? "danger" : "default"}>{busy ? (isDelete ? "Deleting…" : isMove ? "Moving…" : "Saving…") : action}</Button></footer>
+        <footer className="library-dialog-footer"><Dialog.Close asChild><Button ref={cancelRef} type="button" variant="outline" disabled={busy}>Cancel</Button></Dialog.Close><Button disabled={busy || unchanged || ((isCreate || isRename) && !name.trim())} variant={isDelete ? "danger" : "default"}>{busy ? (isDelete ? "Deleting" : isMove ? "Moving" : "Saving") : action}</Button></footer>
       </form>
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;

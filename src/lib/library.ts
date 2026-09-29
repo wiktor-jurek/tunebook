@@ -1,6 +1,6 @@
 import { and, asc, eq, exists, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { bookShares, bookEntries, catalogSettings, folders, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
+import { bookShares, bookEntries, bookPopularTunes, catalogSettings, folders, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { parseSessionUrl } from "@/lib/session-url";
 import { getMySets } from "@/lib/sets";
@@ -8,7 +8,7 @@ import { displaySetName } from "@/lib/set-name";
 import { getTuneEmojiSuggestion, withTuneEmojis } from "@/lib/tune-emojis";
 import { withTunePractice, type TuneWithPractice } from "@/lib/tune-practice";
 
-type Tune = TuneWithPractice;
+type Tune = TuneWithPractice & { oftenPlayed: boolean };
 export type BookSection = { kind: "tune"; entryId: string; tune: Tune } | { kind: "set"; entryId: string; setId: string; name: string; autoName: boolean; tunes: Tune[] };
 
 export async function getLibrary(userId: string) {
@@ -38,16 +38,18 @@ export async function getBook(userId: string | null, id: string) {
   const entries = await db.select().from(bookEntries).where(eq(bookEntries.bookId, id)).orderBy(asc(bookEntries.position), asc(bookEntries.id));
   const tuneIds = entries.flatMap((entry) => entry.tuneId ? [entry.tuneId] : []);
   const setIds = entries.flatMap((entry) => entry.setId ? [entry.setId] : []);
-  const [singles, sets, members] = await Promise.all([
+  const [singles, sets, members, popular] = await Promise.all([
     tuneIds.length ? db.select().from(savedTunes).where(and(inArray(savedTunes.id, tuneIds), eq(savedTunes.userId, book.userId))) : [],
     setIds.length ? db.select().from(tuneSets).where(and(inArray(tuneSets.id, setIds), eq(tuneSets.userId, book.userId))) : [],
     setIds.length ? db.select({ setId: setTunes.setId, tune: savedTunes }).from(setTunes)
       .innerJoin(savedTunes, eq(setTunes.tuneId, savedTunes.id))
       .where(and(inArray(setTunes.setId, setIds), eq(savedTunes.userId, book.userId))).orderBy(asc(setTunes.position)) : [],
+    db.select({ tuneId: bookPopularTunes.tuneId }).from(bookPopularTunes).where(eq(bookPopularTunes.bookId, id)),
   ]);
   // Practice belongs to the viewer, never to the owner of a shared book.
   const resolved = await withTunePractice(userId, await withTuneEmojis([...singles, ...members.map((row) => row.tune)]));
-  const byId = new Map(resolved.map((tune) => [tune.id, tune]));
+  const popularIds = new Set(popular.map((row) => row.tuneId));
+  const byId = new Map(resolved.map((tune) => [tune.id, { ...tune, oftenPlayed: popularIds.has(tune.tuneId) }]));
   const sections: BookSection[] = [];
   for (const entry of entries) {
     if (entry.tuneId) {

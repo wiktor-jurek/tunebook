@@ -16,7 +16,7 @@ describe("notation preparation", () => {
   });
   it("preserves complete ABC and formats concurrent notes", () => {
     expect(abcForTune({ ...tune, abc: "X:1\nT:Existing\nK:D\nDEFG|" })).toContain("T:Existing");
-    expect(noteNames([{ pitch: 60 }, { pitch: 62 }])).toBe("C4 · D4");
+    expect(noteNames([{ pitch: 60 }, { pitch: 62 }])).toBe("C4, D4");
   });
   it("omits the duplicate visual title without changing the music or source ABC", () => {
     const source = abcForTune(tune);

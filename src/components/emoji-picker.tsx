@@ -28,7 +28,7 @@ export default function TunebookEmojiPicker({ onSelect }: { onSelect: (emoji: st
     height="min(340px, calc(var(--radix-popover-content-available-height) - 96px))"
     emojiStyle={EmojiStyle.NATIVE}
     theme={Theme.LIGHT}
-    searchPlaceholder="Search emojis…"
+    searchPlaceholder="Search emojis"
     previewConfig={{ showPreview: false }}
     lazyLoadEmojis
     onEmojiClick={({ emoji }) => onSelect(emoji)}

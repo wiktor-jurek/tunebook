@@ -28,5 +28,5 @@ export function SaveSharedBook({ bookId, tuneId, signedIn, alreadySaved = false 
     finally { setBusy(false); }
   }
   const isSaved = tuneId && (saved || alreadySaved);
-  return <div className="shared-save"><Button variant="outline" size={tuneId ? "sm" : "default"} disabled={busy || !!isSaved} onClick={() => void save()}>{isSaved ? <Check size={14} /> : tuneId ? <Plus size={14} /> : <BookPlus size={15} />}{busy ? "Saving…" : isSaved ? "Saved" : tuneId ? "Save tune" : "Save a copy"}</Button>{error && <span role="alert" className="inline-error">{error}</span>}</div>;
+  return <div className="shared-save"><Button variant="outline" size={tuneId ? "sm" : "default"} disabled={busy || !!isSaved} onClick={() => void save()}>{isSaved ? <Check size={14} /> : tuneId ? <Plus size={14} /> : <BookPlus size={15} />}{busy ? "Saving" : isSaved ? "Saved" : tuneId ? "Save tune" : "Save a copy"}</Button>{error && <span role="alert" className="inline-error">{error}</span>}</div>;
 }
