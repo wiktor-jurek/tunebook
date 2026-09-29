@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Score, pauseTune } from "@/components/score";
 import { TuneActions } from "@/components/tune-actions";
 import { SaveSharedBook } from "@/components/save-shared-book";
+import { TuneAbility } from "@/components/tune-ability";
+import { AbilityMark, AbilitySummary } from "@/components/ability-mark";
 import { TuneIcon } from "@/components/tune-icon";
 import { EntryControls, SetControls, SetTuneOrder } from "@/components/set-controls";
 import type { BookSection, getLibrary } from "@/lib/library";
@@ -32,7 +34,7 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, s
   const setCount = sections.filter((section) => section.kind === "set").length;
   const contentsTune = (section: BookSection, tune: ReturnType<typeof members>[number]) => {
     const instanceId = `${section.entryId}-${tune.id}`, index = positions.get(instanceId)!;
-    return <li key={instanceId}><a href={`#book-tune-${instanceId}`} onClick={() => { trackEvent("contents_navigated", { kind: "tune" }); setExpanded(instanceId, true); }}><span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="contents-emoji" aria-hidden="true">{tune.emoji}</span><span className="contents-title">{tune.title}</span><span className="contents-meta">{[tune.kind, tune.mode].filter(Boolean).join(" · ")}</span></a></li>;
+    return <li key={instanceId}><a href={`#book-tune-${instanceId}`} onClick={() => { trackEvent("contents_navigated", { kind: "tune" }); setExpanded(instanceId, true); }}><span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="contents-emoji" aria-hidden="true">{tune.emoji}</span><span className="contents-title">{tune.title}</span>{signedIn && <AbilityMark practice={tune.practice} />}<span className="contents-meta">{[tune.kind, tune.mode].filter(Boolean).join(" · ")}</span></a></li>;
   };
   function renderTune(section: BookSection, sectionIndex: number, tune: ReturnType<typeof members>[number], memberIndex: number) {
     const instanceId = `${section.entryId}-${tune.id}`, expanded = !collapsed.has(instanceId), index = positions.get(instanceId)!;
@@ -40,11 +42,12 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, s
     return <section className="book-tune" id={`book-tune-${instanceId}`} key={instanceId}>
       <div className="book-tune-head"><TuneIcon tune={tune} readOnly={readOnly} size="book" /><Heading><button type="button" className="book-tune-toggle" id={`toggle-${instanceId}`} aria-expanded={expanded} aria-controls={`score-${instanceId}`} onClick={() => setExpanded(instanceId, !expanded)}>
         {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}<span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="book-tune-title">{tune.title}</span>
-      </button></Heading><div className="book-tune-tools">{readOnly ? <SaveSharedBook bookId={bookId} tuneId={tune.id} signedIn={signedIn} alreadySaved={libraryTunes.some((saved) => saved.settingId === tune.settingId)} /> : section.kind === "set" ? <SetTuneOrder setId={section.setId} tuneId={tune.id} first={memberIndex === 0} last={memberIndex === section.tunes.length - 1} /> : <><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /><TuneActions tuneId={tune.id} currentBookId={bookId} /></>}</div></div>
-      <div className="book-tune-panel" id={`score-${instanceId}`} role="region" aria-labelledby={`toggle-${instanceId}`} hidden={!expanded}><Score tune={tune} defaultSound={defaultSound} showTitle={false} playbackId={instanceId} /></div>
+      </button></Heading><div className="book-tune-tools">{signedIn && <TuneAbility tune={tune} editable={!readOnly} />}{readOnly ? <SaveSharedBook bookId={bookId} tuneId={tune.id} signedIn={signedIn} alreadySaved={libraryTunes.some((saved) => saved.settingId === tune.settingId)} /> : section.kind === "set" ? <SetTuneOrder setId={section.setId} tuneId={tune.id} first={memberIndex === 0} last={memberIndex === section.tunes.length - 1} /> : <><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /><TuneActions tuneId={tune.id} currentBookId={bookId} /></>}</div></div>
+      <div className="book-tune-panel" id={`score-${instanceId}`} role="region" aria-labelledby={`toggle-${instanceId}`} hidden={!expanded}><Score tune={tune} defaultSound={defaultSound} showTitle={false} playbackId={instanceId} practiceEditable={!readOnly} showPractice={signedIn} /></div>
     </section>;
   }
   return <>
+    {signedIn && <AbilitySummary tunes={tunes.map((row) => row.tune)} />}
     <nav className="book-contents" aria-label="Tunebook contents">
       <div className="book-contents-head"><h2>Contents <span>{tunes.length} {tunes.length === 1 ? "tune" : "tunes"}{setCount > 0 && ` · ${setCount} ${setCount === 1 ? "set" : "sets"}`}</span></h2><div className="book-expand-actions">
         {!readOnly && <SetControls task={{ mode: "group", bookId }} choices={choices} />}
@@ -54,7 +57,7 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, s
       <ol>{sections.map((section) => section.kind === "tune" ? contentsTune(section, section.tune) : <li className="contents-set" key={section.entryId}><a className="contents-set-link" href={`#book-set-${section.entryId}`} onClick={() => { trackEvent("contents_navigated", { kind: "set" }); section.tunes.forEach((tune) => setExpanded(`${section.entryId}-${tune.id}`, true)); }}><span className="set-tag">SET</span><span className="contents-title">{section.name}</span><span className="contents-meta">{section.tunes.length} tunes</span></a><ol>{section.tunes.map((tune) => contentsTune(section, tune))}</ol></li>)}</ol>
     </nav>
     <div className="book-scores">{sections.map((section, sectionIndex) => section.kind === "tune" ? renderTune(section, sectionIndex, section.tune, 0) : <section className="book-set" id={`book-set-${section.entryId}`} key={section.entryId} aria-labelledby={`set-heading-${section.entryId}`}>
-      <header className="book-set-head"><div><p className="eyebrow">SET · {section.tunes.length} TUNES</p><h2 id={`set-heading-${section.entryId}`}>{section.name}</h2></div>{!readOnly && <div className="book-set-tools"><SetControls task={{ mode: "edit", setId: section.setId, name: section.name, autoName: section.autoName, tuneIds: section.tunes.map((tune) => tune.id), bookCount: mySets.find((set) => set.id === section.setId)?.books.length ?? 1 }} choices={libraryTunes.map((tune) => ({ id: tune.id, title: tune.title }))} /><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /></div>}</header>
+      <header className="book-set-head"><div><p className="eyebrow">SET · {section.tunes.length} TUNES</p><h2 id={`set-heading-${section.entryId}`}>{section.name}</h2>{signedIn && <AbilitySummary tunes={section.tunes} />}</div>{!readOnly && <div className="book-set-tools"><SetControls task={{ mode: "edit", setId: section.setId, name: section.name, autoName: section.autoName, tuneIds: section.tunes.map((tune) => tune.id), bookCount: mySets.find((set) => set.id === section.setId)?.books.length ?? 1 }} choices={libraryTunes.map((tune) => ({ id: tune.id, title: tune.title }))} /><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /></div>}</header>
       {section.tunes.map((tune, index) => renderTune(section, sectionIndex, tune, index))}
     </section>)}</div>
   </>;

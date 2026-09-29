@@ -5,9 +5,10 @@ import { user } from "@/db/auth-schema";
 import { parseSessionUrl } from "@/lib/session-url";
 import { getMySets } from "@/lib/sets";
 import { displaySetName } from "@/lib/set-name";
-import { getTuneEmojiSuggestion, withTuneEmojis, type TuneWithEmoji } from "@/lib/tune-emojis";
+import { getTuneEmojiSuggestion, withTuneEmojis } from "@/lib/tune-emojis";
+import { withTunePractice, type TuneWithPractice } from "@/lib/tune-practice";
 
-type Tune = TuneWithEmoji;
+type Tune = TuneWithPractice;
 export type BookSection = { kind: "tune"; entryId: string; tune: Tune } | { kind: "set"; entryId: string; setId: string; name: string; autoName: boolean; tunes: Tune[] };
 
 export async function getLibrary(userId: string) {
@@ -21,7 +22,7 @@ export async function getLibrary(userId: string) {
       .where(sql`${tunebooks.userId} <> ${userId}`).orderBy(asc(tunebooks.name)),
     getMySets(userId),
   ]);
-  return { folders: allFolders, books: allBooks, tunes: await withTuneEmojis(allTunes), sharedBooks, sets };
+  return { folders: allFolders, books: allBooks, tunes: await withTunePractice(userId, await withTuneEmojis(allTunes)), sharedBooks, sets };
 }
 
 export const isBookId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -44,7 +45,8 @@ export async function getBook(userId: string | null, id: string) {
       .innerJoin(savedTunes, eq(setTunes.tuneId, savedTunes.id))
       .where(and(inArray(setTunes.setId, setIds), eq(savedTunes.userId, book.userId))).orderBy(asc(setTunes.position)) : [],
   ]);
-  const resolved = await withTuneEmojis([...singles, ...members.map((row) => row.tune)]);
+  // Practice belongs to the viewer, never to the owner of a shared book.
+  const resolved = await withTunePractice(userId, await withTuneEmojis([...singles, ...members.map((row) => row.tune)]));
   const byId = new Map(resolved.map((tune) => [tune.id, tune]));
   const sections: BookSection[] = [];
   for (const entry of entries) {
@@ -66,7 +68,7 @@ export async function getBook(userId: string | null, id: string) {
 
 export async function getSavedTune(userId: string, id: string) {
   const [tune] = await db.select().from(savedTunes).where(and(eq(savedTunes.userId, userId), eq(savedTunes.id, id))).limit(1);
-  return tune ? (await withTuneEmojis([tune]))[0] : null;
+  return tune ? (await withTunePractice(userId, await withTuneEmojis([tune])))[0] : null;
 }
 
 export async function searchCatalog(query: string) {

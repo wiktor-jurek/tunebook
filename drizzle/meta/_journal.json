@@ -50,6 +50,13 @@
       "when": 1790620904246,
       "tag": "0006_heavy_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790627161263,
+      "tag": "0007_purple_thunderbolts",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
+import type { AbilityLevel } from "../lib/ability";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -41,6 +42,18 @@ export const tuneEmojiSuggestions = pgTable("tune_emoji_suggestions", {
   matcherVersion: text("matcher_version").notNull(),
   createdAt: createdAt(),
 });
+
+export const tunePractice = pgTable("tune_practice", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  tuneId: integer("tune_id").notNull(),
+  playableTempo: integer("playable_tempo"),
+  levelOverride: text("level_override").$type<AbilityLevel>(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.userId, t.tuneId] }),
+  check("practice_tempo_range", sql`${t.playableTempo} IS NULL OR ${t.playableTempo} BETWEEN 50 AND 150`),
+  check("practice_level_values", sql`${t.levelOverride} IS NULL OR ${t.levelOverride} IN ('unlearned', 'learning', 'learned', 'mastered')`),
+]);
 
 export const folders = pgTable("folders", {
   id: uuid("id").primaryKey().defaultRandom(),

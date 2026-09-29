@@ -51,6 +51,18 @@ Use **Add set** to reuse one in another tunebook. It inserts the tunes as a grou
 
 Shared books display the same set headings and order. Saving a shared book makes private copies of its sets and tunes. The database stores reusable set identities, ordered memberships, and tunebook placements separately; `getOftenPlayedWith` counts distinct sets containing each pair of catalog tunes, so reusing a set in several books does not inflate the count.
 
+## Practice and ability
+
+Each saved tune has a quiet four-bar ability indicator. Click it in Tunes, a score, or an owned tunebook to choose a manual level, return to **From speed**, or reset progress. The four levels are **Unlearned** (no recorded speed), **Learning** (50–99%), **Learned** (100–124%), and **Mastered** (125–150%). Manual levels can be set without recording a speed and take precedence over speed-derived levels.
+
+While practising, set the tempo slider and choose **Can play at …%** to confirm that speed. Merely adjusting the slider or listening does not record ability. The app keeps your highest confirmed percentage; slowing down to practise does not erase that achievement. Recording speed preserves a manual level until you choose From speed. Reset clears both the speed and override. Percentages scale the score's normal tempo (its ABC tempo, or the default used by the player), rather than representing a universal BPM or session pace. Saving progress does not stop ongoing playback.
+
+Progress is private and stored in `tune_practice` per user and The Session **tune ID**, so all your settings of the tune share it. It survives deletion of a saved setting and is removed with the account. Shared views use the signed-in viewer's own progress; guests see no practice indicators or totals. Saving a shared book does not copy the owner's ability. Practice edits require an owned saved setting.
+
+Tunebooks, set headings, and My sets show **N of M playable** and a percentage. Playable means Learned or Mastered, including manual overrides. Counts use distinct tune IDs, so repeated placements and alternate settings do not inflate progress. Hover a summary for the full level breakdown. Analytics records `tune_practice_updated` with only `source` (tempo, level, reset) and `outcome`, without the tune, speed, or ability level.
+
+Run `npm run test:practice` for PostgreSQL confirmation, concurrency, ownership, shared-view privacy, private-copy, reset, and aggregation checks in a temporary schema. Production applies the practice migration at startup; run `npm run db:migrate` locally.
+
 ## Sharing tunebooks
 
 Open a tunebook and choose **Share** to add viewers by email or set general access to **Anyone with the link**. Email shares appear under **Shared with me** after the recipient signs in with that verified email, including accounts created after the invitation. Invitations use the same SMTP configuration as account emails. If delivery fails, access is still granted and the dialog prompts you to send the link yourself.

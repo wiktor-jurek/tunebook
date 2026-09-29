@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import abcjs from "abcjs";
 import { Pause, Play, RotateCcw, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { TuneWithEmoji } from "@/lib/tune-emojis";
+import type { TuneWithPractice } from "@/lib/tune-practice";
+import { PracticeSpeed, TuneAbility } from "@/components/tune-ability";
 import { TuneIcon } from "@/components/tune-icon";
 import { abcForScore, abcForTune, noteNames } from "@/lib/notation";
 import { DEFAULT_SOUND, SOUND_OPTIONS } from "@/lib/sounds";
 
-type Tune = TuneWithEmoji;
+type Tune = TuneWithPractice;
 type Visual = ReturnType<typeof abcjs.renderAbc>[number];
 type Player = { buffer?: AudioBuffer; key?: string; source?: AudioBufferSourceNode; gain?: GainNode; startedAt: number; offset: number; timer?: abcjs.TimingCallbacks; raf?: number; playing: boolean; token: number };
 let sharedContext: AudioContext | null = null;
@@ -20,7 +21,7 @@ export function pauseTune(tuneId: string) {
   window.dispatchEvent(new CustomEvent("tunebook:pause", { detail: tuneId }));
 }
 
-export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, playbackId }: { tune: Tune; defaultSound?: number; showTitle?: boolean; playbackId?: string }) {
+export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, playbackId, practiceEditable = true, showPractice = true }: { tune: Tune; defaultSound?: number; showTitle?: boolean; playbackId?: string; practiceEditable?: boolean; showPractice?: boolean }) {
   const paperRef = useRef<HTMLDivElement>(null);
   const visualRef = useRef<Visual | null>(null);
   const playerRef = useRef<Player>({ startedAt: 0, offset: 0, playing: false, token: 0 });
@@ -36,11 +37,12 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
   const [note, setNote] = useState("—");
   const [activeElements, setActiveElements] = useState<HTMLElement[]>([]);
   const scoreId = playbackId ?? tune.id;
+  const notation = abcForScore(tune);
 
   useEffect(() => {
     if (!paperRef.current) return;
     const player = playerRef.current;
-    const result = abcjs.renderAbc(paperRef.current, abcForScore(tune), { responsive: "resize", add_classes: true, staffwidth: 760, paddingtop: 0, paddingbottom: 0 });
+    const result = abcjs.renderAbc(paperRef.current, notation, { responsive: "resize", add_classes: true, staffwidth: 760, paddingtop: 0, paddingbottom: 0 });
     visualRef.current = result[0] || null;
     setReady(Boolean(result[0]));
     return () => {
@@ -49,7 +51,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
       if (player.raf) cancelAnimationFrame(player.raf);
       player.playing = false;
     };
-  }, [tune]);
+  }, [notation, scoreId]);
 
   useEffect(() => {
     for (const element of activeElements) element.classList.add("playing-note");
@@ -104,14 +106,14 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
       const key = `${nextInstrument}:${nextSpeed}`;
       if (p.key !== key || !p.buffer) {
         const synth = new abcjs.synth.CreateSynth();
-        const result = await synth.init({ visualObj: visual, audioContext: sharedContext, options: { program: nextInstrument, qpm: nextSpeed, soundFontUrl: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/" } });
+        const result = await synth.init({ visualObj: visual, audioContext: sharedContext, millisecondsPerMeasure: visual.millisecondsPerMeasure() * 100 / nextSpeed, options: { program: nextInstrument, soundFontUrl: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/" } });
         if (result.error.length) throw new Error("Some instrument notes could not be loaded");
         await synth.prime();
         if (token !== p.token) return;
         p.buffer = synth.getAudioBuffer(); p.key = key;
         if (!p.buffer) throw new Error("Could not prepare audio");
         p.timer?.stop();
-        p.timer = new abcjs.TimingCallbacks(visual, { qpm: nextSpeed, eventCallback: (event) => {
+        p.timer = new abcjs.TimingCallbacks(visual, { qpm: visual.getBpm() * nextSpeed / 100, eventCallback: (event) => {
           setNote(noteNames(event?.midiPitches));
           setActiveElements(event?.elements?.flat() as HTMLElement[] || []);
           return undefined;
@@ -158,9 +160,9 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
     setProgress(value);
     if (wasPlaying) await start(instrument, speed, value / 100, false);
   }
-  return <article className="score-sheet"><div className="score-header">{showTitle && <TuneIcon tune={tune} size="page" />}<div className="score-title">{showTitle && <><p className="eyebrow">{tune.kind || "TUNE"} · {tune.mode || "KEY UNKNOWN"}</p><h2>{tune.title}</h2></>}<p className="score-meta">{[!showTitle && tune.kind, !showTitle && tune.mode, tune.meter, tune.composer && `Composer: ${tune.composer}`, tune.contributor && `Setting by ${tune.contributor}`].filter(Boolean).join(" · ")}</p></div><a onClick={() => trackEvent("tune_source_opened", {})} href={tune.sourceUrl} className="source-link" target="_blank" rel="noreferrer">View source ↗</a></div>
+  return <article className="score-sheet"><div className="score-header">{showTitle && <TuneIcon tune={tune} size="page" />}<div className="score-title">{showTitle && <><p className="eyebrow">{tune.kind || "TUNE"} · {tune.mode || "KEY UNKNOWN"}</p><h2>{tune.title}</h2></>}{showTitle && showPractice && <TuneAbility tune={tune} editable={practiceEditable} />}<p className="score-meta">{[!showTitle && tune.kind, !showTitle && tune.mode, tune.meter, tune.composer && `Composer: ${tune.composer}`, tune.contributor && `Setting by ${tune.contributor}`].filter(Boolean).join(" · ")}</p></div><a onClick={() => trackEvent("tune_source_opened", {})} href={tune.sourceUrl} className="source-link" target="_blank" rel="noreferrer">View source ↗</a></div>
     <div className="notation-frame"><div ref={paperRef} className="notation" aria-label={`Sheet music for ${tune.title}`} />{!ready && <p>Rendering score…</p>}</div>
-    <div className="player" aria-label={`Player for ${tune.title}`}><div className="player-primary"><Button size="icon" aria-label={playing ? "Pause" : "Play"} disabled={!ready || loading} onClick={() => { if (playing) { trackEvent("playback_paused", {}); pause(); } else void start(); }}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</Button><Button variant="ghost" size="icon" aria-label="Restart" onClick={() => { trackEvent("playback_restarted", {}); reset(); }}><RotateCcw size={16} /></Button><div className="note-display"><span>NOW PLAYING</span><strong>{note}</strong></div></div><div className="player-progress"><input type="range" min="0" max="100" value={progress} aria-label="Playback position" onPointerUp={() => trackEvent("playback_seeked", {})} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_seeked", {}); }} onChange={(event) => void seek(Number(event.target.value))} /></div><div className="player-options"><label>Sound<select value={instrument} onChange={(event) => void changeSound(Number(event.target.value))}>{instruments.map((entry) => <option key={entry.program} value={entry.program}>{entry.label}</option>)}</select></label><label>Tempo <span>{speed}%</span><input type="range" min="50" max="150" step="5" value={speed} onChange={(event) => void changeSpeed(Number(event.target.value))} aria-label="Tempo percentage" onPointerUp={(event) => trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) })} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) }); }} /></label><label className="volume-control"><Volume2 size={16} /><input type="range" min="0" max="100" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); if (playerRef.current.gain) playerRef.current.gain.gain.value = next / 100; }} aria-label="Volume" /></label></div>{loading && <p className="player-status">Loading instrument…</p>}{error && <p role="alert" className="form-error">{error}</p>}</div>
+    <div className="player" aria-label={`Player for ${tune.title}`}><div className="player-primary"><Button size="icon" aria-label={playing ? "Pause" : "Play"} disabled={!ready || loading} onClick={() => { if (playing) { trackEvent("playback_paused", {}); pause(); } else void start(); }}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</Button><Button variant="ghost" size="icon" aria-label="Restart" onClick={() => { trackEvent("playback_restarted", {}); reset(); }}><RotateCcw size={16} /></Button><div className="note-display"><span>NOW PLAYING</span><strong>{note}</strong></div></div><div className="player-progress"><input type="range" min="0" max="100" value={progress} aria-label="Playback position" onPointerUp={() => trackEvent("playback_seeked", {})} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_seeked", {}); }} onChange={(event) => void seek(Number(event.target.value))} /></div><div className="player-options"><label>Sound<select value={instrument} onChange={(event) => void changeSound(Number(event.target.value))}>{instruments.map((entry) => <option key={entry.program} value={entry.program}>{entry.label}</option>)}</select></label><label>Tempo <span>{speed}%</span><input type="range" min="50" max="150" step="5" value={speed} onChange={(event) => void changeSpeed(Number(event.target.value))} aria-label="Tempo percentage" onPointerUp={(event) => trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) })} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) }); }} /></label><label className="volume-control"><Volume2 size={16} /><input type="range" min="0" max="100" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); if (playerRef.current.gain) playerRef.current.gain.gain.value = next / 100; }} aria-label="Volume" /></label></div>{showPractice && practiceEditable && <PracticeSpeed tune={tune} speed={speed} />}{loading && <p className="player-status">Loading instrument…</p>}{error && <p role="alert" className="form-error">{error}</p>}</div>
     <details className="abc-details" onToggle={(event) => { if (event.currentTarget.open) trackEvent("notation_opened", {}); }}><summary>ABC notation</summary><pre>{abcForTune(tune)}</pre></details><p className="attribution">Contains information from <a href="https://thesession.org" target="_blank" rel="noreferrer">The Session</a>, available under the <a href="https://github.com/adactio/TheSession-data/blob/main/LICENSE.md" target="_blank" rel="noreferrer">Open Database License</a>.</p>
   </article>;
 }

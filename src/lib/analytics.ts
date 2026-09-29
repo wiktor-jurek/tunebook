@@ -17,6 +17,7 @@ type Events = Record<LibraryEvent, { outcome: Outcome }> & {
   tune_lookup: { source: "url" | "title"; outcome: Outcome; result_count?: number };
   tune_saved: { outcome: Outcome };
   tune_icon_changed: { outcome: Outcome; source: "suggested" | "custom" };
+  tune_practice_updated: { outcome: Outcome; source: "tempo" | "level" | "reset" };
   set_created: { outcome: Outcome; tune_count: number };
   set_updated: { outcome: Outcome; tune_count: number; book_count: number };
   set_deleted: { outcome: Outcome; book_count: number };

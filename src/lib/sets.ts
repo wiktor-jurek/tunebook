@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { bookEntries, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
 import { withTuneEmojis } from "@/lib/tune-emojis";
 import { defaultSetName, displaySetName } from "@/lib/set-name";
+import { withTunePractice } from "@/lib/tune-practice";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export class SetError extends Error {}
@@ -19,7 +20,7 @@ export async function getMySets(userId: string) {
       .innerJoin(tunebooks, eq(bookEntries.bookId, tunebooks.id))
       .where(and(inArray(bookEntries.setId, ids), eq(tunebooks.userId, userId))).orderBy(asc(tunebooks.name)),
   ]);
-  const resolved = await withTuneEmojis(members.map((row) => row.tune));
+  const resolved = await withTunePractice(userId, await withTuneEmojis(members.map((row) => row.tune)));
   const byId = new Map(resolved.map((tune) => [tune.id, tune]));
   return sets.map((set) => {
     const tunes = members.filter((row) => row.setId === set.id).map((row) => byId.get(row.tune.id)!);
