@@ -27,9 +27,9 @@ export function SetDialog({ task, choices, onClose }: { task: SetTask; choices: 
     setOrdered((current) => { const next = [...current]; [next[index], next[index + offset]] = [next[index + offset], next[index]]; return next; });
   }
   function trackResult(outcome: "success" | "error") {
-    if (task.mode === "group") trackEvent("set_created", { outcome, tune_count: ordered.length });
-    else if (task.mode === "edit") trackEvent("set_updated", { outcome, tune_count: ordered.length, book_count: task.bookCount });
-    else trackEvent("set_deleted", { outcome, book_count: task.bookCount });
+    if (task.mode === "group") trackEvent("set_created", { outcome, tune_count: ordered.length, name });
+    else if (task.mode === "edit") trackEvent("set_updated", { outcome, tune_count: ordered.length, book_count: task.bookCount, name });
+    else trackEvent("set_deleted", { outcome, book_count: task.bookCount, name: task.name });
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault();

@@ -2,25 +2,30 @@ import { beforeEach, afterEach, describe, expect, it, vi, type Mock } from "vite
 
 let analytics: typeof import("./analytics");
 let track: Mock<(build: (defaults: Record<string, unknown>) => Record<string, unknown>) => Promise<void>>;
+let identify: Mock<(id: string, data?: Record<string, unknown>) => Promise<void>>;
+let calls: string[];
 let location: { hostname: string; origin: string; pathname: string };
 let payloads: Record<string, unknown>[];
 
 beforeEach(async () => {
   vi.resetModules();
   payloads = [];
+  calls = [];
   location = { hostname: "libresession.com", origin: "https://libresession.com", pathname: "/books/private-book" };
   track = vi.fn((build: (defaults: Record<string, unknown>) => Record<string, unknown>) => {
+    calls.push("track");
     payloads.push(build({ website: "website-id", url: "/reset-password?token=secret", title: "Private book title", referrer: "https://example.com/?email=private" }));
     return Promise.resolve();
   });
-  vi.stubGlobal("window", { location, umami: { track } });
+  identify = vi.fn(() => { calls.push("identify"); return Promise.resolve(); });
+  vi.stubGlobal("window", { location, umami: { track, identify } });
   vi.stubGlobal("document", { referrer: "https://libresession.com/reset-password?token=secret" });
   vi.stubGlobal("navigator", { doNotTrack: "0" });
   analytics = await import("./analytics");
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("analytics privacy and delivery", () => {
+describe("analytics delivery and identity", () => {
   it("groups book and tune routes without exposing IDs, query strings, or hashes", () => {
     expect(analytics.analyticsPath("/books/private-id?email=private#secret")).toBe("/books/:id");
     expect(analytics.analyticsPath("/tunes/private-id/")).toBe("/tunes/:id");
@@ -80,7 +85,7 @@ describe("analytics privacy and delivery", () => {
     window.umami = undefined;
     analytics.trackEvent("guest_save_sign_in", { kind: "book" });
     location.pathname = "/sign-in";
-    window.umami = { track };
+    window.umami = { track, identify };
     analytics.trackPageView("/sign-in?next=private");
     analytics.trackPageView("/sign-up");
     expect(payloads.map((payload) => [payload.url, payload.name])).toEqual([
@@ -91,7 +96,7 @@ describe("analytics privacy and delivery", () => {
   it("bounds the queue when a tracker is blocked", () => {
     window.umami = undefined;
     for (let count = 0; count < 80; count++) analytics.trackEvent("print_requested", {});
-    window.umami = { track };
+    window.umami = { track, identify };
     analytics.trackPageView("/");
     expect(track).toHaveBeenCalledTimes(51);
   });
@@ -104,11 +109,31 @@ describe("analytics privacy and delivery", () => {
     await Promise.resolve();
   });
 
-  it("records successful and failed library operations as separate outcomes", () => {
-    analytics.trackLibraryAction("createBook", "success");
+  it("records library operations with their outcome and names", () => {
+    analytics.trackLibraryAction("createBook", "success", { name: "Madrid Session" });
     analytics.trackLibraryAction("createBook", "error");
     expect(payloads.map((payload) => [payload.name, payload.data])).toEqual([
-      ["tunebook_created", { outcome: "success" }], ["tunebook_created", { outcome: "error" }],
+      ["tunebook_created", { outcome: "success", name: "Madrid Session" }], ["tunebook_created", { outcome: "error" }],
     ]);
+  });
+
+  it("identifies the signed-in user once, before queued events are sent", () => {
+    window.umami = undefined;
+    analytics.identifyUser({ id: "user-1", name: "Ana", email: "ana@example.com" });
+    analytics.trackEvent("print_requested", {});
+    window.umami = { track, identify };
+    analytics.trackPageView("/");
+    analytics.identifyUser({ id: "user-1", name: "Ana", email: "ana@example.com" });
+    analytics.trackEvent("print_requested", {});
+    expect(identify).toHaveBeenCalledTimes(1);
+    expect(identify).toHaveBeenCalledWith("user-1", { name: "Ana", email: "ana@example.com" });
+    expect(calls).toEqual(["identify", "track", "track", "track"]);
+  });
+
+  it("does not identify when tracking is disabled", () => {
+    location.hostname = "localhost";
+    analytics.identifyUser({ id: "user-1", name: "Ana", email: "ana@example.com" });
+    analytics.trackPageView("/");
+    expect(identify).not.toHaveBeenCalled();
   });
 });

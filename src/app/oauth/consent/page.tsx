@@ -1,6 +1,9 @@
 import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import { db } from "@/db";
 import { oauthClient } from "@/db/auth-schema";
+import { APP_URL } from "@/lib/mcp-config";
+import { trackServer } from "@/lib/server-analytics";
 import { requireUser } from "@/lib/session";
 import { ConsentForm } from "@/components/consent-form";
 
@@ -19,6 +22,8 @@ export default async function Consent({ searchParams }: { searchParams: Promise<
   const { client_id: clientId, scope } = await searchParams;
   const [client] = clientId ? await db.select({ name: oauthClient.name, uri: oauthClient.uri }).from(oauthClient).where(eq(oauthClient.clientId, clientId)).limit(1) : [];
   const scopes = (scope ?? "").split(" ").filter(Boolean);
+  trackServer("oauth_consent_shown", { client: client?.name, scopes: scopes.join(" ") },
+    { userId: user.id, request: new Request(`${APP_URL}/oauth/consent`, { headers: await headers() }), url: "/oauth/consent" });
   return <ConsentForm clientName={client?.name || "An application"} clientUri={client?.uri ?? null} userName={user.name}
     permissions={scopes.map((name) => SCOPE_LABELS[name] ?? name)} />;
 }

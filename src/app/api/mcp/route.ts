@@ -2,9 +2,13 @@ import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resourc
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { auth } from "@/lib/auth";
 import { AUTH_ISSUER, MCP_RESOURCE, MCP_SCOPES } from "@/lib/mcp-config";
+import { oauthClientName } from "@/lib/oauth-clients";
+import { identifyUser } from "@/lib/user-analytics";
 import { createLibresessionServer } from "@/mcp/server";
 
 const resourceClient = oauthProviderResourceClient(auth).getActions();
+// Refresh each agent user's Umami profile once per server process.
+const identified = new Set<string>();
 
 type ChallengeError = { statusCode?: number; headers?: HeadersInit; message?: string };
 
@@ -28,7 +32,12 @@ async function handle(request: Request) {
   }
   if (!payload.sub) return Response.json({ error: "invalid_token" }, { status: 401 });
   const scopes = typeof payload.scope === "string" ? payload.scope.split(" ") : [];
-  const server = createLibresessionServer({ userId: payload.sub, canWrite: scopes.includes("tunebooks:write") });
+  const client = await oauthClientName(typeof payload.azp === "string" ? payload.azp : typeof payload.client_id === "string" ? payload.client_id : undefined);
+  if (!identified.has(payload.sub)) {
+    identified.add(payload.sub);
+    void identifyUser(payload.sub, { mcp_client: client, uses_mcp: true }, { request, serverAgent: true });
+  }
+  const server = createLibresessionServer({ userId: payload.sub, canWrite: scopes.includes("tunebooks:write"), client, request });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);
   return transport.handleRequest(request);

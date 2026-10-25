@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/session";
 import { saveCatalogSetting, searchCatalog } from "@/lib/library";
+import { trackServer } from "@/lib/server-analytics";
 
 export async function GET(request: Request) {
-  if (!await currentUser()) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const query = new URL(request.url).searchParams.get("q") || "";
   if (!query.trim()) return NextResponse.json({ error: "Paste a tune URL or enter a title" }, { status: 400 });
   try {
     const settings = await searchCatalog(query);
+    trackServer("catalog_searched", { source: "web", query: query.trim(), result_count: settings.length,
+      top_titles: [...new Set(settings.map((setting) => setting.title))].slice(0, 5).join(" | ") }, { userId: user.id, request, url: "/import" });
     return NextResponse.json({ settings: settings.map(({ settingId, title, kind, mode, meter, contributor, sourceUrl }) => ({ settingId, title, kind, mode, meter, contributor, sourceUrl })) });
   } catch {
     return NextResponse.json({ error: "Could not search the catalog" }, { status: 500 });

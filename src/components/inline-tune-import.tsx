@@ -19,14 +19,14 @@ export function InlineTuneImport() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  async function saveSetting(settingId: number) {
+  async function saveSetting(settingId: number, title?: string) {
     try {
       const response = await fetch("/api/catalog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settingId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save the tune");
-      trackEvent("tune_saved", { outcome: "success" });
+      trackEvent("tune_saved", { outcome: "success", tune: title });
       setOpen(false); setQuery(""); setSettings([]); setMessage("Tune saved to your library."); router.refresh();
-    } catch (cause) { trackEvent("tune_saved", { outcome: "error" }); throw cause; }
+    } catch (cause) { trackEvent("tune_saved", { outcome: "error", tune: title }); throw cause; }
   }
 
   async function lookup(event: React.FormEvent<HTMLFormElement>) {
@@ -38,17 +38,17 @@ export function InlineTuneImport() {
       if (!response.ok) throw new Error(result.error || "Could not find the tune");
       const found: Setting[] = result.settings;
       lookedUp = true;
-      trackEvent("tune_lookup", { source: /^https?:\/\//i.test(query.trim()) ? "url" : "title", outcome: "success", result_count: found.length });
+      trackEvent("tune_lookup", { source: /^https?:\/\//i.test(query.trim()) ? "url" : "title", outcome: "success", result_count: found.length, query: query.trim() });
       if (!found.length) throw new Error("No settings found. Try a tune title or another The Session URL.");
-      if (found.length === 1) await saveSetting(found[0].settingId);
+      if (found.length === 1) await saveSetting(found[0].settingId, found[0].title);
       else { setSettings(found); setOpen(true); }
-    } catch (cause) { if (!lookedUp) trackEvent("tune_lookup", { source: /^https?:\/\//i.test(query.trim()) ? "url" : "title", outcome: "error" }); setError(cause instanceof Error ? cause.message : "Could not find the tune"); }
+    } catch (cause) { if (!lookedUp) trackEvent("tune_lookup", { source: /^https?:\/\//i.test(query.trim()) ? "url" : "title", outcome: "error", query: query.trim() }); setError(cause instanceof Error ? cause.message : "Could not find the tune"); }
     finally { setBusy(false); }
   }
 
   async function choose(settingId: number) {
     setBusy(true); setError("");
-    try { await saveSetting(settingId); }
+    try { await saveSetting(settingId, settings.find((setting) => setting.settingId === settingId)?.title); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save the tune"); }
     finally { setBusy(false); }
   }

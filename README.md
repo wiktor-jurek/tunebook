@@ -19,7 +19,7 @@ Google’s authorized redirect URI is `http://localhost:3000/api/auth/callback/g
 
 The SMTP defaults in `.env.example` use Purelymail at `smtp.purelymail.com:465` with TLS, authenticating and sending as `hello@libresession.com`. Fill in `SMTP_PASSWORD` with that mailbox’s password in your private `.env` or deployment environment, then restart the app.
 
-The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com/adactio/TheSession-data). Set `THESESSION_CSV_URL` to another compatible CSV URL if needed. It expects the dump’s `tune_id`, `setting_id`, `name`, `type`, `meter`, `mode`, `abc`, `username`, and `composer` fields. The app does not send tune content to an LLM.
+The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com/adactio/TheSession-data). Set `THESESSION_CSV_URL` to another compatible CSV URL if needed. It expects the dump’s `tune_id`, `setting_id`, `name`, `type`, `meter`, `mode`, `abc`, `username`, and `composer` fields. The app itself does not send tune content to an LLM; AI assistants you connect over MCP read what their tools return.
 
 ## Coolify
 
@@ -87,20 +87,29 @@ abcjs generates audio using General MIDI soundfonts. The whistle-like preset use
 
 ## Analytics
 
-Production pages load the Umami tracker from `https://analytics.jurek.dev/script.js` for website `48e712da-7618-450e-8c2f-88ba9f613eb7`. Tracking is restricted to `libresession.com` and `www.libresession.com`, honors Do Not Track and Umami’s `umami.disabled` local-storage opt-out, and stays disabled during development. Pageviews are sent once on initial load and on client-side pathname changes, including browser back/forward navigation. Automatic tracking is disabled so every pageview and event uses a sanitized URL and title: book/tune IDs become `:id`, queries and fragments are omitted, and external referrers contain only their origin. Events never include emails, names, passwords, tokens, search text, notation, or tune/book/set titles. No user identification is sent.
+Libresession uses self-hosted [Umami](https://umami.is) at `https://analytics.jurek.dev` (website `48e712da-7618-450e-8c2f-88ba9f613eb7`) for identified product analytics. **Signed-in people are tracked by name and email**, along with search text and the names of tunes, tunebooks and sets they work with. There is no consent banner; make sure the site's privacy notice says this.
 
-The event schema is in `src/lib/analytics.ts`. Mutation events have an `outcome` of `success` or `error`; use **success** when measuring completed actions. Other properties contain fixed categories, counts, or instrument/tempo values.
+**Browser.** Production pages load the Umami tracker for `libresession.com` and `www.libresession.com`. It stays off during development and honours Do Not Track and Umami's `umami.disabled` local-storage opt-out. Signed-in pages call `umami.identify(accountId, { name, email })` before any event, so a person's sessions join up across devices. Pageviews and events use grouped URLs: book and tune IDs become `:id`, and query strings, fragments and external referrer paths are dropped, so tokens never reach the tracker. The event schema is in `src/lib/analytics.ts`, and events queued before the tracker loads (up to 50) are sent after identification.
+
+**Server.** `src/lib/server-analytics.ts` posts events to Umami's `/api/send` with the account ID as the distinct ID, so they join the same person in Umami. It runs only when `NODE_ENV=production`; set `UMAMI_DISABLED=true` to switch it off, or `UMAMI_HOST`/`UMAMI_WEBSITE_ID` to point elsewhere. Delivery is fire-and-forget with a 3-second timeout and never affects a request. Umami discards events whose user agent looks automated, which covers every MCP client, so MCP and OAuth events are sent with `Libresession/1.0 (Linux x86_64)` and record the agent's own user agent as `user_agent`. Browser-originated server events forward the visitor's agent and IP.
+
+Every sign-in also refreshes the person's Umami profile with name, email, verification state, sign-up date, last sign-in method, and tunebook and saved-tune counts. Agent users additionally get `uses_mcp` and `mcp_client`.
+
+Mutation events carry an `outcome` of `success` or `error`; use **success** when measuring completed actions.
 
 | Flow | Events and useful properties |
 | --- | --- |
-| Authentication | `auth_submitted`, `auth_completed` (`mode`, `outcome`), `google_sign_in_started`, `google_sign_in_failed`, `signed_out`. Signup success means the verification email step was reached; Google start means a redirect was requested. |
-| Tune discovery | `tune_lookup` (`source`: url/title, `result_count`, `outcome`), `tune_saved`, `tune_deleted`, `tune_added_to_book`, `tune_removed_from_book`. Saving an already-saved setting counts as a successful save action. |
-| Library | `tunebook_created/renamed/moved/deleted`, `folder_created/renamed/moved/deleted`, `tunebook_icon_changed`. |
-| Sets | `set_created/updated/deleted` (tune/book counts), `set_added_to_book`, `book_entry_changed` (`kind`, `action`), `set_tune_reordered` (`direction`). |
-| Sharing | `tunebook_opened` (`access`: owner/viewer, `signed_in`, tune/set counts), `share_dialog_opened`, `book_shared_by_email` (`delivery`: sent/warning), `book_share_removed`, `book_visibility_changed` (`visibility`), `book_link_copied`, `shared_tune_saved`, `shared_book_saved`, `guest_save_sign_in` (`kind`). |
-| Playing and reading | `playback_started` (`instrument`, `tempo`), `playback_paused/completed/failed/restarted`, `playback_sound_changed`, `playback_tempo_changed`, `playback_seeked`, `notation_opened`, `tune_source_opened`, `scores_toggled`, `contents_navigated`, `print_requested`, `preferences_saved`. Playback starts count actual starts, excluding automatic restarts after seeking or changing sound/tempo. Print records a request, not confirmed printing. |
+| Accounts (server) | `user_signed_up`, `user_signed_in` (`method`: email/google/email_verification), plus an identify with the profile above. |
+| Authentication (browser) | `auth_submitted`, `auth_completed` (`mode`, `outcome`), `google_sign_in_started`, `google_sign_in_failed`, `signed_out`. |
+| Search | `catalog_searched` (server; `source`: web/mcp, `query`, filters, `result_count`, `top_titles`, `client`), `tune_lookup` (browser; `query`, `source`, `result_count`). |
+| AI agents (server) | `mcp_tool_called` for every tool call: `tool`, `outcome`, `duration_ms`, `client` (e.g. Claude Code), `user_agent`, each argument as `arg_*`, a result summary (`result_total`, `result_book_id`, `result_titles`, …) and `error` text on failure. |
+| OAuth (server) | `oauth_client_registered` (`client`, `application_type`, `redirect_hosts`), `oauth_consent_shown` (`client`, `scopes`), `oauth_consent_decided` (`accepted`), `oauth_token_issued` (`grant_type`, `client`). |
+| Library | `tune_saved` (`tune`), `tunebook_created/renamed/moved/deleted`, `folder_created/renamed/moved/deleted` (`name`), `tune_added_to_book` (`tune` or `book`), `tune_removed_from_book`, `tune_deleted`, `tunebook_icon_changed`. |
+| Sets | `set_created/updated/deleted` (`name`, tune/book counts), `set_added_to_book` (`name`), `book_entry_changed` (`kind`, `action`), `set_tune_reordered` (`direction`). |
+| Sharing | `tunebook_opened` (`book`, `access`, `signed_in`, tune/set counts), `share_dialog_opened`, `book_shared_by_email` (`delivery`), `book_share_removed`, `book_visibility_changed` (`visibility`), `book_link_copied`, `shared_tune_saved`, `shared_book_saved`, `guest_save_sign_in` (`kind`). |
+| Playing and reading | `playback_started` (`tune`, `instrument`, `tempo`), `playback_paused/completed/failed/restarted`, `playback_sound_changed`, `playback_tempo_changed`, `playback_seeked`, `notation_opened`, `tune_source_opened`, `scores_toggled`, `contents_navigated`, `print_requested`, `preferences_saved`. |
 
-Events that happen before the tracker loads are queued in memory (up to 50). A blocked or unavailable tracker never blocks an app action. To verify production, open Libresession with tracking allowed, check the request to `analytics.jurek.dev/api/send`, and inspect Events in Umami. Suggested funnels: `auth_submitted` → successful `auth_completed` → successful `tune_saved` → successful `tunebook_created` → successful `set_created`; and `tunebook_opened` with viewer access → `guest_save_sign_in` → successful `shared_book_saved`.
+To verify production, sign in with tracking allowed and check the identify request to `analytics.jurek.dev/api/send`, then look for the person under Sessions in Umami. Their MCP calls appear as `mcp_tool_called` events in the same session. Useful funnels: `oauth_consent_shown` → `oauth_consent_decided` (accepted) → `mcp_tool_called` (`tool`: build_tunebook); and `auth_submitted` → `user_signed_in` → `tune_saved` → `tunebook_created`.
 
 ## AI agents (MCP)
 

@@ -7,7 +7,7 @@ import { SharingError } from "@/lib/sharing";
 import { TuneEmojiError } from "@/lib/tune-emojis";
 import type { TuneWithPractice } from "@/lib/tune-practice";
 
-export type Context = { userId: string; canWrite: boolean };
+export type Context = { userId: string; canWrite: boolean; client?: string; request?: Request };
 
 export const responseFormat = z.enum(["markdown", "json"]).default("markdown")
   .describe("markdown (default) for reading; json for the full structured data");

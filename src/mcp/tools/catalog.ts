@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getCatalogTune, searchCatalogTunes } from "@/lib/library";
 import { getOftenPlayedWith } from "@/lib/sets";
+import { trackServer } from "@/lib/server-analytics";
 import { parseSessionUrl } from "@/lib/session-url";
 import { describeTune, fail, formatMode, guard, ok, page, pageShape, pagination, responseFormat, type Context } from "@/mcp/format";
 
@@ -38,6 +39,8 @@ Filters combine with AND. Sort by popularity (the number of The Session members'
       tunebooks: tune.tunebooks, matching_settings: tune.matchingSettings, source_url: tune.sourceUrl,
     }));
     const meta = page(total, rows.length, offset);
+    trackServer("catalog_searched", { source: "mcp", client: context.client, query, kind, tonic, mode, meter, sort, offset, result_count: total,
+      top_titles: rows.slice(0, 5).map((tune) => tune.title).join(" | ") }, { userId: context.userId, request: context.request, url: "/mcp/search_catalog", serverAgent: true });
     const markdown = rows.length
       ? [`Found ${total} tunes (showing ${offset + 1}-${offset + rows.length}).`, "",
         ...rows.map((tune) => `- **${tune.title}** (${describeTune(tune)}) — tune ${tune.tune_id}, setting ${tune.setting_id}, in ${tune.tunebooks} tunebooks`),

@@ -11,15 +11,17 @@ import { catalogSettings, catalogTunes } from "@/db/schema";
 const state = vi.hoisted(() => ({ db: null as unknown as NodePgDatabase }));
 vi.mock("@/db", () => ({ get db() { return state.db; } }));
 vi.mock("@/lib/email", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/lib/server-analytics", () => ({ trackServer: vi.fn() }));
 
 import { sendEmail } from "@/lib/email";
+import { trackServer } from "@/lib/server-analytics";
 import { createLibresessionServer } from "./server";
 
 type Result = { isError?: boolean; content: { type: string; text: string }[]; structuredContent?: Record<string, unknown> };
 
 async function connect(userId: string, canWrite = true) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await createLibresessionServer({ userId, canWrite }).connect(serverTransport);
+  await createLibresessionServer({ userId, canWrite, client: "Test Agent" }).connect(serverTransport);
   const client = new Client({ name: "test", version: "1.0.0" });
   await client.connect(clientTransport);
   const call = async <T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}) => {
@@ -95,6 +97,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Libresession MCP server (Postgr
     const tune = await owner.call<{ settings: unknown[]; tunebooks: number }>("libresession_get_tune", { tune: "https://thesession.org/tunes/1" });
     expect(tune.data.settings).toHaveLength(2);
     expect(tune.data.tunebooks).toBe(8000);
+  });
+
+  it("tracks every tool call and search for product analytics", async () => {
+    vi.mocked(trackServer).mockClear();
+    await owner.ok("libresession_search_catalog", { query: "The Kesh", kind: "jig" });
+    await owner.call("libresession_get_tunebook", { book_id: randomUUID() });
+    const events = vi.mocked(trackServer).mock.calls.map(([name, data, context]) => ({ name, data, userId: context?.userId }));
+    expect(events).toEqual([
+      { name: "catalog_searched", userId: "owner", data: expect.objectContaining({ source: "mcp", client: "Test Agent", query: "The Kesh", kind: "jig", result_count: 1, top_titles: "Kesh, The" }) },
+      { name: "mcp_tool_called", userId: "owner", data: expect.objectContaining({ tool: "search_catalog", outcome: "success", client: "Test Agent", arg_query: "The Kesh", result_total: 1, result_titles: "Kesh, The" }) },
+      { name: "mcp_tool_called", userId: "owner", data: expect.objectContaining({ tool: "get_tunebook", outcome: "error", error: expect.stringContaining("Tunebook not found") }) },
+    ]);
+    expect(events[1].data).not.toHaveProperty("arg_response_format");
   });
 
   it("builds a tunebook with sets in one call", async () => {

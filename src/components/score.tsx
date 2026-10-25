@@ -131,7 +131,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
       source.start(0, p.offset);
       p.timer?.start(p.offset, "seconds");
       p.playing = true; setPlaying(true); tick();
-      if (userStarted) trackEvent("playback_started", { instrument: nextInstrument, tempo: nextSpeed });
+      if (userStarted) trackEvent("playback_started", { instrument: nextInstrument, tempo: nextSpeed, tune: tune.title });
       window.dispatchEvent(new CustomEvent("tunebook:play", { detail: scoreId }));
     } catch (cause) { trackEvent("playback_failed", {}); setError(cause instanceof Error ? cause.message : "Audio failed"); }
     finally { if (token === p.token) setLoading(false); }

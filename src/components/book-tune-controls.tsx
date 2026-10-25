@@ -17,10 +17,10 @@ export function BookTuneControls({ bookId, available, sets }: { bookId: string; 
       const response = await fetch(kind === "set" ? "/api/sets" : "/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(kind === "set" ? { operation: "add", bookId, setId: id } : { operation: "addToBook", bookId, tuneId: id }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not update tunebook");
-      if (kind === "set") trackEvent("set_added_to_book", { outcome: "success" });
-      else trackLibraryAction("addToBook", "success");
+      if (kind === "set") trackEvent("set_added_to_book", { outcome: "success", name: sets.find((set) => set.id === id)?.name });
+      else trackLibraryAction("addToBook", "success", { tune: available.find((tune) => tune.id === id)?.title });
       router.refresh();
-    } catch (cause) { if (kind === "set") trackEvent("set_added_to_book", { outcome: "error" }); else trackLibraryAction("addToBook", "error"); setError(cause instanceof Error ? cause.message : "Could not update tunebook"); }
+    } catch (cause) { if (kind === "set") trackEvent("set_added_to_book", { outcome: "error", name: sets.find((set) => set.id === id)?.name }); else trackLibraryAction("addToBook", "error", { tune: available.find((tune) => tune.id === id)?.title }); setError(cause instanceof Error ? cause.message : "Could not update tunebook"); }
     finally { setBusy(false); }
   }
   return <div className="book-add book-add-items"><label className="field-label">Add tune<select className="input" value="" disabled={busy} onChange={(event) => void add("tune", event.target.value)}><option value="">Choose a saved tune</option>{available.map((tune) => <option key={tune.id} value={tune.id}>{tune.emoji} {tune.title}</option>)}</select></label><label className="field-label">Add set<select className="input" value="" disabled={busy || !sets.length} onChange={(event) => void add("set", event.target.value)}><option value="">{sets.length ? "Choose a saved set" : "Group tunes below to create a set"}</option>{sets.map((set) => <option key={set.id} value={set.id}>{set.name}, {set.tunes.length} tunes</option>)}</select></label><Link className="book-my-sets" href="/sets">My sets</Link>{error && <span role="alert" className="inline-error">{error}</span>}</div>;

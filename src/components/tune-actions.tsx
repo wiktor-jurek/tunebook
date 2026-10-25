@@ -31,11 +31,11 @@ export function TuneActions({ tuneId, currentBookId }: { tuneId: string; current
       const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, bookId, tuneId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not update tune");
-      trackLibraryAction(operation, "success");
+      trackLibraryAction(operation, "success", { book: books.find((book) => book.id === bookId)?.name });
       if (bookId) setBooks((current) => current.map((book) => book.id === bookId ? { ...book, inBook: operation === "addToBook" } : book));
       router.refresh();
       if (operation === "deleteSavedTune") router.push("/");
-    } catch (cause) { trackLibraryAction(operation, "error"); setError(cause instanceof Error ? cause.message : "Request failed"); }
+    } catch (cause) { trackLibraryAction(operation, "error", { book: books.find((book) => book.id === bookId)?.name }); setError(cause instanceof Error ? cause.message : "Request failed"); }
     finally { setBusy(false); }
   }
   return <div className="tune-actions">
