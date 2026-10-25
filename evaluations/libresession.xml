@@ -1,0 +1,48 @@
+<!--
+  Read-only evaluation for the Libresession MCP server, in the mcp-builder format.
+  Answers were verified against TheSession-data tunes.csv and tune_popularity.csv (October 2026),
+  choosing questions whose leader is well ahead so popularity drift does not change the answer.
+  Requires a synced catalog (npm run catalog:sync).
+-->
+<evaluation>
+  <qa_pair>
+    <question>Which slip jig appears in the most members' tunebooks on The Session? Answer with its The Session tune ID.</question>
+    <answer>10</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Among reels that have at least one setting in D mixolydian, which is the most popular by tunebook count? Answer with its tune ID.</question>
+    <answer>208</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the tune ID of the most popular slide in the catalog?</question>
+    <answer>250</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>The Kesh has many settings. In which key and mode are most of its settings written? Answer as a tonic and mode, e.g. "A minor".</question>
+    <answer>G major</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which jig with a setting in A dorian is in the most members' tunebooks? Answer with its tune ID.</question>
+    <answer>106</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the tune ID of the most popular polka on The Session?</question>
+    <answer>441</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the tune ID of the most popular waltz in the catalog?</question>
+    <answer>449</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Drowsy Maggie is the most popular reel with a setting in B minor. Which reel with a B minor setting is the next most popular? Answer with its tune ID.</question>
+    <answer>248</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which strathspey is in the most members' tunebooks? Answer with its tune ID.</question>
+    <answer>3016</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>The second most popular reel overall is Cooley's. In which key and mode are most of Cooley's settings written? Answer as a tonic and mode, e.g. "A minor".</question>
+    <answer>E dorian</answer>
+  </qa_pair>
+</evaluation>

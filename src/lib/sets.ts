@@ -137,6 +137,41 @@ export async function changeEntry(userId: string, bookId: string, entryId: strin
   });
 }
 
+export async function reorderBook(userId: string, bookId: string, entryIds: string[]) {
+  return db.transaction(async (tx) => {
+    const entries = await lockBook(tx, userId, bookId);
+    const known = new Set(entries.map((entry) => entry.id));
+    if (entryIds.length !== entries.length || new Set(entryIds).size !== entryIds.length || entryIds.some((id) => !known.has(id))) {
+      throw new SetError(`List each of this tunebook's ${entries.length} entry IDs exactly once`);
+    }
+    await reorderEntries(tx, entryIds);
+  });
+}
+
+// Groups saved tunes into a new set in playing order, placing any that are not yet in the book first.
+export async function createSetFromTunes(userId: string, bookId: string, savedTuneIds: string[], name?: string) {
+  const entryIds = await db.transaction(async (tx) => {
+    const entries = await lockBook(tx, userId, bookId);
+    await ownTunes(tx, userId, savedTuneIds);
+    const grouped = entries.filter((entry) => entry.setId).map((entry) => entry.setId!);
+    if (grouped.length) {
+      const [member] = await tx.select({ tuneId: setTunes.tuneId }).from(setTunes)
+        .where(and(inArray(setTunes.setId, grouped), inArray(setTunes.tuneId, savedTuneIds))).limit(1);
+      if (member) throw new SetError("A tune is already in a set in this tunebook; ungroup that set first");
+    }
+    let position = (entries.at(-1)?.position ?? -1) + 1;
+    const ids: string[] = [];
+    for (const tuneId of savedTuneIds) {
+      const existing = entries.find((entry) => entry.tuneId === tuneId);
+      if (existing) { ids.push(existing.id); continue; }
+      const [entry] = await tx.insert(bookEntries).values({ bookId, tuneId, position: position++ }).returning({ id: bookEntries.id });
+      ids.push(entry.id);
+    }
+    return ids;
+  });
+  return groupTunes(userId, bookId, name, entryIds);
+}
+
 export async function deleteSet(userId: string, setId: string) {
   return db.transaction(async (tx) => {
     // Match addSet's book-then-set lock order, including concurrent new placements.

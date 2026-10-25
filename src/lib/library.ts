@@ -1,6 +1,6 @@
-import { and, asc, eq, exists, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { bookShares, bookEntries, bookPopularTunes, catalogSettings, folders, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
+import { bookShares, bookEntries, bookPopularTunes, catalogSettings, catalogTunes, folders, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { parseSessionUrl } from "@/lib/session-url";
 import { getMySets } from "@/lib/sets";
@@ -15,14 +15,19 @@ export async function getLibrary(userId: string) {
   const [allFolders, allBooks, allTunes, sharedBooks, sets] = await Promise.all([
     db.select().from(folders).where(eq(folders.userId, userId)).orderBy(asc(folders.name)),
     db.select().from(tunebooks).where(eq(tunebooks.userId, userId)).orderBy(asc(tunebooks.name)),
-    db.select().from(savedTunes).where(eq(savedTunes.userId, userId)).orderBy(asc(savedTunes.title)),
+    getSavedTunes(userId),
     db.select({ id: tunebooks.id, name: tunebooks.name, emoji: tunebooks.emoji })
       .from(tunebooks).innerJoin(bookShares, eq(bookShares.bookId, tunebooks.id))
       .innerJoin(user, and(eq(user.id, userId), eq(user.emailVerified, true), eq(bookShares.email, sql`lower(${user.email})`)))
       .where(sql`${tunebooks.userId} <> ${userId}`).orderBy(asc(tunebooks.name)),
     getMySets(userId),
   ]);
-  return { folders: allFolders, books: allBooks, tunes: await withTunePractice(userId, await withTuneEmojis(allTunes)), sharedBooks, sets };
+  return { folders: allFolders, books: allBooks, tunes: allTunes, sharedBooks, sets };
+}
+
+export async function getSavedTunes(userId: string) {
+  const tunes = await db.select().from(savedTunes).where(eq(savedTunes.userId, userId)).orderBy(asc(savedTunes.title));
+  return withTunePractice(userId, await withTuneEmojis(tunes));
 }
 
 export const isBookId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -86,6 +91,71 @@ export async function searchCatalog(query: string) {
   return db.select().from(catalogSettings)
     .where(or(ilike(catalogSettings.title, pattern), sql`${catalogSettings.tuneId}::text = ${trimmed}`))
     .orderBy(asc(catalogSettings.title), asc(catalogSettings.settingId)).limit(50);
+}
+
+export type CatalogTuneFilters = {
+  query?: string; kind?: string; tonic?: string; mode?: string; meter?: string;
+  minTunebooks?: number; sort: "popularity" | "title"; limit: number; offset: number;
+};
+export type CatalogTune = {
+  tuneId: number; settingId: number; title: string; kind: string | null; meter: string | null; mode: string | null;
+  tunebooks: number; matchingSettings: number; sourceUrl: string;
+};
+
+// The Session files many titles with a trailing article, e.g. "Kesh, The".
+export function titleVariants(query: string) {
+  const trimmed = query.trim().replace(/\s+/g, " ");
+  const article = /^(the|an|a)\s+(.+)$/i.exec(trimmed);
+  return article ? [trimmed, `${article[2]}, ${article[1][0].toUpperCase()}${article[1].slice(1).toLowerCase()}`] : [trimmed];
+}
+const likePattern = (value: string) => `%${value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+
+// One row per tune: the first setting matching every filter represents the tune.
+export async function searchCatalogTunes(filters: CatalogTuneFilters) {
+  const conditions = [sql`true`];
+  const query = filters.query?.trim().slice(0, 100);
+  if (query) {
+    const parsed = parseSessionUrl(query);
+    if (parsed) conditions.push(parsed.settingId ? sql`cs.setting_id = ${parsed.settingId}` : sql`cs.tune_id = ${parsed.tuneId}`);
+    else conditions.push(sql`(${sql.join(titleVariants(query).map((title) => sql`cs.title ILIKE ${likePattern(title)}`), sql` OR `)} OR cs.tune_id::text = ${query})`);
+  }
+  if (filters.kind) conditions.push(sql`lower(cs.kind) = lower(${filters.kind})`);
+  if (filters.meter) conditions.push(sql`cs.meter = ${filters.meter}`);
+  if (filters.tonic) conditions.push(sql`cs.mode ~ ${`^${filters.tonic}[a-z]+$`}`);
+  if (filters.mode) conditions.push(sql`lower(cs.mode) ~ ${`^[a-g][#b]?${filters.mode.toLowerCase()}$`}`);
+  if (filters.minTunebooks) conditions.push(sql`coalesce(ct.tunebooks, 0) >= ${filters.minTunebooks}`);
+  const order = filters.sort === "title" ? sql`title ASC, "tuneId" ASC` : sql`tunebooks DESC, title ASC, "tuneId" ASC`;
+  const result = await db.execute<CatalogTune & { total: number }>(sql`
+    SELECT *, count(*) OVER ()::integer AS total FROM (
+      SELECT DISTINCT ON (cs.tune_id) cs.tune_id AS "tuneId", cs.setting_id AS "settingId", cs.title, cs.kind, cs.meter, cs.mode,
+        cs.source_url AS "sourceUrl", coalesce(ct.tunebooks, 0)::integer AS tunebooks,
+        count(*) OVER (PARTITION BY cs.tune_id)::integer AS "matchingSettings"
+      FROM catalog_settings cs LEFT JOIN catalog_tunes ct ON ct.tune_id = cs.tune_id
+      WHERE ${sql.join(conditions, sql` AND `)}
+      ORDER BY cs.tune_id, cs.setting_id
+    ) tunes
+    ORDER BY ${order} LIMIT ${filters.limit} OFFSET ${filters.offset}
+  `);
+  const total = result.rows[0]?.total ?? (filters.offset ? await countCatalogTunes(conditions) : 0);
+  return { total, tunes: result.rows as CatalogTune[] };
+}
+
+// An offset past the end returns no rows, so the total needs its own count.
+async function countCatalogTunes(conditions: SQL[]) {
+  const result = await db.execute<{ total: number }>(sql`
+    SELECT count(DISTINCT cs.tune_id)::integer AS total
+    FROM catalog_settings cs LEFT JOIN catalog_tunes ct ON ct.tune_id = cs.tune_id
+    WHERE ${sql.join(conditions, sql` AND `)}
+  `);
+  return result.rows[0]?.total ?? 0;
+}
+
+export async function getCatalogTune(tuneId: number) {
+  const [settings, [popularity]] = await Promise.all([
+    db.select().from(catalogSettings).where(eq(catalogSettings.tuneId, tuneId)).orderBy(asc(catalogSettings.settingId)),
+    db.select({ tunebooks: catalogTunes.tunebooks }).from(catalogTunes).where(eq(catalogTunes.tuneId, tuneId)).limit(1),
+  ]);
+  return { settings, tunebooks: popularity?.tunebooks ?? 0 };
 }
 
 export async function saveCatalogSetting(userId: string, settingId: number) {

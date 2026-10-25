@@ -64,6 +64,20 @@
       "when": 1790686936862,
       "tag": "0008_milky_rachel_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792961551985,
+      "tag": "0009_oauth_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792961565131,
+      "tag": "0010_catalog_popularity",
+      "breakpoints": true
     }
   ]
 }

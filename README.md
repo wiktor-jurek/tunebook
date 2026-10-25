@@ -102,9 +102,25 @@ The event schema is in `src/lib/analytics.ts`. Mutation events have an `outcome`
 
 Events that happen before the tracker loads are queued in memory (up to 50). A blocked or unavailable tracker never blocks an app action. To verify production, open Libresession with tracking allowed, check the request to `analytics.jurek.dev/api/send`, and inspect Events in Umami. Suggested funnels: `auth_submitted` → successful `auth_completed` → successful `tune_saved` → successful `tunebook_created` → successful `set_created`; and `tunebook_opened` with viewer access → `guest_save_sign_in` → successful `shared_book_saved`.
 
+## AI agents (MCP)
+
+Libresession has a [Model Context Protocol](https://modelcontextprotocol.io) server, so AI assistants can search The Session and build tunebooks for you from prompts such as "a tunebook of 20 popular reels in D, in sets of three". Connect `https://libresession.com/api/mcp` (or `http://localhost:3000/api/mcp` locally):
+
+- **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector, and paste the URL.
+- **Claude Code:** `claude mcp add --transport http libresession https://libresession.com/api/mcp`, then run `/mcp` to sign in.
+- **Other clients:** any MCP client that supports streamable HTTP with OAuth.
+
+The client opens Libresession's sign-in page and then a consent screen. Agents act as you with two scopes: `tunebooks:read` searches the catalog and reads your library, tunebooks, sets and sharing; `tunebooks:write` saves tunes, creates and edits tunebooks, folders and sets, deletes them, and shares tunebooks by email or link. Destructive tools are annotated as such and their descriptions tell agents to confirm first; invitations send real emails. Agents cannot read other people's private tunebooks, change practice progress, or touch account settings. Access tokens last an hour and refresh tokens 30 days; to revoke an app, remove the connector in your client.
+
+The main workflow is `libresession_search_catalog` (filter by title, type, key, mode, meter and popularity) followed by `libresession_build_tunebook`, which creates a book, saves the settings and groups sets in one call. Other tools read and edit the library: `get_library`, `list_saved_tunes`, `get_tune`, `get_tunebook`, `add_to_tunebook`, `reorder_tunebook`, `create_set`/`update_set`, `set_often_played`, folders, deletion and sharing, all prefixed `libresession_`. Read tools return Markdown by default or JSON with `response_format: "json"`, and list tools page with `limit`/`offset`.
+
+The server lives in `src/mcp` and is served statelessly from `src/app/api/mcp/route.ts` with the official TypeScript SDK. OAuth 2.1 comes from Better Auth's `@better-auth/oauth-provider` and `jwt` plugins: dynamic client registration, PKCE, consent at `/oauth/consent`, and JWT access tokens bound to the `/api/mcp` resource. Discovery is published at `/.well-known/oauth-protected-resource/api/mcp` and `/.well-known/oauth-authorization-server/api/auth`. `BETTER_AUTH_URL` must be the exact public URL, because it sets the token issuer and audience. Clients registering `http://localhost` callbacks are treated as native apps. The OAuth tables arrive in a migration that production applies at startup; run `npm run db:migrate` locally.
+
+Popularity is the number of The Session members' tunebooks containing a tune. `npm run catalog:sync` imports it from TheSession-data's `tune_popularity.csv` into `catalog_tunes` (override with `THESESSION_POPULARITY_CSV_URL`). Run `npm run test:mcp` for PostgreSQL checks of tool listing by scope, search and paging, building, editing, sharing, ownership and deletion. `evaluations/libresession.xml` holds ten read-only questions, in the [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder) format, for testing how well a model uses the server.
+
 ## Checks
 
-Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. Run `npm run test:sharing` for PostgreSQL sharing tests and `npm run test:sets` for migration, grouping, reuse, ordering, ownership, private copies, and tune relationships. Those tests use a temporary schema in `TEST_DATABASE_URL` (or `DATABASE_URL` from `.env`) and remove it afterward; the database role needs permission to create schemas. The server runs migrations automatically in the production container; local development runs them explicitly.
+Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. Run `npm run test:sharing` for PostgreSQL sharing tests, `npm run test:mcp` for the MCP server, and `npm run test:sets` for migration, grouping, reuse, ordering, ownership, private copies, and tune relationships. Those tests use a temporary schema in `TEST_DATABASE_URL` (or `DATABASE_URL` from `.env`) and remove it afterward; the database role needs permission to create schemas. The server runs migrations automatically in the production container; local development runs them explicitly.
 
 ## Commits and releases
 

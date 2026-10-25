@@ -19,6 +19,12 @@ export const catalogSettings = pgTable("catalog_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("catalog_title_idx").on(t.title), index("catalog_tune_idx").on(t.tuneId)]);
 
+// Tune-level popularity from The Session: how many member tunebooks contain the tune.
+export const catalogTunes = pgTable("catalog_tunes", {
+  tuneId: integer("tune_id").primaryKey(),
+  tunebooks: integer("tunebooks").notNull().default(0),
+}, (t) => [index("catalog_tune_popularity_idx").on(t.tunebooks)]);
+
 export const savedTunes = pgTable("saved_tunes", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),

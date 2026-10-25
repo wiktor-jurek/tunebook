@@ -25,6 +25,8 @@ export function AuthForm({ mode, token, returnTo = "/" }: { mode: "sign-in" | "s
         const result = await authClient.signIn.email({ email, password, callbackURL: returnTo });
         if (result.error) throw new Error(result.error.message);
         trackEvent("auth_completed", { mode, outcome: "success" });
+        // During an OAuth authorization the client plugin follows the server's redirect back to the app.
+        if (new URLSearchParams(window.location.search).has("sig")) return;
         router.push(returnTo); router.refresh();
       } else if (mode === "sign-up") {
         const result = await authClient.signUp.email({ email, password, name: String(data.get("name") || ""), callbackURL: returnTo });
