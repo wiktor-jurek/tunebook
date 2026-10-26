@@ -78,6 +78,20 @@
       "when": 1792961565131,
       "tag": "0010_catalog_popularity",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792961810523,
+      "tag": "0011_catalog_melodies",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793018209261,
+      "tag": "0012_playalong_tracks",
+      "breakpoints": true
     }
   ]
 }

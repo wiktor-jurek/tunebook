@@ -41,6 +41,8 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   playback_failed: Record<string, never>;
   playback_restarted: Record<string, never>;
   playback_sound_changed: { instrument: number };
+  playalong_started: { tempo: number; tune: string; label: string };
+  playalong_selected: { label: string };
   playback_tempo_changed: { tempo: number };
   playback_seeked: Record<string, never>;
   notation_opened: Record<string, never>;

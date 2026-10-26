@@ -10,10 +10,12 @@ import { PracticeSpeed, TuneAbility } from "@/components/tune-ability";
 import { TuneIcon } from "@/components/tune-icon";
 import { abcForScore, abcForTune, noteNames } from "@/lib/notation";
 import { DEFAULT_SOUND, SOUND_OPTIONS } from "@/lib/sounds";
+import type { Playalong } from "@/lib/playalongs";
 
 type Tune = TuneWithPractice;
 type Visual = ReturnType<typeof abcjs.renderAbc>[number];
-type Player = { buffer?: AudioBuffer; key?: string; source?: AudioBufferSourceNode; gain?: GainNode; startedAt: number; offset: number; timer?: abcjs.TimingCallbacks; raf?: number; playing: boolean; token: number };
+// audio is set while a play-along recording is the sound; otherwise the score is synthesised into buffer.
+type Player = { buffer?: AudioBuffer; key?: string; source?: AudioBufferSourceNode; gain?: GainNode; audio?: HTMLAudioElement; startedAt: number; offset: number; timer?: abcjs.TimingCallbacks; raf?: number; playing: boolean; token: number };
 let sharedContext: AudioContext | null = null;
 const instruments = SOUND_OPTIONS;
 
@@ -21,7 +23,7 @@ export function pauseTune(tuneId: string) {
   window.dispatchEvent(new CustomEvent("tunebook:pause", { detail: tuneId }));
 }
 
-export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, playbackId, practiceEditable = true, showPractice = true }: { tune: Tune; defaultSound?: number; showTitle?: boolean; playbackId?: string; practiceEditable?: boolean; showPractice?: boolean }) {
+export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, playbackId, practiceEditable = true, showPractice = true, playalongs = [] }: { tune: Tune; defaultSound?: number; showTitle?: boolean; playbackId?: string; practiceEditable?: boolean; showPractice?: boolean; playalongs?: Playalong[] }) {
   const paperRef = useRef<HTMLDivElement>(null);
   const visualRef = useRef<Visual | null>(null);
   const playerRef = useRef<Player>({ startedAt: 0, offset: 0, playing: false, token: 0 });
@@ -31,6 +33,8 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
   const [error, setError] = useState("");
   const [soundOverride, setInstrument] = useState<number | null>(null);
   const instrument = soundOverride ?? defaultSound;
+  const [trackId, setTrackId] = useState<string | null>(null);
+  const track = playalongs.find((entry) => entry.id === trackId) ?? null;
   const [speed, setSpeed] = useState(100);
   const [volume, setVolume] = useState(75);
   const [progress, setProgress] = useState(0);
@@ -47,7 +51,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
     setReady(Boolean(result[0]));
     return () => {
       player.token++;
-      player.source?.stop(); player.timer?.stop();
+      player.source?.stop(); player.timer?.stop(); player.audio?.pause();
       if (player.raf) cancelAnimationFrame(player.raf);
       player.playing = false;
     };
@@ -78,23 +82,67 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
   function pause() {
     const p = playerRef.current;
     if (!p.playing) return;
-    p.offset = Math.min(p.buffer?.duration || 0, sharedContext!.currentTime - p.startedAt);
-    p.source?.stop(); p.source = undefined; p.timer?.pause();
+    if (p.audio) p.audio.pause();
+    else {
+      p.offset = Math.min(p.buffer?.duration || 0, sharedContext!.currentTime - p.startedAt);
+      p.source?.stop(); p.source = undefined; p.timer?.pause();
+    }
     if (p.raf) cancelAnimationFrame(p.raf);
     p.playing = false; setPlaying(false);
   }
   function reset() {
     pause();
     const p = playerRef.current;
+    if (p.audio) p.audio.currentTime = 0;
     p.offset = 0; p.timer?.reset(); setProgress(0); setNote("-"); setActiveElements([]);
+  }
+  function finished() {
+    const p = playerRef.current;
+    p.playing = false; p.source = undefined; p.offset = 0; p.timer?.stop();
+    setPlaying(false); setProgress(0); setNote("-"); setActiveElements([]);
+    if (p.raf) cancelAnimationFrame(p.raf);
+  }
+  // Share of the way through the current sound, from 0 to 1.
+  function position() {
+    const p = playerRef.current;
+    if (p.audio) return p.audio.duration ? p.audio.currentTime / p.audio.duration : 0;
+    return p.buffer ? (p.playing && sharedContext ? sharedContext.currentTime - p.startedAt : p.offset) / p.buffer.duration : 0;
   }
   function tick() {
     const p = playerRef.current;
-    if (!p.playing || !p.buffer || !sharedContext) return;
-    setProgress(Math.min(100, Math.round((sharedContext.currentTime - p.startedAt) / p.buffer.duration * 100)));
+    if (!p.playing || (!p.audio && (!p.buffer || !sharedContext))) return;
+    setProgress(Math.min(100, Math.round(position() * 100)));
     p.raf = requestAnimationFrame(tick);
   }
-  async function start(nextInstrument = instrument, nextSpeed = speed, offsetRatio?: number, userStarted = true) {
+  async function startRecording(recording: Playalong, nextSpeed: number, offsetRatio?: number, userStarted = true) {
+    const p = playerRef.current;
+    const token = ++p.token;
+    setLoading(true); setError("");
+    try {
+      if (!p.audio || p.key !== recording.id) {
+        p.audio?.pause();
+        const audio = new Audio(recording.url);
+        audio.preload = "auto";
+        audio.onended = () => { if (p.audio === audio && p.playing) { trackEvent("playback_completed", {}); audio.currentTime = 0; finished(); } };
+        p.audio = audio; p.key = recording.id;
+      }
+      const audio = p.audio;
+      // Slowed-down practice keeps the recording in tune.
+      audio.preservesPitch = true;
+      audio.playbackRate = nextSpeed / 100;
+      audio.volume = volume / 100;
+      if (offsetRatio !== undefined) audio.currentTime = offsetRatio * recording.durationMs / 1000;
+      await audio.play();
+      if (token !== p.token) { audio.pause(); return; }
+      setNote("-"); setActiveElements([]);
+      p.playing = true; setPlaying(true); tick();
+      if (userStarted) trackEvent("playalong_started", { tempo: nextSpeed, tune: tune.title, label: recording.label });
+      window.dispatchEvent(new CustomEvent("tunebook:play", { detail: scoreId }));
+    } catch (cause) { trackEvent("playback_failed", {}); setError(cause instanceof Error ? cause.message : "Audio failed"); }
+    finally { if (token === p.token) setLoading(false); }
+  }
+  async function start(nextInstrument = instrument, nextSpeed = speed, offsetRatio?: number, userStarted = true, recording = track) {
+    if (recording) return startRecording(recording, nextSpeed, offsetRatio, userStarted);
     const visual = visualRef.current;
     if (!visual || !abcjs.synth.supportsAudio()) { trackEvent("playback_failed", {}); setError("Audio is unavailable in this browser"); return; }
     const p = playerRef.current;
@@ -127,7 +175,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
       p.offset = offsetRatio !== undefined ? Math.min(p.buffer.duration - 0.01, Math.max(0, offsetRatio * p.buffer.duration)) : p.offset;
       p.source = source; p.gain = gain;
       p.startedAt = sharedContext.currentTime - p.offset;
-      source.onended = () => { if (p.source === source && p.playing) { trackEvent("playback_completed", {}); p.playing = false; p.source = undefined; p.offset = 0; p.timer?.stop(); setPlaying(false); setProgress(0); setNote("-"); setActiveElements([]); if (p.raf) cancelAnimationFrame(p.raf); } };
+      source.onended = () => { if (p.source === source && p.playing) { trackEvent("playback_completed", {}); finished(); } };
       source.start(0, p.offset);
       p.timer?.start(p.offset, "seconds");
       p.playing = true; setPlaying(true); tick();
@@ -136,25 +184,35 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
     } catch (cause) { trackEvent("playback_failed", {}); setError(cause instanceof Error ? cause.message : "Audio failed"); }
     finally { if (token === p.token) setLoading(false); }
   }
-  async function changeSound(program: number) {
-    trackEvent("playback_sound_changed", { instrument: program });
+  // Sound is either a General MIDI program for the synthesised score or "track:<id>" for a play-along.
+  async function changeSound(value: string) {
+    const recording = playalongs.find((entry) => `track:${entry.id}` === value) ?? null;
+    const program = recording ? instrument : Number(value);
+    if (recording) trackEvent("playalong_selected", { label: recording.label });
+    else trackEvent("playback_sound_changed", { instrument: program });
     const p = playerRef.current;
-    const ratio = p.buffer ? (p.playing && sharedContext ? sharedContext.currentTime - p.startedAt : p.offset) / p.buffer.duration : 0;
+    const switching = Boolean(recording) !== Boolean(p.audio);
+    const ratio = switching ? 0 : position();
     const wasPlaying = p.playing;
-    pause(); setInstrument(program);
-    if (wasPlaying) await start(program, speed, ratio, false);
+    pause();
+    if (!recording && p.audio) { p.audio = undefined; p.key = undefined; }
+    if (switching) { p.offset = 0; p.timer?.reset(); setProgress(0); }
+    setTrackId(recording?.id ?? null); setInstrument(program);
+    if (wasPlaying) await start(program, speed, ratio, false, recording);
   }
   async function changeSpeed(value: number) {
     const p = playerRef.current;
-    const ratio = p.buffer ? (p.playing && sharedContext ? sharedContext.currentTime - p.startedAt : p.offset) / p.buffer.duration : 0;
+    if (p.audio) { setSpeed(value); p.audio.playbackRate = value / 100; return; }
+    const ratio = position();
     const wasPlaying = p.playing;
     pause(); setSpeed(value);
     if (wasPlaying) await start(instrument, value, ratio, false);
   }
   async function seek(value: number) {
-    const wasPlaying = playerRef.current.playing;
-    pause();
     const p = playerRef.current;
+    if (p.audio) { if (p.audio.duration) p.audio.currentTime = value / 100 * p.audio.duration; setProgress(value); return; }
+    const wasPlaying = p.playing;
+    pause();
     p.offset = p.buffer ? value / 100 * p.buffer.duration : 0;
     p.timer?.setProgress(value / 100);
     setProgress(value);
@@ -162,7 +220,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
   }
   return <article className="score-sheet"><div className="score-header">{showTitle && <TuneIcon tune={tune} size="page" />}<div className="score-title">{showTitle && <><p className="eyebrow">{tune.kind || "TUNE"}, {tune.mode || "KEY UNKNOWN"}</p><h2>{tune.title}</h2></>}{showTitle && showPractice && <TuneAbility tune={tune} editable={practiceEditable} />}<p className="score-meta">{[!showTitle && tune.kind, !showTitle && tune.mode, tune.meter, tune.composer && `Composer: ${tune.composer}`, tune.contributor && `Setting by ${tune.contributor}`].filter(Boolean).join(", ")}</p></div><a onClick={() => trackEvent("tune_source_opened", {})} href={tune.sourceUrl} className="source-link" target="_blank" rel="noreferrer">View source</a></div>
     <div className="notation-frame"><div ref={paperRef} className="notation" aria-label={`Sheet music for ${tune.title}`} />{!ready && <p>Rendering score</p>}</div>
-    <div className="player" aria-label={`Player for ${tune.title}`}><div className="player-primary"><Button size="icon" aria-label={playing ? "Pause" : "Play"} disabled={!ready || loading} onClick={() => { if (playing) { trackEvent("playback_paused", {}); pause(); } else void start(); }}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</Button><Button variant="ghost" size="icon" aria-label="Restart" onClick={() => { trackEvent("playback_restarted", {}); reset(); }}><RotateCcw size={16} /></Button><div className="note-display"><span>NOW PLAYING</span><strong>{note}</strong></div></div><div className="player-progress"><input type="range" min="0" max="100" value={progress} aria-label="Playback position" onPointerUp={() => trackEvent("playback_seeked", {})} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_seeked", {}); }} onChange={(event) => void seek(Number(event.target.value))} /></div><div className="player-options"><label>Sound<select value={instrument} onChange={(event) => void changeSound(Number(event.target.value))}>{instruments.map((entry) => <option key={entry.program} value={entry.program}>{entry.label}</option>)}</select></label><label>Tempo <span>{speed}%</span><input type="range" min="50" max="150" step="5" value={speed} onChange={(event) => void changeSpeed(Number(event.target.value))} aria-label="Tempo percentage" onPointerUp={(event) => trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) })} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) }); }} /></label><label className="volume-control"><Volume2 size={16} /><input type="range" min="0" max="100" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); if (playerRef.current.gain) playerRef.current.gain.gain.value = next / 100; }} aria-label="Volume" /></label></div>{showPractice && practiceEditable && <PracticeSpeed tune={tune} speed={speed} />}{loading && <p className="player-status">Loading instrument</p>}{error && <p role="alert" className="form-error">{error}</p>}</div>
+    <div className="player" aria-label={`Player for ${tune.title}`}><div className="player-primary"><Button size="icon" aria-label={playing ? "Pause" : "Play"} disabled={!ready || loading} onClick={() => { if (playing) { trackEvent("playback_paused", {}); pause(); } else void start(); }}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</Button><Button variant="ghost" size="icon" aria-label="Restart" onClick={() => { trackEvent("playback_restarted", {}); reset(); }}><RotateCcw size={16} /></Button><div className="note-display"><span>NOW PLAYING</span><strong>{note}</strong></div></div><div className="player-progress"><input type="range" min="0" max="100" value={progress} aria-label="Playback position" onPointerUp={() => trackEvent("playback_seeked", {})} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_seeked", {}); }} onChange={(event) => void seek(Number(event.target.value))} /></div><div className="player-options"><label>Sound<select value={track ? `track:${track.id}` : String(instrument)} onChange={(event) => void changeSound(event.target.value)}>{instruments.map((entry) => <option key={entry.program} value={entry.program}>{entry.label}</option>)}{playalongs.length > 0 && <optgroup label="Play-along recordings">{playalongs.map((entry) => <option key={entry.id} value={`track:${entry.id}`}>{entry.label}</option>)}</optgroup>}</select></label><label>Tempo <span>{speed}%</span><input type="range" min="50" max="150" step="5" value={speed} onChange={(event) => void changeSpeed(Number(event.target.value))} aria-label="Tempo percentage" onPointerUp={(event) => trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) })} onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) }); }} /></label><label className="volume-control"><Volume2 size={16} /><input type="range" min="0" max="100" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); if (playerRef.current.gain) playerRef.current.gain.gain.value = next / 100; if (playerRef.current.audio) playerRef.current.audio.volume = next / 100; }} aria-label="Volume" /></label></div>{showPractice && practiceEditable && <PracticeSpeed tune={tune} speed={speed} />}{loading && <p className="player-status">{track ? "Loading recording" : "Loading instrument"}</p>}{track && <p className="player-status">Play-along recording of this setting, generated with <a href="https://huggingface.co/m-a-p/YuE2-3B" target="_blank" rel="noreferrer">YuE2</a>.</p>}{error && <p role="alert" className="form-error">{error}</p>}</div>
     <details className="abc-details" onToggle={(event) => { if (event.currentTarget.open) trackEvent("notation_opened", {}); }}><summary>ABC notation</summary><pre>{abcForTune(tune)}</pre></details><p className="attribution">Contains information from <a href="https://thesession.org" target="_blank" rel="noreferrer">The Session</a>, available under the <a href="https://github.com/adactio/TheSession-data/blob/main/LICENSE.md" target="_blank" rel="noreferrer">Open Database License</a>.</p>
   </article>;
 }

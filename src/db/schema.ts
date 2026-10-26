@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 import type { AbilityLevel } from "../lib/ability";
 
@@ -24,6 +24,31 @@ export const catalogTunes = pgTable("catalog_tunes", {
   tuneId: integer("tune_id").primaryKey(),
   tunebooks: integer("tunebooks").notNull().default(0),
 }, (t) => [index("catalog_tune_popularity_idx").on(t.tunebooks)]);
+
+// Melody line of each catalog setting for Listen. Durations are in 1/48 of a whole note;
+// chars are score positions of each note, so a match can be highlighted.
+export const catalogMelodies = pgTable("catalog_melodies", {
+  settingId: integer("setting_id").primaryKey().references(() => catalogSettings.settingId, { onDelete: "cascade" }),
+  tuneId: integer("tune_id").notNull(),
+  pitches: smallint("pitches").array().notNull(),
+  durations: smallint("durations").array().notNull(),
+  chars: integer("chars").array().notNull(),
+  version: text("version").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Generated play-along recordings of a catalog setting, stored in the private B2 bucket.
+export const playalongTracks = pgTable("playalong_tracks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  settingId: integer("setting_id").notNull().references(() => catalogSettings.settingId, { onDelete: "cascade" }),
+  tuneId: integer("tune_id").notNull(),
+  label: text("label").notNull(),
+  bpm: smallint("bpm"),
+  durationMs: integer("duration_ms").notNull(),
+  storageKey: text("storage_key").notNull(),
+  model: text("model").notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("playalong_storage_key_idx").on(t.storageKey), index("playalong_setting_idx").on(t.settingId)]);
 
 export const savedTunes = pgTable("saved_tunes", {
   id: uuid("id").primaryKey().defaultRandom(),
