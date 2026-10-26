@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Label review</title>
+<style>
+:root {
+  --bg: #fafaf8; --fg: #171717; --muted: #666761; --border: #deded9; --card: #fff;
+  --ok: #2f7d4f; --bad: #a33328; --set: #8a6a12; --accent: #2b5fb8;
+  --wave: #8f8f88; --wave-in: #171717; --region: rgba(43, 95, 184, .12); --suggest: #c07a12; --music: #2f7d4f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --fg: #ececea; --muted: #a3a39d; --border: #33332f; --card: #1f1f1d;
+    --ok: #5fbf86; --bad: #e0786c; --set: #d9b44a; --accent: #7aa7f0;
+    --wave: #6b6b66; --wave-in: #ececea; --region: rgba(122, 167, 240, .16); --suggest: #e3a548; --music: #5fbf86;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 Inter, system-ui, sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+nav { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+nav .spacer { flex: 1; }
+button, select, input { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+button { cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button.active { border-color: var(--fg); }
+button.ok { border-color: var(--ok); color: var(--ok); }
+button.bad { border-color: var(--bad); color: var(--bad); }
+button.set { border-color: var(--set); color: var(--set); }
+kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; margin-left: 6px; color: var(--muted); }
+article { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+article.yes { border-left: 4px solid var(--ok); }
+article.no { border-left: 4px solid var(--bad); }
+article.set { border-left: 4px solid var(--set); }
+h2 { margin: 0 0 2px; font-size: 18px; }
+.meta { color: var(--muted); font-size: 13px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+a { color: inherit; }
+.wave { position: relative; margin-top: 14px; user-select: none; touch-action: none; }
+canvas { display: block; width: 100%; height: 200px; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; }
+.times { font-variant-numeric: tabular-nums; }
+.warn { color: var(--set); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+.status { min-height: 1.5em; margin-top: 8px; }
+.help { margin-top: 16px; font-size: 12px; color: var(--muted); }
+input.id { width: 7em; }
+input.notes { flex: 1; min-width: 12em; }
+</style>
+</head>
+<body>
+<main>
+  <nav>
+    <button data-set="youtube">YouTube clips</button>
+    <button data-set="reels50">Reels50 mapping</button>
+    <select id="filter" aria-label="Show">
+      <option value="pending">Unreviewed</option>
+      <option value="set">Sets (label later)</option>
+      <option value="yes">Correct</option>
+      <option value="no">Wrong</option>
+      <option value="all">All</option>
+    </select>
+    <span class="spacer"></span>
+    <span class="meta" id="count"></span>
+    <button id="prev" title="Previous (K)">◀</button>
+    <button id="next" title="Next (J)">▶</button>
+  </nav>
+  <div id="view"></div>
+</main>
+<script>
+let set = "youtube", rows = [], position = 0;
+const view = document.getElementById("view");
+const filter = document.getElementById("filter");
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const fmt = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
+const escape = (text) => String(text ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+function visible() {
+  return rows.map((row, index) => index).filter((index) => {
+    const verdict = rows[index].verified;
+    return filter.value === "all" || (filter.value === "pending" ? !verdict : verdict === filter.value);
+  });
+}
+
+async function load() {
+  document.querySelectorAll("nav button[data-set]").forEach((b) => b.classList.toggle("active", b.dataset.set === set));
+  rows = await (await fetch(`/rows/${set}`)).json();
+  position = 0;
+  show();
+}
+
+async function save(index, patch) {
+  const response = await fetch(`/rows/${set}/${index}`, { method: "POST", body: JSON.stringify(patch) });
+  if (!response.ok) throw new Error(await response.text());
+  rows[index] = await response.json();
+}
+
+function counts() {
+  const tally = (v) => rows.filter((r) => r.verified === v).length;
+  const extra = set === "youtube" ? ` · ${tally("set")} sets` : "";
+  document.getElementById("count").textContent = `${tally("yes") + tally("no") + tally("set")} of ${rows.length} reviewed (${tally("yes")} correct${extra})`;
+}
+
+function show() {
+  counts();
+  stop();
+  const list = visible();
+  position = Math.max(0, Math.min(position, list.length - 1));
+  document.getElementById("prev").disabled = position <= 0;
+  document.getElementById("next").disabled = position >= list.length - 1;
+  if (!list.length) { view.innerHTML = `<article><p class="meta">Nothing here.</p></article>`; return; }
+  const index = list[position];
+  set === "youtube" ? showClip(index) : showMapping(index);
+}
+
+function move(step) { position += step; show(); }
+document.getElementById("prev").onclick = () => move(-1);
+document.getElementById("next").onclick = () => move(1);
+document.querySelectorAll("nav button[data-set]").forEach((b) => b.onclick = () => { set = b.dataset.set; load(); });
+filter.onchange = () => { position = 0; show(); };
+
+// After a verdict, stay on the same place in the list: the judged row drops out of "Unreviewed".
+async function judge(index, patch) {
+  const list = visible();
+  await save(index, patch);
+  if (visible().length === list.length) position += 1;
+  show();
+}
+
+/* ---------- Reels50 mapping ---------- */
+
+function showMapping(index) {
+  const row = rows[index];
+  view.innerHTML = `<article class="${row.verified}">
+    <h2>${escape(row.irishtune_name)} → ${escape(row.title || "no match")}</h2>
+    <div class="meta">${escape(row.match)} match${row.candidates ? ` · other candidates: ${escape(row.candidates)}` : ""}</div>
+    <div class="meta"><a href="https://www.irishtune.info/tune/${row.irishtune_id}/" target="_blank">irishtune.info</a> · <a href="https://thesession.org/tunes/${row.tune_id}" target="_blank">The Session</a></div>
+    <img src="https://www.irishtune.info/tune/${row.irishtune_id}/incipit.png" alt="Incipit of ${escape(row.irishtune_name)}" style="max-width:100%;margin-top:8px;background:#fff">
+    <div class="row"><button class="ok" data-v="yes">Same tune<kbd>Y</kbd></button><button class="bad" data-v="no">Wrong<kbd>N</kbd></button>
+    <input class="id" value="${escape(row.tune_id)}" aria-label="The Session tune ID"></div></article>`;
+  view.querySelectorAll("button[data-v]").forEach((b) => b.onclick = () => judge(index, { verified: b.dataset.v }));
+  view.querySelector("input.id").onchange = (e) => save(index, { tune_id: e.target.value.trim() }).then(counts);
+}
+
+/* ---------- YouTube clip editor ---------- */
+
+const audio = new (window.AudioContext || window.webkitAudioContext)();
+const sources = new Map(); // row index -> Promise<{buffer, analysis}>
+let clip = null; // the clip being edited
+
+function loadSource(index) {
+  if (!sources.has(index)) {
+    const promise = Promise.all([
+      fetch(`/source/${index}`).then(async (r) => { if (!r.ok) throw new Error(await r.text()); return r.arrayBuffer(); }).then((data) => audio.decodeAudioData(data)),
+      fetch(`/analysis/${index}`).then(async (r) => { if (!r.ok) throw new Error(await r.text()); return r.json(); }),
+    ]).then(([buffer, analysis]) => ({ buffer, analysis, peaks: blockPeaks(buffer) }));
+    promise.catch(() => sources.delete(index));
+    sources.set(index, promise);
+    if (sources.size > 8) sources.delete(sources.keys().next().value);
+  }
+  return sources.get(index);
+}
+
+const BLOCK = 256;
+function blockPeaks(buffer) {
+  const data = buffer.getChannelData(0), n = Math.ceil(data.length / BLOCK);
+  const low = new Float32Array(n), high = new Float32Array(n);
+  for (let b = 0; b < n; b++) {
+    let lo = 0, hi = 0;
+    for (let i = b * BLOCK, end = Math.min(data.length, i + BLOCK); i < end; i++) { const v = data[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    low[b] = lo; high[b] = hi;
+  }
+  return { low, high };
+}
+
+function showClip(index) {
+  const row = rows[index];
+  view.innerHTML = `<article class="${row.verified}">
+    <h2>${escape(row.title)} <span class="meta">${escape(row.kind)} · ${escape(row.instrument)}</span></h2>
+    <div class="meta">Video: ${escape(row.video_title)}</div>
+    <div class="meta"><a href="https://thesession.org/tunes/${row.tune_id}" target="_blank">The Session score</a> ·
+      <a href="https://www.youtube.com/watch?v=${row.youtube_id}&t=${Math.floor(row.start_s)}" target="_blank">YouTube</a>
+      ${row.verified ? ` · currently <strong>${{ yes: "correct", no: "wrong", set: "a set" }[row.verified]}</strong>` : ""}</div>
+    <div class="wave"><canvas aria-label="Waveform: drag the clip's edges to trim it"></canvas></div>
+    <div class="legend"><span style="--c:var(--music)">music activity</span><span style="--c:var(--suggest)">suggested clip</span><span style="--c:var(--accent)">your clip</span></div>
+    <div class="row times">
+      <button id="play">Play clip<kbd>Space</kbd></button>
+      <button id="suggest">Use suggestion<kbd>U</kbd></button>
+      <button id="zoom">Zoom to clip<kbd>Z</kbd></button>
+      <span>Start <strong id="start">–</strong> · End <strong id="end">–</strong> · <span id="length">–</span></span>
+    </div>
+    <div class="status meta" id="status">Loading the video's first 3 minutes…</div>
+    <div class="row">
+      <button class="ok" data-v="yes">Correct<kbd>Y</kbd></button>
+      <button class="set" data-v="set">Set – label later<kbd>S</kbd></button>
+      <button class="bad" data-v="no">Wrong / unusable<kbd>N</kbd></button>
+      <select aria-label="Backing" id="backing"><option value="">Backing?</option><option>solo</option><option>backing</option><option>group</option></select>
+      <input class="id" id="tune" value="${escape(row.tune_id)}" aria-label="The Session tune ID" title="The Session tune ID">
+      <input class="notes" id="notes" value="${escape(row.notes)}" placeholder="Notes" aria-label="Notes">
+    </div>
+    <div class="help">Drag the clip's edges to trim it, or drag inside it to move it. Click anywhere to play from there.
+      <kbd>[</kbd> / <kbd>]</kbd> set start / end at the playhead · <kbd>←</kbd> <kbd>→</kbd> nudge start 0.1 s (<kbd>Shift</kbd> for the end) · <kbd>J</kbd> / <kbd>K</kbd> next / previous.
+      Engines score the first 5, 10 and 15 s of the clip.</div>
+  </article>`;
+  document.getElementById("backing").value = row.backing;
+  const canvas = view.querySelector("canvas");
+  clip = { index, row, canvas, data: null, start: Number(row.start_s), end: Number(row.start_s) + Number(row.duration_s), view: null, playhead: null };
+  view.querySelectorAll("button[data-v]").forEach((b) => b.onclick = () => verdict(b.dataset.v));
+  document.getElementById("play").onclick = toggle;
+  document.getElementById("suggest").onclick = useSuggestion;
+  document.getElementById("zoom").onclick = zoom;
+  bindCanvas(canvas);
+  updateTimes();
+
+  const mine = clip;
+  loadSource(index).then((data) => {
+    if (clip !== mine) return;
+    clip.data = data;
+    const duration = data.buffer.duration;
+    clip.view = [0, duration];
+    if (!row.verified) { clip.start = data.analysis.suggested.start; clip.end = data.analysis.suggested.end; }
+    clip.end = Math.min(clip.end, duration);
+    const s = data.analysis.suggested;
+    document.getElementById("status").textContent = `Suggested ${fmt(s.start)}–${fmt(s.end)}.` + (row.verified ? "" : " The clip starts there; adjust it if the tune starts elsewhere.");
+    updateTimes();
+    draw();
+    // Warm the next clip while this one is reviewed.
+    const list = visible();
+    if (list[position + 1] !== undefined) loadSource(list[position + 1]);
+  }).catch((error) => {
+    if (clip === mine) document.getElementById("status").textContent = `Couldn't load the video: ${error.message}`;
+  });
+}
+
+function updateTimes() {
+  const length = clip.end - clip.start;
+  document.getElementById("start").textContent = fmt(clip.start);
+  document.getElementById("end").textContent = fmt(clip.end);
+  const node = document.getElementById("length");
+  node.textContent = `${length.toFixed(1)} s` + (length < 15 ? " (under 15 s: the 15 s score uses what's there)" : "");
+  node.className = length < 15 ? "warn" : "";
+}
+
+function x(t) { const [a, b] = clip.view; return ((t - a) / (b - a)) * clip.canvas.clientWidth; }
+function t(px) { const [a, b] = clip.view; return a + (px / clip.canvas.clientWidth) * (b - a); }
+
+function draw() {
+  const { canvas, data } = clip;
+  const ratio = devicePixelRatio || 1, width = canvas.clientWidth, height = canvas.clientHeight;
+  canvas.width = width * ratio; canvas.height = height * ratio;
+  const g = canvas.getContext("2d");
+  g.setTransform(ratio, 0, 0, ratio, 0, 0);
+  g.clearRect(0, 0, width, height);
+  if (!data) return;
+  const lane = 30, top = 14, mid = top + (height - top - lane) / 2, amp = (height - top - lane) / 2 - 4;
+  const [a, b] = clip.view, rate = data.buffer.sampleRate;
+
+  // Selected clip
+  g.fillStyle = css("--region");
+  g.fillRect(x(clip.start), 0, x(clip.end) - x(clip.start), height);
+
+  // Waveform: per pixel column, min/max over the block peaks it covers.
+  const { low, high } = data.peaks, raw = data.buffer.getChannelData(0);
+  const perPixel = ((b - a) * rate) / width;
+  for (let px = 0; px < width; px++) {
+    const from = Math.floor((a + (px / width) * (b - a)) * rate), to = Math.max(from + 1, Math.floor(from + perPixel));
+    let lo = 0, hi = 0;
+    if (perPixel > BLOCK * 2) {
+      for (let k = Math.floor(from / BLOCK); k < Math.min(low.length, Math.ceil(to / BLOCK)); k++) { if (low[k] < lo) lo = low[k]; if (high[k] > hi) hi = high[k]; }
+    } else {
+      for (let i = Math.max(0, from); i < Math.min(raw.length, to); i++) { if (raw[i] < lo) lo = raw[i]; if (raw[i] > hi) hi = raw[i]; }
+    }
+    const time = t(px + 0.5);
+    g.fillStyle = time >= clip.start && time <= clip.end ? css("--wave-in") : css("--wave");
+    g.fillRect(px, mid - hi * amp, 1, Math.max(1, (hi - lo) * amp));
+  }
+
+  // Music activity lane along the bottom, with the detector's threshold.
+  const { score, score_fps } = data.analysis;
+  g.fillStyle = css("--music");
+  for (let px = 0; px < width; px++) {
+    const value = score[Math.min(score.length - 1, Math.floor(t(px) * score_fps))] ?? 0;
+    g.globalAlpha = 0.15 + 0.85 * value;
+    g.fillRect(px, height - lane * value, 1, lane * value);
+  }
+  g.globalAlpha = 1;
+  g.strokeStyle = css("--border");
+  g.setLineDash([2, 3]);
+  g.beginPath(); g.moveTo(0, height - lane * 0.6); g.lineTo(width, height - lane * 0.6); g.stroke();
+
+  // Suggested clip: a dashed outline.
+  const s = data.analysis.suggested;
+  g.strokeStyle = css("--suggest"); g.setLineDash([5, 4]); g.lineWidth = 1.5;
+  g.strokeRect(x(s.start), 1, x(s.end) - x(s.start), height - lane - 2);
+  g.setLineDash([]);
+
+  // Clip edges with grab handles.
+  g.fillStyle = css("--accent");
+  for (const edge of [clip.start, clip.end]) {
+    g.fillRect(x(edge) - 1, 0, 2, height);
+    g.fillRect(x(edge) - 5, 0, 10, 12);
+  }
+
+  // Time ticks.
+  g.fillStyle = css("--muted"); g.font = "11px system-ui, sans-serif";
+  const span = b - a, step = [1, 2, 5, 10, 15, 30, 60].find((s) => span / s < width / 70) ?? 60;
+  for (let tick = Math.ceil(a / step) * step; tick < b; tick += step) g.fillText(fmt(tick).replace(/\.0$/, ""), x(tick) + 3, 11);
+
+  if (clip.playhead !== null) {
+    g.fillStyle = css("--fg");
+    g.fillRect(x(clip.playhead), 0, 1.5, height);
+  }
+}
+
+function bindCanvas(canvas) {
+  let drag = null;
+  const at = (event) => t(event.clientX - canvas.getBoundingClientRect().left);
+  canvas.onpointerdown = (event) => {
+    if (!clip.data) return;
+    canvas.setPointerCapture(event.pointerId);
+    const time = at(event), grab = (edge) => Math.abs(x(edge) - x(time)) < 8;
+    drag = grab(clip.start) ? { kind: "start" } : grab(clip.end) ? { kind: "end" }
+      : time > clip.start && time < clip.end ? { kind: "move", from: time, start: clip.start, end: clip.end, moved: false }
+      : { kind: "seek" };
+    drag.down = time;
+  };
+  canvas.onpointermove = (event) => {
+    if (!clip.data) return;
+    const time = Math.max(0, Math.min(clip.data.buffer.duration, at(event)));
+    if (!drag) {
+      const near = Math.abs(x(clip.start) - x(time)) < 8 || Math.abs(x(clip.end) - x(time)) < 8;
+      canvas.style.cursor = near ? "ew-resize" : time > clip.start && time < clip.end ? "grab" : "crosshair";
+      return;
+    }
+    if (drag.kind === "start") clip.start = Math.min(time, clip.end - 1);
+    else if (drag.kind === "end") clip.end = Math.max(time, clip.start + 1);
+    else if (drag.kind === "move" && Math.abs(x(time) - x(drag.down)) > 3) {
+      const shift = Math.max(-drag.start, Math.min(clip.data.buffer.duration - drag.end, time - drag.from));
+      clip.start = drag.start + shift; clip.end = drag.end + shift; drag.moved = true;
+    } else return;
+    clip.start = Math.round(clip.start * 10) / 10; clip.end = Math.round(clip.end * 10) / 10;
+    updateTimes(); draw();
+  };
+  canvas.onpointerup = () => {
+    if (drag && (drag.kind === "seek" || (drag.kind === "move" && !drag.moved))) play(drag.down, null);
+    drag = null;
+  };
+  new ResizeObserver(() => clip?.data && draw()).observe(canvas);
+}
+
+let playing = null; // { node, offset, began, until }
+function play(from, until) {
+  stop();
+  audio.resume();
+  const node = audio.createBufferSource();
+  node.buffer = clip.data.buffer;
+  node.connect(audio.destination);
+  const duration = until === null ? undefined : Math.max(0, until - from);
+  node.start(0, from, duration);
+  playing = { node, offset: from, began: audio.currentTime };
+  node.onended = () => { if (playing?.node === node) { playing = null; clip.playhead = null; draw(); } };
+  const tick = () => {
+    if (playing?.node !== node) return;
+    clip.playhead = playing.offset + audio.currentTime - playing.began;
+    draw();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function stop() { if (playing) { playing.node.onended = null; playing.node.stop(); playing = null; } if (clip) clip.playhead = null; }
+function toggle() {
+  if (!clip?.data) return;
+  if (playing) { const at = clip.playhead; stop(); clip.playhead = at; draw(); return; }
+  const from = clip.playhead !== null && clip.playhead >= clip.start && clip.playhead < clip.end ? clip.playhead : clip.start;
+  play(from, clip.end);
+}
+
+function useSuggestion() {
+  if (!clip?.data) return;
+  ({ start: clip.start, end: clip.end } = clip.data.analysis.suggested);
+  updateTimes(); draw();
+}
+
+function zoom() {
+  if (!clip?.data) return;
+  const whole = [0, clip.data.buffer.duration];
+  const zoomed = clip.view[0] !== 0 || clip.view[1] !== whole[1];
+  clip.view = zoomed ? whole : [Math.max(0, clip.start - 5), Math.min(whole[1], clip.end + 5)];
+  document.getElementById("zoom").firstChild.textContent = zoomed ? "Zoom to clip" : "Whole recording";
+  draw();
+}
+
+async function verdict(value) {
+  if (!clip) return;
+  const status = document.getElementById("status");
+  const patch = {
+    verified: value,
+    backing: document.getElementById("backing").value,
+    tune_id: document.getElementById("tune").value.trim(),
+    notes: document.getElementById("notes").value.trim(),
+  };
+  // Wrong clips and sets keep their old trim: sets are labelled later from the whole recording.
+  if (value === "yes" && clip.data) Object.assign(patch, { start_s: clip.start.toFixed(1), duration_s: (clip.end - clip.start).toFixed(1) });
+  view.querySelectorAll("button[data-v]").forEach((b) => b.disabled = true);
+  status.textContent = "Saving…";
+  try {
+    stop();
+    await judge(clip.index, patch);
+  } catch (error) {
+    status.textContent = `Couldn't save: ${error.message}`;
+    view.querySelectorAll("button[data-v]").forEach((b) => b.disabled = false);
+  }
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.target.matches("input, select") || event.metaKey || event.ctrlKey || event.altKey) return;
+  // Shortcuts act on the page, not on whichever button was clicked last.
+  if (event.target.matches("button")) event.target.blur();
+  const key = event.key.toLowerCase();
+  if (key === "j") return move(1);
+  if (key === "k") return move(-1);
+  if (set === "reels50") {
+    const button = view.querySelector(`button[data-v="${{ y: "yes", n: "no" }[key]}"]`);
+    if (button) button.click();
+    return;
+  }
+  if (!clip) return;
+  const actions = {
+    " ": toggle, y: () => verdict("yes"), n: () => verdict("no"), s: () => verdict("set"), u: useSuggestion, z: zoom,
+    "[": () => clip.playhead !== null && clip.playhead < clip.end - 1 && (clip.start = Math.round(clip.playhead * 10) / 10),
+    "]": () => clip.playhead !== null && clip.playhead > clip.start + 1 && (clip.end = Math.round(clip.playhead * 10) / 10),
+    arrowleft: () => nudge(event.shiftKey ? "end" : "start", -0.1),
+    arrowright: () => nudge(event.shiftKey ? "end" : "start", 0.1),
+  };
+  if (!actions[key]) return;
+  event.preventDefault();
+  actions[key]();
+  if (clip?.data) { updateTimes(); draw(); }
+});
+
+function nudge(edge, amount) {
+  if (!clip?.data) return;
+  const value = Math.round((clip[edge] + amount) * 10) / 10;
+  if (edge === "start" && value >= 0 && value < clip.end - 1) clip.start = value;
+  if (edge === "end" && value <= clip.data.buffer.duration && value > clip.start + 1) clip.end = value;
+}
+
+load();
+</script>
+</body>
+</html>
