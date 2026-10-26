@@ -19,7 +19,8 @@ try {
     const melodies = rows.map((row) => {
       try {
         const melody = melodyFromAbc(row);
-        return { settingId: row.settingId, tuneId: row.tuneId, version: MELODY_VERSION, ...(melody ?? { pitches: [], durations: [], chars: [] }) };
+        const { pitches, durations, chars } = melody ?? { pitches: [], durations: [], chars: [] };
+        return { settingId: row.settingId, tuneId: row.tuneId, version: MELODY_VERSION, pitches, durations, chars };
       } catch {
         return { settingId: row.settingId, tuneId: row.tuneId, version: MELODY_VERSION, pitches: [], durations: [], chars: [] };
       }

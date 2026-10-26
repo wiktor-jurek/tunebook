@@ -1,12 +1,13 @@
 import abcjs from "abcjs";
 import { abcForScore } from "@/lib/notation";
 
-// Durations are stored in 1/48 of a whole note so triplets stay whole numbers.
+// Starts and durations are in 1/48 of a whole note so triplets stay whole numbers.
 export const DURATION_UNIT = 48;
 // Bump when extraction or contour rules change; stale catalog rows are reindexed.
 export const MELODY_VERSION = "abcjs-6.7-contour-v2";
 
-export type Melody = { pitches: number[]; durations: number[]; chars: number[] };
+// Starts keep rests and pickups, which durations alone lose; the catalog table stores no starts.
+export type Melody = { pitches: number[]; durations: number[]; chars: number[]; starts: number[] };
 export type Contour = { pitches: number[]; durations: number[]; origins: number[] };
 type Tune = Parameters<typeof abcForScore>[0];
 type NoteEvent = { cmd: string; pitch: number; start: number; duration: number; startChar: number };
@@ -21,7 +22,7 @@ export function melodyFromAbc(tune: Tune): Melody | null {
   const track = audio.tracks.map((events) => events.filter((event) => event.cmd === "note"))
     .filter((events) => events.some((event) => event.startChar !== undefined))
     .sort((a, b) => b.length - a.length)[0] ?? [];
-  const melody: Melody = { pitches: [], durations: [], chars: [] };
+  const melody: Melody = { pitches: [], durations: [], chars: [], starts: [] };
   let lastStart = Number.NaN;
   for (const note of [...track].sort((a, b) => a.start - b.start || b.pitch - a.pitch)) {
     // Grace notes are ornaments a player may or may not add (abcjs gives them no score position);
@@ -31,6 +32,7 @@ export function melodyFromAbc(tune: Tune): Melody | null {
     melody.pitches.push(note.pitch);
     melody.durations.push(Math.max(1, Math.round(note.duration * DURATION_UNIT)));
     melody.chars.push(note.startChar);
+    melody.starts.push(Math.round(note.start * DURATION_UNIT));
   }
   return melody.pitches.length >= 8 ? melody : null;
 }

@@ -11,6 +11,7 @@ import argparse
 import csv
 import io
 import json
+import math
 import re
 import sys
 from fractions import Fraction
@@ -83,7 +84,7 @@ def quantise(value: Fraction) -> Fraction:
 
 def request(setting: dict, abc: str, rng: np.random.Generator, line_up: tuple[str, str] | None = None,
             pace: float = 1.0, feel: str = "lively session feel with ornaments",
-            max_quarters: int | None = MAX_QUARTERS) -> tuple[dict, str]:
+            max_quarters: int | None = MAX_QUARTERS, times: int = 1, tempo: tuple[float, Fraction] | None = None) -> tuple[dict, str]:
     meter = setting["meter"] or "4/4"
     numerator, denominator = (int(x) for x in meter.split("/"))
     bar = Fraction(numerator * 4, denominator)
@@ -92,16 +93,29 @@ def request(setting: dict, abc: str, rng: np.random.Generator, line_up: tuple[st
     scale = Fraction(1)
     while bpm > MAX_BPM:  # write fast tunes in halved note values at half the tempo: same speed, saner BPM
         bpm, scale = bpm / 2, scale / 2
+    if tempo:  # an existing request's BPM and note scale, when rebuilding its notes
+        bpm, scale = tempo
     start = (bar - pickup(abc, meter) * scale) % bar
+    # Catalog starts and durations are 1/48 of a whole note. Starts keep rests and pickups;
+    # older exports without them fall back to notes played back to back.
+    lengths = [Fraction(d, 12) * scale for d in setting["durations"]]
+    starts = [Fraction(t, 12) * scale for t in setting["starts"]] if setting.get("starts") else \
+        [sum(lengths[:i], Fraction(0)) for i in range(len(lengths))]
+    # Each time through starts a whole number of bars later, so a pickup meets the short last bar.
+    written_bar = bar * scale
+    span = -(-(starts[-1] + lengths[-1]) // written_bar) * written_bar
     onset, notes = start, []
-    for pitch, duration in zip(setting["pitches"], setting["durations"]):
-        length = Fraction(duration, 12) * scale  # catalog durations are 1/48 of a whole note
-        begin, end = quantise(onset), quantise(onset + length)
-        if end > begin:
-            notes.append([str(begin), str(end - begin), int(pitch)])
-        onset += length
-        if max_quarters and onset >= max_quarters * scale:
-            break
+    for time in range(times):
+        for pitch, begin_at, length in zip(setting["pitches"], starts, lengths):
+            onset = start + time * span + begin_at + length
+            begin, end = quantise(onset - length), quantise(onset)
+            if end > begin:
+                notes.append([str(begin), str(end - begin), int(pitch)])
+            if max_quarters and onset >= max_quarters * scale:
+                break
+        else:
+            continue
+        break
     bars = -(-quantise(onset) // bar)
     key_letter = re.match(r"[A-G][b#]?", setting["mode"] or "D").group(0)
     key = key_letter + ("m" if re.search(r"minor|aeolian|dorian|phrygian", setting["mode"] or "", re.I) else "")
@@ -112,6 +126,23 @@ def request(setting: dict, abc: str, rng: np.random.Generator, line_up: tuple[st
              f"{key_letter} {'minor' if key.endswith('m') else 'major'}, {events['bpm']} BPM, natural room acoustics, "
              "no vocals, no singing, no choir, no spoken words.")
     return events, style
+
+
+def retime(path: Path, abc: dict[int, str]) -> None:
+    """Rebuilds the notes of existing requests from the current catalog export, keeping each
+    request's name, setting, seed, prompt and tempo, so finished clips keep their place."""
+    catalog = {row["settingId"]: row for row in load_catalog()}
+    rows = [json.loads(line) for line in path.open()]
+    changed = 0
+    for row in rows:
+        setting, old = catalog[row["setting_id"]], row["events"]
+        first = Fraction(old["notes"][0][1]) / (Fraction(setting["durations"][0], 12))
+        scale = Fraction(1, 2 ** round(math.log2(1 / first))) if first < 1 else Fraction(1)
+        events, _ = request(setting, abc[row["setting_id"]], np.random.default_rng(0), ("x", "y"), tempo=(old["bpm"], scale))
+        changed += events != old
+        row["events"] = events
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    print(f"{changed} of {len(rows)} requests rebuilt with changed notes → {path}")
 
 
 def melody_settings(abc: dict[int, str]) -> dict[int, list[dict]]:
@@ -178,9 +209,11 @@ def main() -> None:
     parser.add_argument("--versions", type=int, default=2)
     parser.add_argument("--setting", type=int, help="one setting in three line-ups, for listening, instead of the benchmark")
     parser.add_argument("--pace", type=float, default=1.0, help="with --setting: tempo relative to the tune type's usual pace")
+    parser.add_argument("--times", type=int, default=1, help="with --setting: play the tune this many times through, as a session does")
     parser.add_argument("--feel", default="lively session feel with ornaments", help="with --setting: playing style in the prompt")
     parser.add_argument("--references", type=int, help="write a JSONL of evaluation references for this many tunes instead")
     parser.add_argument("--train", type=int, help="write a JSONL of this many training tunes (train split, never benchmark) instead")
+    parser.add_argument("--retime", type=Path, help="rebuild the notes of this requests JSONL in place from the current catalog")
     parser.add_argument("--out", default=str(ML / "cache" / "yue" / "requests"))
     args = parser.parse_args()
 
@@ -189,12 +222,15 @@ def main() -> None:
         setting = next(row for row in load_catalog() if row["settingId"] == args.setting)
         for version, line_up in enumerate(LINE_UPS):
             events, style = request(setting, abc[args.setting], np.random.default_rng([args.setting, version]), line_up, args.pace, args.feel,
-                                    max_quarters=None)  # a play-along plays the whole tune
+                                    max_quarters=None, times=args.times)  # a play-along plays the whole tune
             target = Path(args.out) / f"{setting['tuneId']}-s{args.setting}-{version}"
             target.mkdir(parents=True, exist_ok=True)
             (target / "events.json").write_text(json.dumps(events))
             (target / "style.txt").write_text(style)
             print(target.name, events["bpm"], f"{len(events['bars'])} bars", line_up)
+        return
+    if args.retime:
+        retime(args.retime, abc)
         return
     if args.train:
         write_training(abc, args.train, args.versions, Path(args.out))

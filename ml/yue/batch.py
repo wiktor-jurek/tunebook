@@ -10,6 +10,7 @@ turn. A 24 GB card holds two of these processes; a third runs out of memory.
 """
 
 import argparse
+import hashlib
 import json
 import random
 import subprocess
@@ -41,11 +42,12 @@ def make_request(row: dict) -> dict:
 
 
 def save(audio, path: Path) -> None:
-    """48 kHz stereo float → 16 kHz mono Opus."""
+    """48 kHz stereo float → 16 kHz mono Opus for training, plus a full-quality AAC copy for the web."""
     raw = audio.astype("float32")
     raw = raw.T if raw.shape[0] == 2 else raw
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "f32le", "-ar", "48000", "-ac", str(raw.shape[1] if raw.ndim == 2 else 1),
-                    "-i", "pipe:", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "-b:a", "48k", str(path)],
+                    "-i", "pipe:", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "-b:a", "48k", str(path),
+                    "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(path.with_suffix(".m4a"))],
                    input=raw.tobytes(), check=True)
 
 
@@ -73,9 +75,15 @@ def main() -> None:
                     print(f"{row['name']} {entry['status']} {entry['elapsed']}s", flush=True)
 
 
+def events_hash(events: dict) -> str:
+    """Fingerprint of the notes a clip was made from, so a clip from rebuilt notes can be told apart."""
+    return hashlib.sha1(json.dumps(events, sort_keys=True).encode()).hexdigest()[:12]
+
+
 def render_one(pipe, row: dict, out: Path, torch) -> dict:
     start = time.time()
-    entry = {"name": row["name"], "tune_id": row["tune_id"], "setting_id": row["setting_id"], "style": row["style"]}
+    entry = {"name": row["name"], "tune_id": row["tune_id"], "setting_id": row["setting_id"], "style": row["style"],
+             "events": events_hash(row["events"])}
     for attempt in range(5):
         try:
             song = pipe(**make_request(row))
