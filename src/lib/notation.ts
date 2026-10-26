@@ -1,6 +1,7 @@
 import type { savedTunes } from "@/db/schema";
 
-type Tune = typeof savedTunes.$inferSelect;
+// Catalog rows and saved snapshots share the fields notation needs.
+type Tune = Pick<typeof savedTunes.$inferSelect, "title" | "kind" | "meter" | "mode" | "abc">;
 
 export function abcForTune(tune: Tune) {
   if (/^X\s*:/m.test(tune.abc)) return tune.abc;
