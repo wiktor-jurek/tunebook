@@ -33,18 +33,19 @@ MAX_BPM = 180
 TEMPO = {"reel": 220, "hornpipe": 180, "jig": 345, "slip jig": 360, "slide": 380, "polka": 250, "barndance": 200,
          "strathspey": 160, "march": 220, "waltz": 160, "mazurka": 160, "three-two": 200}  # quarter notes, or eighths for x/8
 INSTRUMENTS = ["fiddle", "wooden flute", "tin whistle", "button accordion", "uilleann pipes", "concertina", "tenor banjo"]
-BACKING = ["DADGAD guitar", "bouzouki", "piano vamping", "guitar and bodhrán", "no accompaniment, solo"]
+BACKING = ["acoustic guitar", "Irish bouzouki", "piano vamping", "guitar and bodhrán", "no accompaniment, solo"]
 # Training mirrors what Listen will mostly hear: sessions and bands, with duos and soloists less often.
 SESSIONS = ["fiddles, flutes and button accordions playing together in a pub session",
             "a pub session of fiddles, flutes, whistles, banjo and concertina all playing the tune",
             "fiddle, flute and accordion in unison", "fiddle, banjo and accordion in unison",
             "two fiddles, flute and uilleann pipes in unison", "a céilí band of fiddles, accordions, flutes and banjo",
             "a trad band with fiddle, flute, uilleann pipes and accordion", "fiddle, concertina and whistle in unison"]
-SESSION_BACKING = ["guitar and bodhrán", "bouzouki and bodhrán", "DADGAD guitar and bouzouki", "piano and drums",
-                   "guitar, bodhrán and pub chatter", "bouzouki, guitar and bodhrán", "piano vamping and bodhrán"]
+# Named plainly: "DADGAD", "low whistle" and drums pulled YuE2 towards pop and electro-folk.
+SESSION_BACKING = ["guitar and bodhrán", "Irish bouzouki and bodhrán", "acoustic guitar and Irish bouzouki", "piano and bodhrán",
+                   "guitar, bodhrán and pub chatter", "Irish bouzouki, guitar and bodhrán", "piano vamping and bodhrán"]
 DUOS = ["fiddle and flute in unison", "two fiddles in unison", "banjo and fiddle in unison", "flute and uilleann pipes in unison",
         "accordion and fiddle in unison", "concertina and flute in unison"]
-SOLOISTS = INSTRUMENTS + ["low whistle", "piano accordion", "mandolin", "Irish harp", "hammered dulcimer"]
+SOLOISTS = INSTRUMENTS + ["whistle", "piano accordion", "mandolin", "Irish harp", "hammered dulcimer"]
 SOLO_BACKING = BACKING + ["standard-tuned guitar strumming", "guitar and double bass", "piano and bodhrán", "harp"]
 LINE_UP_MIX = [(0.6, SESSIONS, SESSION_BACKING), (0.2, DUOS, SOLO_BACKING), (0.2, SOLOISTS, SOLO_BACKING)]
 FEELS = ["lively session feel with ornaments", "busy pub session with a crowd", "lively session feel with ornaments", "driving, energetic session feel", "relaxed, unhurried session feel with ornaments",
@@ -118,6 +119,12 @@ def request(setting: dict, abc: str, rng: np.random.Generator, line_up: tuple[st
         else:
             continue
         break
+    # YuE2 takes one melody line, but some exported notes run past the next one (a tie counted
+    # twice, a chord): end each note where the next begins, dropping notes that start together.
+    notes = [note for note, after in zip(notes, notes[1:] + [None])
+             if after is None or Fraction(after[0]) > Fraction(note[0])]
+    for note, after in zip(notes, notes[1:]):
+        note[1] = str(min(Fraction(note[1]), Fraction(after[0]) - Fraction(note[0])))
     bars = -(-quantise(onset) // bar)
     key_letter = re.match(r"[A-G][b#]?", setting["mode"] or "D").group(0)
     key = key_letter + ("m" if re.search(r"minor|aeolian|dorian|phrygian", setting["mode"] or "", re.I) else "")
