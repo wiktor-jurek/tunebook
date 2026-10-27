@@ -49,7 +49,9 @@ SOLO_BACKING = BACKING + ["standard-tuned guitar strumming", "guitar and double 
 LINE_UP_MIX = [(0.6, SESSIONS, SESSION_BACKING), (0.2, DUOS, SOLO_BACKING), (0.2, SOLOISTS, SOLO_BACKING)]
 FEELS = ["lively session feel with ornaments", "busy pub session with a crowd", "lively session feel with ornaments", "driving, energetic session feel", "relaxed, unhurried session feel with ornaments",
          "bright dance-hall céilí band feel", "intimate home recording feel", "concert stage recording with a lively audience"]
-LINE_UPS = [("low whistle", "DADGAD guitar"), ("fiddle", "bouzouki"), ("wooden flute", "piano vamping")]
+# YuE2 often swaps the lead (yue/describe.py hears what it played): "fiddle" holds, "whistle" and
+# "flute" mostly give a whistle, while "bouzouki" turns electro-folk and piano never sounds.
+LINE_UPS = [("fiddle", "acoustic guitar"), ("whistle", "acoustic guitar"), ("flute", "acoustic guitar")]
 NOTE = re.compile(r"\{[^}]*\}|\"[^\"]*\"|!\w+!|\[[^\]|]*\]|\(3|[_^=]*[A-Ga-gz][,']*(\d*)(/*)(\d*)|\|")
 
 
@@ -210,6 +212,8 @@ def main() -> None:
     parser.add_argument("--setting", type=int, help="one setting in three line-ups, for listening, instead of the benchmark")
     parser.add_argument("--pace", type=float, default=1.0, help="with --setting: tempo relative to the tune type's usual pace")
     parser.add_argument("--times", type=int, default=1, help="with --setting: play the tune this many times through, as a session does")
+    parser.add_argument("--line-up", action="append", metavar="LEAD=BACKING",
+                        help="with --setting: line-ups to render instead of LINE_UPS, e.g. 'fiddle=Irish bouzouki'")
     parser.add_argument("--feel", default="lively session feel with ornaments", help="with --setting: playing style in the prompt")
     parser.add_argument("--references", type=int, help="write a JSONL of evaluation references for this many tunes instead")
     parser.add_argument("--train", type=int, help="write a JSONL of this many training tunes (train split, never benchmark) instead")
@@ -220,7 +224,8 @@ def main() -> None:
     abc = {int(row["setting_id"]): row["abc"] for row in csv.DictReader(io.StringIO(download("tunes")))}
     if args.setting:
         setting = next(row for row in load_catalog() if row["settingId"] == args.setting)
-        for version, line_up in enumerate(LINE_UPS):
+        line_ups = [tuple(entry.split("=", 1)) for entry in args.line_up] if args.line_up else LINE_UPS
+        for version, line_up in enumerate(line_ups):
             events, style = request(setting, abc[args.setting], np.random.default_rng([args.setting, version]), line_up, args.pace, args.feel,
                                     max_quarters=None, times=args.times)  # a play-along plays the whole tune
             target = Path(args.out) / f"{setting['tuneId']}-s{args.setting}-{version}"
