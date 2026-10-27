@@ -36,7 +36,6 @@ from tunebook_ml.simulate import simulate  # noqa: E402
 
 FRAMES = 400  # 8 s at 50 frames a second
 CLIPS = ML / "cache" / "classifier" / "clips.pt"
-REUSE_STEPS = 2000
 
 
 # ── Data ────────────────────────────────────────────────────────────────────────────
@@ -65,6 +64,7 @@ class Simulated(torch.utils.data.IterableDataset):
 
     def __iter__(self):
         info = torch.utils.data.get_worker_info()
+        torch.set_num_threads(1)  # one simulator per core; library threads only fight over the CPU quota
         rng = np.random.default_rng([self.seed, info.id if info else 0])
         settings = Simulated.settings(self.tune_ids)
         while True:
@@ -161,6 +161,29 @@ def _render_job(job: tuple[int, int]) -> tuple[int, torch.Tensor] | None:
         return None
 
 
+def _audio_job(path: str) -> tuple[int, np.ndarray] | None:
+    """Every 8 s window, one every 2 s, of a labelled recording named {tune_id}-...: pre-KeyCanon float16."""
+    torch.set_num_threads(1)
+    try:
+        # NumPy, not a tensor: torch passes tensors between processes as file descriptors and runs out
+        return int(Path(path).name.split("-")[0]), windows(read_audio(Path(path)), hop_seconds=2.0).numpy()
+    except Exception:
+        return None
+
+
+def audio_cache(args) -> None:
+    """YuE2 performances (data/yue/train/*/{tune_id}-s{setting}-{n}.ogg) as one pool of windows."""
+    from multiprocessing import get_context
+
+    paths = sorted(str(p) for p in (ML / "data" / "yue" / "train").glob("*/*.ogg"))
+    # spawn: torch in a forked child can deadlock on the parent's thread pool
+    with get_context("spawn").Pool(args.workers) as pool:
+        results = [r for r in pool.imap_unordered(_audio_job, paths, chunksize=4) if r is not None]
+    out = ML / "cache" / "classifier" / "yue.pt"
+    torch.save([{"tune_id": tune, "windows": torch.from_numpy(w)} for tune, w in results], out)
+    print(f"{out.name}: {len(results)} recordings, {sum(len(w) for _, w in results)} windows", flush=True)
+
+
 def render_cache(args) -> None:
     """Shards of FluidSynth renders through the real front end, mixed into training to
     cover what the simulator gets wrong. Labels index catalog_tunes()."""
@@ -189,14 +212,15 @@ def render_cache(args) -> None:
 
 
 class Classifier(nn.Module):
-    def __init__(self, n_classes: int, width: int = 384, layers: int = 8, heads: int = 6, dim: int = 384, centres: int = 3):
+    def __init__(self, n_classes: int, width: int = 384, layers: int = 8, heads: int = 6, dim: int = 384, centres: int = 3, stride: int = 4):
         super().__init__()
+        # Tokens are `stride` frames: 4 → 80 ms (100 tokens per window), 8 → 160 ms, about a quaver at reel tempo.
         self.stem = nn.Sequential(
             nn.Conv1d(12, 128, 5, padding=2), nn.GELU(),
             nn.Conv1d(128, 256, 5, stride=2, padding=2), nn.GELU(),
-            nn.Conv1d(256, width, 3, stride=2, padding=1),
+            nn.Conv1d(256, width, 2 * (stride // 2) - 1 if stride > 2 else 3, stride=stride // 2, padding=(stride // 2) - 1 if stride > 2 else 1),
         )
-        self.position = nn.Parameter(torch.zeros(1, FRAMES // 4, width))
+        self.position = nn.Parameter(torch.zeros(1, FRAMES // stride, width))
         layer = nn.TransformerEncoderLayer(width, heads, 4 * width, dropout=0.1, activation="gelu", batch_first=True, norm_first=True)
         self.encoder = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
         self.norm = nn.LayerNorm(width)
@@ -272,6 +296,59 @@ def evaluate(model: Classifier, tune_ids: list[int], clips: dict, device: str, s
     return metrics
 
 
+@torch.no_grad()
+def rerank_grid(model: Classifier, tune_ids: list[int], clips: dict, device: str, scale: float, top: int = 10,
+                temperature: float = 1.5) -> None:
+    """Real-clip top-1 under every mix of the popularity prior and alignment re-ranking.
+
+    Score for a candidate among the classifier's top `top`: log p(tune | audio) + a · log(tunebooks + 1)
+    + w · alignment, where alignment (tunebook_ml.align) is the best mean cosine of the clip's
+    pitch classes along a path through any of the tune's settings, in any key."""
+    from tunebook_ml import align
+
+    model.eval()
+    index = {tune: i for i, tune in enumerate(tune_ids)}
+    counts = popularity()
+    books = torch.tensor([counts.get(tune, 0) for tune in tune_ids], dtype=torch.float32, device=device)
+    settings: dict[int, list[dict]] = {}
+    for row in load_catalog():
+        if row["pitches"]:
+            settings.setdefault(row["tuneId"], []).append(row)
+    priors, weights = (0.0, 0.25, 0.5, 1.0), (0.0, 2.0, 5.0, 10.0)
+    for name in ("youtube", "bands", "albums"):
+        rows = [r for r in clips.get(name, []) if r["tune_id"] in index]
+        hits = {(a, w): [0, 0] for a in priors for w in weights}
+        verified = {(a, w): [0, 0] for a in priors for w in weights}
+        for row in rows:
+            truth = index[row["tune_id"]]
+            x = pitchclass.keycanon(row["windows"].to(device).float())
+            with torch.autocast(device.split(":")[0], dtype=torch.bfloat16, enabled=device.startswith("cuda")):
+                cos = model.cosines(model.embed(x)).float()
+            logp = (cos * scale / temperature).softmax(dim=-1).mean(0).clamp(min=1e-12).log()
+            sequence = align.clip_sequence(row["windows"].float().numpy())
+            aligned: dict[int, float] = {}
+            for a in priors:
+                scores = logp + a * (books + 1).log()
+                candidates = scores.topk(top).indices.tolist()
+                for c in candidates:
+                    if c not in aligned:
+                        aligned[c] = align.score(sequence, settings.get(tune_ids[c], [])[:4])
+                for w in weights:
+                    best = max(candidates, key=lambda c: scores[c].item() + w * aligned[c])
+                    hits[(a, w)][0] += best == truth
+                    hits[(a, w)][1] += 1
+                    if row.get("verified"):
+                        verified[(a, w)][0] += best == truth
+                        verified[(a, w)][1] += 1
+        print(f"── {name}: top-1 by popularity prior exponent (rows) and alignment weight (columns), {len(rows)} clips")
+        print("prior  " + "".join(f"  w={w:<5}" for w in weights))
+        for a in priors:
+            line = "".join(f"  {hits[(a, w)][0] / max(1, hits[(a, w)][1]):6.1%} " for w in weights)
+            if name == "youtube":
+                line += "   verified: " + " ".join(f"{verified[(a, w)][0] / max(1, verified[(a, w)][1]):.1%}" for w in weights)
+            print(f"a={a:<4} {line}")
+
+
 # ── Training ────────────────────────────────────────────────────────────────────────
 
 
@@ -286,21 +363,24 @@ def catalog_tunes() -> list[int]:
 
 
 class Cached:
-    """Pre-KeyCanon windows held on the GPU, sampled into each batch: FluidSynth renders
-    (cache/classifier/renders/*.pt) and found recordings of training-split tunes."""
+    """Pre-KeyCanon windows sampled into each batch: FluidSynth renders
+    (cache/classifier/renders/*.pt), found recordings of training-split tunes and YuE2
+    performances. Pools stay in host memory (they outgrow an 8 GB card); only each batch's
+    picks go to the device."""
 
     def __init__(self, tune_ids: list[int], device: str):
         self.index = {tune: i for i, tune in enumerate(tune_ids)}
         self.device = device
         self.loaded: set[str] = set()
-        self.windows = {"renders": [], "found": []}
-        self.labels = {"renders": [], "found": []}
-        found = ML / "cache" / "classifier" / "found_train.pt"
-        if found.exists():
-            for row in torch.load(found):
-                if row["tune_id"] in self.index:
-                    self.windows["found"].append(row["windows"])
-                    self.labels["found"].append(torch.full((len(row["windows"]),), self.index[row["tune_id"]]))
+        self.windows = {"renders": [], "found": [], "yue": []}
+        self.labels = {"renders": [], "found": [], "yue": []}
+        for name, file in (("found", "found_train.pt"), ("yue", "yue.pt")):
+            path = ML / "cache" / "classifier" / file
+            if path.exists():
+                for row in torch.load(path):
+                    if row["tune_id"] in self.index:
+                        self.windows[name].append(row["windows"])
+                        self.labels[name].append(torch.full((len(row["windows"]),), self.index[row["tune_id"]]))
         self.refresh()
 
     def refresh(self) -> None:
@@ -316,7 +396,7 @@ class Cached:
             self.windows["renders"].append(shard["windows"][keep])
             self.labels["renders"].append(labels[keep])
             self.loaded.add(path.name)
-        self.pools = {name: (torch.cat(self.windows[name]).to(self.device), torch.cat(self.labels[name]).to(self.device))
+        self.pools = {name: (torch.cat(self.windows[name]), torch.cat(self.labels[name]))
                       for name in self.windows if self.windows[name]}
 
     def size(self, name: str) -> int:
@@ -324,8 +404,8 @@ class Cached:
 
     def sample(self, name: str, n: int) -> tuple[torch.Tensor, torch.Tensor]:
         windows, labels = self.pools[name]
-        pick = torch.randint(len(labels), (n,), device=self.device)
-        return pitchclass.keycanon(windows[pick].float()), labels[pick]
+        pick = torch.randint(len(labels), (n,))
+        return pitchclass.keycanon(windows[pick].to(self.device).float()), labels[pick].to(self.device)
 
 
 def train(args) -> None:
@@ -338,7 +418,7 @@ def train(args) -> None:
     Simulated.settings(tune_ids)  # load once, before workers fork
     loader = torch.utils.data.DataLoader(Simulated(tune_ids, args.seed, args.backing), batch_size=args.batch, num_workers=args.workers,
                                          pin_memory=device == "cuda", persistent_workers=True, prefetch_factor=4)
-    model = Classifier(len(tune_ids), args.width, args.layers, args.heads, args.dim, args.centres).to(device)
+    model = Classifier(len(tune_ids), args.width, args.layers, args.heads, args.dim, args.centres, args.stride).to(device)
     if args.init:
         # Curriculum: a backbone trained on fewer tunes. Its head is kept for those tunes
         # (catalog order is shared, so they are the first rows) and the rest start fresh.
@@ -362,7 +442,7 @@ def train(args) -> None:
 
     clips = torch.load(CLIPS) if CLIPS.exists() else {}
     cached = Cached(tune_ids, device)
-    print(f"cached windows: {cached.size('renders')} renders, {cached.size('found')} found", flush=True)
+    print(f"cached windows: {cached.size('renders')} renders, {cached.size('found')} found, {cached.size('yue')} YuE2", flush=True)
     log = (out / "log.jsonl").open("a")
     step, started, seen = 0, time.time(), 0
     for semis, labels in loader:
@@ -375,10 +455,10 @@ def train(args) -> None:
             x = pitchclass.features(semis)
             # Swap part of the simulated batch for rendered and real windows.
             at = 0
-            for name, fraction in (("renders", args.render_fraction), ("found", args.found_fraction)):
+            for name, fraction in (("renders", args.render_fraction), ("found", args.found_fraction), ("yue", args.yue_fraction)):
                 # A small pool drawn from heavily is memorised, not learnt from: cap each
-                # window's use at about once per REUSE_STEPS steps until the pool grows.
-                fraction = min(fraction, cached.size(name) / (REUSE_STEPS * len(labels)))
+                # window's use at about once per --reuse-steps steps until the pool grows.
+                fraction = min(fraction, cached.size(name) / (args.reuse_steps * len(labels)))
                 n = int(fraction * len(labels) + torch.rand(()).item())
                 if n:
                     w, l = cached.sample(name, n)
@@ -440,10 +520,15 @@ def main() -> None:
     t.add_argument("--eval-every", type=int, default=2000)
     t.add_argument("--tunes", type=int, default=0, help="train on the first N tunes only")
     t.add_argument("--render-fraction", type=float, default=0.3, help="share of each batch drawn from cached renders, once there are any")
+    t.add_argument("--reuse-steps", type=int, default=2000, help="draw each cached window at most about once per this many steps")
+    t.add_argument("--yue-fraction", type=float, default=0.2, help="share drawn from YuE2 performances")
     t.add_argument("--found-fraction", type=float, default=0.1, help="share drawn from found recordings of training-split tunes")
     t.add_argument("--init", help="checkpoint to start from")
+    t.add_argument("--stride", type=int, default=4, help="frames per transformer token")
     t.add_argument("--sample-classes", type=int, default=4096, help="Partial FC: random negative tunes per step (0 = all)")
     t.add_argument("--margin-start", type=int, help="step at which the ArcFace margin starts ramping in (default: 20%% of steps)")
+    y = sub.add_parser("yue-cache")
+    y.add_argument("--workers", type=int, default=8)
     r = sub.add_parser("render-cache")
     r.add_argument("--shards", type=int, default=12)
     r.add_argument("--per-shard", type=int, default=10000)
@@ -454,9 +539,12 @@ def main() -> None:
     e.add_argument("checkpoint")
     e.add_argument("--prior", type=float, nargs="*", default=[0.0], help="popularity prior exponents to compare: p(tune) ∝ (tunebooks + 1) ** a")
     e.add_argument("--temperature", type=float, default=1.5)
+    e.add_argument("--rerank", action="store_true", help="grid of popularity prior × alignment re-ranking instead")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare()
+    elif args.command == "yue-cache":
+        audio_cache(args)
     elif args.command == "render-cache":
         render_cache(args)
     elif args.command == "train":
@@ -465,9 +553,12 @@ def main() -> None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         state = torch.load(args.checkpoint, map_location=device)
         a = state["args"]
-        model = Classifier(len(state["tune_ids"]), a["width"], a["layers"], a["heads"], a["dim"], a["centres"]).to(device)
+        model = Classifier(len(state["tune_ids"]), a["width"], a["layers"], a["heads"], a["dim"], a["centres"], a.get("stride", 4)).to(device)
         model.load_state_dict(state["model"])
         clips = torch.load(CLIPS)
+        if args.rerank:
+            rerank_grid(model, state["tune_ids"], clips, device, a["scale"], temperature=args.temperature)
+            return
         counts = popularity()
         books = torch.tensor([counts.get(tune, 0) for tune in state["tune_ids"]], dtype=torch.float32, device=device)
         for alpha in args.prior:

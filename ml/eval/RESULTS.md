@@ -61,3 +61,25 @@ catalogue. Windows are 8 s, taken every 1 s, and softmax-averaged (T = 1.5) over
 By instrument (all labels, top-1 per clip): accordion 76%, banjo 75%, tin whistle 72%, session 71%,
 flute 71%, fiddle 50%, concertina 48%, uilleann pipes 43%. When the best window cosine is ≥ 0.35 it
 answers 61% of clips at 87% precision; at ≥ 0.40, 47% at 91%.
+
+### Closed-set classifier (train/classifier.py), 2026-10-26
+
+A transformer trained on our own pitch-class front end with a sub-center ArcFace head (Partial FC, 4,096 sampled
+negatives) over all 23,305 catalog tunes. Training ran in two stages. The curriculum stages (2,000 tunes,
+then the full catalog) ran on simulated, rendered and found audio on mantis. The fine-tune (`ft1`, 20k steps on a
+Vast 4090) added 99,774 windows of YuE2 performances (2,704 tunes, none from the benchmarks). Clip score:
+softmax-averaged 8 s windows, one per second. Re-ranking covers the top 10 by log p + a·log(tunebooks + 1) + w·alignment
+(tunebook_ml/align.py).
+
+| Model | YouTube top-1 (185) | verified (65) | YouTube top-5 | bands (75) | albums (96) |
+|---|---|---|---|---|---|
+| curriculum stage 2, sim + renders + found | 4.3% | 3.1% | 13.0% | 1.3% | 6.2% |
+| ft1 (+ YuE2) | 22.2% | 24.6% | 43.2% | 13.3% | 21.9% |
+| ft1 + alignment (w = 10) | 29.7% | 33.8% | | 21.3% | 30.2% |
+| ft1 + prior a = 0.5 + alignment | 38.4% | 46.2% | | 22.7% | 36.5% |
+| ft1 + prior a = 1 + alignment | 49.2% | 69.2% | | 20.0% | 38.5% |
+| JigRipper #1006, model only (above) | 63.2% | 84.6% | 72.4% | | |
+
+The popularity prior flatters YouTube and albums, whose benchmark tunes skew popular; on bands (less popular
+valid/test tunes) it adds little. The prior-free comparison with JigRipper is ~30% vs 63%.
+Training accuracy hit 97% against ~22% on real clips, so the cached real-sounding windows are being memorised.

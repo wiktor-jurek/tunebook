@@ -104,6 +104,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (ROOT / "eval" / "review.html").read_bytes(), "text/html; charset=utf-8")
         if parts[0] == "rows" and parts[1:2] and parts[1] in FILES:
             return self.send_json(load(parts[1]))
+        if parts[0] == "prelabel" and parts[1:2]:
+            # A reference model's per-window guesses over the source, written by an offline tool
+            # next to the source as {id}.prelabel.json: {model, window, hop, windows: [{t, tune, name, cos}]}.
+            path = source_path(load("youtube")[int(parts[1])]).with_suffix(".prelabel.json")
+            if not path.exists():
+                return self.send(404, b"No pre-label", "text/plain")
+            return self.send(200, path.read_bytes(), "application/json")
         if parts[0] in ("source", "analysis") and parts[1:2]:
             rows = load("youtube")
             index = int(parts[1])

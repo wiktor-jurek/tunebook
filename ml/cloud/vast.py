@@ -18,17 +18,17 @@ import sys
 from pathlib import Path
 
 ML = Path(__file__).resolve().parent.parent
-IMAGE = "pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel"
+IMAGE = "pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime"  # devel is 10+ GB and can sit "loading" for half an hour
 # Rendering happens on the CPU, so a fast GPU needs many cores to stay busy.
 QUERY = "reliability>0.98 num_gpus=1 gpu_ram>=40 cpu_cores_effective>=32 disk_space>=150 inet_down>=500 rentable=true verified=true"
 
 
-def vast(*args: str) -> str:
+def vast(*args: str, answer: str | None = None) -> str:
     env = dict(os.environ)
     command = ["vastai", *args, "--raw"]
     if "VAST_API_KEY" in env:
         command += ["--api-key", env["VAST_API_KEY"]]
-    result = subprocess.run(command, capture_output=True, text=True, env=env)
+    result = subprocess.run(command, capture_output=True, text=True, env=env, input=answer)
     if result.returncode:
         sys.exit(result.stderr.strip() or result.stdout.strip())
     return result.stdout
@@ -71,7 +71,8 @@ def main() -> None:
     elif args.command == "destroy":
         if not args.yes:
             sys.exit("This deletes the box and its disk: re-run with --yes to confirm.")
-        print(vast("destroy", "instance", args.instance))
+        # The CLI asks to confirm on stdin and quietly aborts without an answer.
+        print(vast("destroy", "instance", args.instance, answer="y\n"))
     elif args.command == "sync":
         host, port = ssh_target(args.instance)
         subprocess.run(["rsync", "-az", "--info=progress2", "-e", f"ssh -p {port} -o StrictHostKeyChecking=accept-new",
