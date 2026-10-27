@@ -106,7 +106,8 @@ def chord_bug_settings() -> set[int]:
 
 
 def training(out: Path) -> None:
-    requests = {row["name"]: row for row in map(json.loads, (ML / "cache" / "yue" / "train.jsonl").open())}
+    requests = {row["name"]: row for path in ("train.jsonl", "train2.jsonl") if (ML / "cache" / "yue" / path).exists()
+                for row in map(json.loads, (ML / "cache" / "yue" / path).open())}
     broken = chord_bug_settings()
     before = ML / "cache" / "yue" / "train-before-retime.jsonl"
     retimed = {row["name"] for row in map(json.loads, before.open())
