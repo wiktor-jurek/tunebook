@@ -4,6 +4,7 @@ import { trackEvent } from "@/lib/analytics";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { BrandMark } from "@/components/brand-mark";
 import { BookOpen, ChevronDown, ChevronRight, Folder, ListMusic, Music2, LogOut, Plus, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
@@ -59,7 +60,7 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><BookOpen size={18} /> Tunebook</button>
     {mobileOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={closeMobile} />}
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
-      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><span className="brand-mark"><Music2 size={20} aria-hidden="true" /></span><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
+      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><BrandMark /><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
         <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link>}</div>
         {!guest && <Link onClick={closeMobile} href="/sets" className={`nav-link nav-my-sets ${path === "/sets" ? "active" : ""}`} aria-current={path === "/sets" ? "page" : undefined}><ListMusic size={16} /> My sets <span className="nav-count">{library.sets.length}</span></Link>}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Music2 } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 
@@ -15,7 +15,7 @@ export function ConsentForm({ clientName, clientUri, userName, permissions }: { 
     const result = await authClient.oauth2.consent({ accept });
     if (result.error) { setError(result.error.message || "Could not complete the request. Start again from the app."); setBusy(false); }
   }
-  return <main className="auth-screen"><div className="auth-card"><Link href="/" className="brand auth-brand"><span className="brand-mark"><Music2 size={20} aria-hidden="true" /></span><span>Tunebook</span></Link><p className="eyebrow">CONNECT AN APP</p><h1>Allow access?</h1>
+  return <main className="auth-screen"><div className="auth-card"><Link href="/" className="brand auth-brand"><BrandMark /><span>Tunebook</span></Link><p className="eyebrow">CONNECT AN APP</p><h1>Allow access?</h1>
     <p className="page-subtitle"><strong>{clientName}</strong>{clientUri && URL.canParse(clientUri) && <> ({new URL(clientUri).host})</>} wants to use your Libresession account, {userName}. It will be able to:</p>
     <ul className="consent-list">{permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul>
     <p className="muted">Only allow apps you trust. AI assistants act on your behalf with these permissions.</p>
