@@ -1,10 +1,11 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { catalogSettings, playalongTracks } from "@/db/schema";
+import { catalogSettings, playalongTracks, type PlayalongTiming } from "@/db/schema";
 import { signedBlobUrl } from "@/lib/blob";
 
 // otherSetting: recorded from another setting of the same tune in the same key, close enough to play along to.
-export type Playalong = { id: string; label: string; url: string; durationMs: number; bpm: number | null; otherSetting: boolean };
+// timing maps the recording onto its own setting's score, so it is left off for other settings.
+export type Playalong = { id: string; label: string; url: string; durationMs: number; bpm: number | null; otherSetting: boolean; timing: PlayalongTiming | null };
 
 // Most settings have no recording of their own, while each tune's recordings come from one or two of its settings.
 const OTHER_SETTINGS = 3;
@@ -13,7 +14,7 @@ type Row = typeof playalongTracks.$inferSelect & { mode: string | null };
 
 function withUrl(row: Row, otherSetting: boolean): Playalong[] {
   const url = signedBlobUrl(row.storageKey);
-  return url ? [{ id: row.id, label: row.label, url, durationMs: row.durationMs, bpm: row.bpm, otherSetting }] : [];
+  return url ? [{ id: row.id, label: row.label, url, durationMs: row.durationMs, bpm: row.bpm, otherSetting, timing: otherSetting ? null : row.timing }] : [];
 }
 
 export async function getPlayalongs(settingId: number): Promise<Playalong[]> {

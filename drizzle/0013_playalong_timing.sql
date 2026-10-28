@@ -1,0 +1,1 @@
+ALTER TABLE "playalong_tracks" ADD COLUMN "timing" jsonb;

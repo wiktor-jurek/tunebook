@@ -1,18 +1,22 @@
 import "dotenv/config";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { inArray, like, sql } from "drizzle-orm";
 import { db, pool } from "../src/db";
-import { catalogSettings, playalongTracks } from "../src/db/schema";
+import { catalogSettings, playalongTracks, type PlayalongTiming } from "../src/db/schema";
 
-// Registers play-along recordings already uploaded to B2 (ml/yue/playalong.py writes the manifest).
-type Entry = { settingId: number; tuneId: number; label: string; bpm: number | null; durationMs: number; storageKey: string; model: string };
+// Registers play-along recordings already uploaded to B2 (ml/yue/playalong.py writes the manifest),
+// with the score maps ml/yue/timing.py has made for them.
+type Entry = { settingId: number; tuneId: number; label: string; bpm: number | null; durationMs: number; storageKey: string; model: string; timing?: PlayalongTiming | null };
+const TIMINGS = "ml/cache/yue/playalong/timings.jsonl";
 
 // --prune <prefix>: also remove registered tracks under that storage prefix that the manifest no longer lists.
 const args = process.argv.slice(2);
 const pruneAt = args.indexOf("--prune");
 const prefix = pruneAt >= 0 ? args.splice(pruneAt, 2)[1] : null;
 const path = args[0] || "ml/cache/yue/playalong/manifest.jsonl";
-const entries: Entry[] = readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+const jsonl = <T>(file: string): T[] => readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+const timings = new Map(existsSync(TIMINGS) ? jsonl<{ storageKey: string; timing?: PlayalongTiming | null }>(TIMINGS).map((row) => [row.storageKey, row.timing ?? null]) : []);
+const entries = jsonl<Entry>(path).map((entry) => ({ ...entry, timing: timings.get(entry.storageKey) ?? null }));
 
 // Postgres takes at most 65,535 parameters a query, so long lists go in chunks.
 const CHUNK = 5000;
@@ -31,7 +35,7 @@ try {
   for (const batch of chunks(rows)) {
     await db.insert(playalongTracks).values(batch).onConflictDoUpdate({
       target: playalongTracks.storageKey,
-      set: { label: sql`excluded.label`, bpm: sql`excluded.bpm`, durationMs: sql`excluded.duration_ms`, model: sql`excluded.model` },
+      set: { label: sql`excluded.label`, bpm: sql`excluded.bpm`, durationMs: sql`excluded.duration_ms`, model: sql`excluded.model`, timing: sql`excluded.timing` },
     });
   }
   console.log(`${rows.length} play-alongs registered; ${entries.length - rows.length} skipped for settings not in the catalog`);

@@ -1,7 +1,11 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 import type { AbilityLevel } from "../lib/ability";
+
+// Where a play-along is in its score: [ms into the recording, 1/48 whole notes into the score as abcjs plays it]
+// anchors (ml/yue/timing.py); loop is the score's length when the recording plays the tune more than once.
+export type PlayalongTiming = { anchors: [number, number][]; loop?: number };
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -47,6 +51,7 @@ export const playalongTracks = pgTable("playalong_tracks", {
   durationMs: integer("duration_ms").notNull(),
   storageKey: text("storage_key").notNull(),
   model: text("model").notNull(),
+  timing: jsonb("timing").$type<PlayalongTiming>(),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("playalong_storage_key_idx").on(t.storageKey), index("playalong_setting_idx").on(t.settingId)]);
 

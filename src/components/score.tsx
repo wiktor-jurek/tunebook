@@ -11,16 +11,31 @@ import { TuneIcon } from "@/components/tune-icon";
 import { abcForScore, abcForTune, noteNames } from "@/lib/notation";
 import { DEFAULT_SOUND, SOUND_OPTIONS } from "@/lib/sounds";
 import type { Playalong } from "@/lib/playalongs";
+import type { PlayalongTiming } from "@/db/schema";
 
 type Tune = TuneWithPractice;
 type Visual = ReturnType<typeof abcjs.renderAbc>[number];
 // audio is set while a play-along recording is the sound; otherwise the score is synthesised into buffer.
-type Player = { buffer?: AudioBuffer; key?: string; source?: AudioBufferSourceNode; gain?: GainNode; audio?: HTMLAudioElement; startedAt: number; offset: number; timer?: abcjs.TimingCallbacks; raf?: number; playing: boolean; token: number };
+// A recording with timing follows the score through the score's note events, kept in follow.
+type Player = { buffer?: AudioBuffer; key?: string; source?: AudioBufferSourceNode; gain?: GainNode; audio?: HTMLAudioElement; timing?: PlayalongTiming | null; follow?: abcjs.NoteTimingEvent[]; followAt?: number; startedAt: number; offset: number; timer?: abcjs.TimingCallbacks; raf?: number; playing: boolean; token: number };
 let sharedContext: AudioContext | null = null;
 const instruments = SOUND_OPTIONS;
 // The lead instrument of a play-along, for its button.
 const LEAD_EMOJI: [RegExp, string][] = [[/fiddle|violin/i, "🎻"], [/whistle|flute/i, "🪈"], [/accordion|concertina/i, "🪗"], [/banjo/i, "🪕"], [/piano/i, "🎹"], [/guitar|bouzouki/i, "🎸"]];
 const leadEmoji = (label: string) => LEAD_EMOJI.find(([pattern]) => pattern.test(label))?.[1] ?? "🎶";
+// Timing positions are in 1/48 of a whole note, as ml/yue/timing.py writes them.
+const TIMING_UNIT = 48;
+
+// Score position of a play-along recording at ms into it, or null during its lead-in and after the tune ends.
+function scorePosition({ anchors, loop }: PlayalongTiming, ms: number) {
+  if (anchors.length < 2 || ms < anchors[0][0] || ms > anchors[anchors.length - 1][0]) return null;
+  let i = 1;
+  while (anchors[i][0] < ms) i++;
+  const [fromMs, from] = anchors[i - 1], [toMs, to] = anchors[i];
+  const position = from + (to - from) * (ms - fromMs) / (toMs - fromMs);
+  if (position < 0) return null;
+  return loop ? position % loop : position;
+}
 
 export function pauseTune(tuneId: string) {
   window.dispatchEvent(new CustomEvent("tunebook:pause", { detail: tuneId }));
@@ -51,6 +66,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
     const player = playerRef.current;
     const result = abcjs.renderAbc(paperRef.current, notation, { responsive: "resize", add_classes: true, staffwidth: 760, paddingtop: 0, paddingbottom: 0 });
     visualRef.current = result[0] || null;
+    player.follow = undefined;
     setReady(Boolean(result[0]));
     return () => {
       player.token++;
@@ -97,7 +113,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
     pause();
     const p = playerRef.current;
     if (p.audio) p.audio.currentTime = 0;
-    p.offset = 0; p.timer?.reset(); setProgress(0); setNote("-"); setActiveElements([]);
+    p.followAt = undefined; p.offset = 0; p.timer?.reset(); setProgress(0); setNote("-"); setActiveElements([]);
   }
   function finished() {
     const p = playerRef.current;
@@ -111,10 +127,31 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
     if (p.audio) return p.audio.duration ? p.audio.currentTime / p.audio.duration : 0;
     return p.buffer ? (p.playing && sharedContext ? sharedContext.currentTime - p.startedAt : p.offset) / p.buffer.duration : 0;
   }
+  // Highlights the note a play-along recording has reached, from its timing.
+  function followRecording() {
+    const p = playerRef.current, visual = visualRef.current;
+    if (!p.audio || !p.timing || !visual) return;
+    if (!p.follow) {
+      visual.setUpAudio({}); // gives the note events their pitches, for the note display
+      p.follow = new abcjs.TimingCallbacks(visual, {}).noteTimings.filter((event) => event.type === "event");
+    }
+    const position = scorePosition(p.timing, p.audio.currentTime * 1000);
+    let at = -1;
+    if (position !== null && p.follow.length) {
+      const ms = position / TIMING_UNIT / visual.getBarLength() * p.follow[0].millisecondsPerMeasure;
+      while (at + 1 < p.follow.length && p.follow[at + 1].milliseconds <= ms) at++;
+    }
+    if (at === p.followAt) return;
+    p.followAt = at;
+    const event = p.follow[at];
+    setNote(noteNames(event?.midiPitches));
+    setActiveElements(event?.elements?.flat() as HTMLElement[] || []);
+  }
   function tick() {
     const p = playerRef.current;
     if (!p.playing || (!p.audio && (!p.buffer || !sharedContext))) return;
     setProgress(Math.min(100, Math.round(position() * 100)));
+    followRecording();
     p.raf = requestAnimationFrame(tick);
   }
   async function startRecording(recording: Playalong, nextSpeed: number, offsetRatio?: number, userStarted = true) {
@@ -137,6 +174,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
       if (offsetRatio !== undefined) audio.currentTime = offsetRatio * recording.durationMs / 1000;
       await audio.play();
       if (token !== p.token) { audio.pause(); return; }
+      p.timing = recording.timing; p.followAt = undefined;
       setNote("-"); setActiveElements([]);
       p.playing = true; setPlaying(true); tick();
       if (userStarted) trackEvent("playalong_started", { tempo: nextSpeed, tune: tune.title, label: recording.label });
@@ -213,7 +251,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
   }
   async function seek(value: number) {
     const p = playerRef.current;
-    if (p.audio) { if (p.audio.duration) p.audio.currentTime = value / 100 * p.audio.duration; setProgress(value); return; }
+    if (p.audio) { if (p.audio.duration) p.audio.currentTime = value / 100 * p.audio.duration; setProgress(value); followRecording(); return; }
     const wasPlaying = p.playing;
     pause();
     p.offset = p.buffer ? value / 100 * p.buffer.duration : 0;

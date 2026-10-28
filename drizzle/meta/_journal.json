@@ -92,6 +92,13 @@
       "when": 1793018209261,
       "tag": "0012_playalong_tracks",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793225961241,
+      "tag": "0013_playalong_timing",
+      "breakpoints": true
     }
   ]
 }

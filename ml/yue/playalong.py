@@ -15,6 +15,10 @@ talk or a crowd; clips not yet described keep their prompt's label. Every candid
 
     uv run python yue/playalong.py --training
     uv run python yue/describe.py --manifest cache/yue/playalong/candidates.jsonl
+
+Before importing, yue/timing.py maps each clip onto its score so the player can follow along:
+
+    uv run python yue/timing.py --manifest cache/yue/playalong/manifest.jsonl cache/yue/playalong/training.jsonl
 """
 
 import argparse
