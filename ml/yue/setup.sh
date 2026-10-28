@@ -9,6 +9,6 @@ if [ ! -d skill ]; then
 fi
 cd skill
 [ -x .venv/bin/python ] || python3 scripts/setup_runtime.py install --venv .venv
-[ -d models/YuE2-3B ] || .venv/bin/python scripts/setup_runtime.py models --output models
+[ -f models/models-verified.json ] || .venv/bin/python scripts/setup_runtime.py models --output models
 # The doctor wants an idle GPU, so it runs once; later runs may share the card with a batch.
 [ -f .doctor-passed ] || { .venv/bin/python scripts/setup_runtime.py doctor --require-gpu --models-root models && touch .doctor-passed; }

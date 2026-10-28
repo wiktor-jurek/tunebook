@@ -16,5 +16,5 @@ copy cache/yue/listen-out yue/listen
 for box in data/yue/train/*/; do copy "$box" "yue/train/$(basename "$box")"; web "$box" "yue/train/$(basename "$box")"; done
 for box in cache/yue/refs/vast*/; do copy "$box" "yue/references/$(basename "$box")"; done
 web cache/yue/playalong playalong
-for requests in cache/yue/train.jsonl cache/yue/train2.jsonl cache/yue/references.jsonl; do copy "$requests" yue/requests; done
+for requests in cache/yue/train.jsonl cache/yue/train2.jsonl cache/yue/train3.jsonl cache/yue/references.jsonl; do copy "$requests" yue/requests; done
 rclone size "b2:$B2_BUCKET"
