@@ -1,21 +1,18 @@
-import { ABILITY_LABELS, ABILITY_LEVELS, practiceSummary, type Practice } from "@/lib/ability";
+import { ABILITY_LABELS, ABILITY_LEVELS, playAlongSentence, practiceSummary, type Practice } from "@/lib/ability";
 
+// Four bars, filled one per step past Not assessed: Want to learn fills one, Can lead all four.
 export function AbilityMark({ practice, label = false }: { practice: Practice; label?: boolean }) {
   const rank = ABILITY_LEVELS.indexOf(practice.level);
-  const description = `${ABILITY_LABELS[practice.level]}${practice.playableTempo ? `, best recorded speed ${practice.playableTempo}%` : ", no speed recorded"}${practice.levelOverride ? ", manual level" : ""}`;
+  const description = `${ABILITY_LABELS[practice.level]}${practice.playableTempo ? `, best recorded speed ${practice.playableTempo}%` : ""}${practice.levelOverride ? ", set by hand" : ""}`;
   return <span className="ability-mark" data-level={practice.level} title={description}>
-    <span className="ability-bars" aria-hidden="true">{ABILITY_LEVELS.map((level, i) => <i key={level} className={i <= rank ? "filled" : ""} />)}</span>
+    <span className="ability-bars" aria-hidden="true">{[1, 2, 3, 4].map((step) => <i key={step} className={step <= rank ? "filled" : ""} />)}</span>
     <span className={label ? "ability-label" : "sr-only"}>{ABILITY_LABELS[practice.level]}</span>
   </span>;
 }
 
 export function AbilitySummary({ tunes }: { tunes: { tuneId: number; practice: Practice }[] }) {
-  const { total, playable, percent, counts } = practiceSummary(tunes);
+  const { total, playable, counts } = practiceSummary(tunes);
   if (!total) return null;
-  const description = `${counts.unlearned} unlearned, ${counts.learning} learning, ${counts.learned} learned, ${counts.mastered} mastered. Playable means learned or mastered; each tune is counted once.`;
-  return <div className="ability-summary" title={description}>
-    <span>{playable} of {total} playable <span className="ability-percent">{percent}%</span></span>
-    <span className="ability-summary-track" aria-hidden="true"><span style={{ width: `${percent}%` }} /></span>
-    <span className="sr-only">{description}</span>
-  </div>;
+  const description = `${counts.unlearned} not assessed, ${counts.wanted} want to learn, ${counts.learning} learning, ${counts.learned} can play along, ${counts.mastered} can lead.`;
+  return <p className="ability-summary" title={description}>{playAlongSentence(playable, total)}</p>;
 }

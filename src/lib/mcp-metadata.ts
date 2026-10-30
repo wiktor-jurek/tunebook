@@ -12,7 +12,7 @@ export async function protectedResourceMetadata() {
     authorization_servers: [AUTH_ISSUER],
     scopes_supported: [...MCP_SCOPES],
     bearer_methods_supported: ["header"],
-    resource_name: "Libresession",
+    resource_name: "Tune Companion",
   });
   return Response.json(metadata, { headers: { "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
 }

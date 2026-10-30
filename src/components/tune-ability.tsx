@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { AbilityMark } from "@/components/ability-mark";
 import { ABILITY_LABELS, ABILITY_LEVELS, abilityFromTempo, type AbilityLevel, type Practice, type PracticeUpdate } from "@/lib/ability";
 import { trackEvent } from "@/lib/analytics";
+import { displayTitle } from "@/lib/titles";
 
 type Tune = { id: string; title: string; practice: Practice };
 
@@ -36,16 +37,16 @@ export function TuneAbility({ tune, editable = true }: { tune: Tune; editable?: 
   const selectId = useId();
   if (!editable) return <AbilityMark practice={tune.practice} label />;
   return <Popover.Root><Popover.Trigger asChild>
-    <button type="button" className="ability-button" aria-label={`Ability for ${tune.title}: ${ABILITY_LABELS[tune.practice.level]}`}><AbilityMark practice={tune.practice} label /></button>
-  </Popover.Trigger><Popover.Portal><Popover.Content className="ability-popover" sideOffset={6} collisionPadding={12} align="end" aria-label="Your tune ability">
-    <header><strong>Your ability</strong><Popover.Close asChild><button type="button" className="icon-button" aria-label="Close ability settings"><X size={15} /></button></Popover.Close></header>
+    <button type="button" className="ability-button" aria-label={`Progress on ${displayTitle(tune.title)}: ${ABILITY_LABELS[tune.practice.level]}`}><AbilityMark practice={tune.practice} label /></button>
+  </Popover.Trigger><Popover.Portal><Popover.Content className="ability-popover" sideOffset={6} collisionPadding={12} align="end" aria-label="Your progress on this tune">
+    <header><strong>Your progress</strong><Popover.Close asChild><button type="button" className="icon-button" aria-label="Close progress settings"><X size={15} /></button></Popover.Close></header>
     <p>{tune.practice.playableTempo ? `Best recorded speed: ${tune.practice.playableTempo}%` : "No speed recorded yet. Confirm a speed while practising."}</p>
-    <label className="field-label" htmlFor={selectId}>Ability level</label>
+    <label className="field-label" htmlFor={selectId}>Progress</label>
     <select id={selectId} value={tune.practice.levelOverride ?? "auto"} disabled={busy} onChange={(event) => void update({ operation: "level", level: event.target.value === "auto" ? null : event.target.value as AbilityLevel })}>
       <option value="auto">From speed, {ABILITY_LABELS[abilityFromTempo(tune.practice.playableTempo)]}</option>
       {ABILITY_LEVELS.map((level) => <option key={level} value={level}>{ABILITY_LABELS[level]}</option>)}
     </select>
-    <p className="ability-help">Unlearned: no speed recorded. Learning: 50-99%. Learned: 100-124%. Mastered: 125-150%. You can choose any level yourself.</p>
+    <p className="ability-help">From your confirmed speed: Learning at 50% to 99% of the score&apos;s tempo, Can play along at 100% to 124%, Can lead at 125% and up. Choose any level yourself, including Want to learn.</p>
     <p className="ability-help">Progress is private and follows your settings of this tune. Speeds are relative to the normal tempo of the score.</p>
     <button type="button" className="ability-reset" disabled={busy || (tune.practice.playableTempo === null && tune.practice.levelOverride === null)} onClick={() => void update({ operation: "reset" })}>Reset progress</button>
     <span role="status" className="ability-status">{busy ? "Saving" : message}</span>{error && <p className="form-error" role="alert">{error}</p>}

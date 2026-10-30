@@ -1,6 +1,6 @@
-# Tunebook
+# Tune Companion
 
-Tunebook is a simple place to collect tunes from [The Session](https://thesession.org), organise them into personal tunebooks, and build small sets to play. Save the settings you like, group tunebooks into folders, and open a book to see its scores together. It was made to give The Session's tunes a clean, personal front end without making tune organisation complicated.
+Tune Companion is a simple place to collect tunes from [The Session](https://thesession.org), organise them into personal tunebooks, and build small sets to play. Save the settings you like, group tunebooks into folders, and open a book to see its scores together. It was made to give The Session's tunes a clean, personal front end without making tune organisation complicated.
 
 Built with Next.js, PostgreSQL, Better Auth, Drizzle, and abcjs. The player shows the current note and lets you change tempo, volume, and instrument.
 
@@ -75,7 +75,7 @@ Run `npm run test:practice` for PostgreSQL confirmation, concurrency, ownership,
 
 Open a tunebook and choose **Share** to add viewers by email or set general access to **Anyone with the link**. Email shares appear under **Shared with me** after the recipient signs in with that verified email, including accounts created after the invitation. Invitations use the same SMTP configuration as account emails. If delivery fails, access is still granted and the dialog prompts you to send the link yourself.
 
-Link sharing lets visitors read scores, play tunes, and print without signing in. Shared books are view-only; signed-in viewers can save individual tunes or a private copy of the book into their own library. Owners can remove email access or return general access to **Restricted** at any time. Removing an email grant does not block a viewer while anyone-with-the-link access remains enabled, and previously saved copies remain in their recipients’ libraries.
+Link sharing lets visitors read scores, play tunes, and print without signing in. Link-visible books publish a link preview (title, owner, tune and set counts, and a generated image) for group chats; restricted books show only a generic card. Guests see a prompt to log in and count which of the book’s tunes they can play. Shared books are view-only; signed-in viewers can save individual tunes or a private copy of the book into their own library. Owners can remove email access or return general access to **Restricted** at any time. Removing an email grant does not block a viewer while anyone-with-the-link access remains enabled, and previously saved copies remain in their recipients’ libraries.
 
 Run `npm run db:migrate` when updating an existing local database. Production containers apply the sharing migration on startup.
 
@@ -87,11 +87,11 @@ abcjs generates audio using General MIDI soundfonts. The whistle-like preset use
 
 ## Analytics
 
-Libresession uses self-hosted [Umami](https://umami.is) at `https://analytics.jurek.dev` (website `48e712da-7618-450e-8c2f-88ba9f613eb7`) for identified product analytics. **Signed-in people are tracked by name and email**, along with search text and the names of tunes, tunebooks and sets they work with. There is no consent banner; make sure the site's privacy notice says this.
+Tune Companion uses self-hosted [Umami](https://umami.is) at `https://analytics.jurek.dev` (website `48e712da-7618-450e-8c2f-88ba9f613eb7`) for identified product analytics. **Signed-in people are tracked by name and email**, along with search text and the names of tunes, tunebooks and sets they work with. There is no consent banner; make sure the site's privacy notice says this.
 
 **Browser.** Production pages load the Umami tracker for `libresession.com` and `www.libresession.com`. It stays off during development and honours Do Not Track and Umami's `umami.disabled` local-storage opt-out. Signed-in pages call `umami.identify(accountId, { name, email })` before any event, so a person's sessions join up across devices. Pageviews and events use grouped URLs: book and tune IDs become `:id`, and query strings, fragments and external referrer paths are dropped, so tokens never reach the tracker. The event schema is in `src/lib/analytics.ts`, and events queued before the tracker loads (up to 50) are sent after identification.
 
-**Server.** `src/lib/server-analytics.ts` posts events to Umami's `/api/send` with the account ID as the distinct ID, so they join the same person in Umami. It runs only when `NODE_ENV=production`; set `UMAMI_DISABLED=true` to switch it off, or `UMAMI_HOST`/`UMAMI_WEBSITE_ID` to point elsewhere. Delivery is fire-and-forget with a 3-second timeout and never affects a request. Umami discards events whose user agent looks automated, which covers every MCP client, so MCP and OAuth events are sent with `Libresession/1.0 (Linux x86_64)` and record the agent's own user agent as `user_agent`. Browser-originated server events forward the visitor's agent and IP.
+**Server.** `src/lib/server-analytics.ts` posts events to Umami's `/api/send` with the account ID as the distinct ID, so they join the same person in Umami. It runs only when `NODE_ENV=production`; set `UMAMI_DISABLED=true` to switch it off, or `UMAMI_HOST`/`UMAMI_WEBSITE_ID` to point elsewhere. Delivery is fire-and-forget with a 3-second timeout and never affects a request. Umami discards events whose user agent looks automated, which covers every MCP client, so MCP and OAuth events are sent with `TuneCompanion/1.0 (Linux x86_64)` and record the agent's own user agent as `user_agent`. Browser-originated server events forward the visitor's agent and IP.
 
 Every sign-in also refreshes the person's Umami profile with name, email, verification state, sign-up date, last sign-in method, and tunebook and saved-tune counts. Agent users additionally get `uses_mcp` and `mcp_client`.
 
@@ -106,20 +106,20 @@ Mutation events carry an `outcome` of `success` or `error`; use **success** when
 | OAuth (server) | `oauth_client_registered` (`client`, `application_type`, `redirect_hosts`), `oauth_consent_shown` (`client`, `scopes`), `oauth_consent_decided` (`accepted`), `oauth_token_issued` (`grant_type`, `client`). |
 | Library | `tune_saved` (`tune`), `tunebook_created/renamed/moved/deleted`, `folder_created/renamed/moved/deleted` (`name`), `tune_added_to_book` (`tune` or `book`), `tune_removed_from_book`, `tune_deleted`, `tunebook_icon_changed`. |
 | Sets | `set_created/updated/deleted` (`name`, tune/book counts), `set_added_to_book` (`name`), `book_entry_changed` (`kind`, `action`), `set_tune_reordered` (`direction`). |
-| Sharing | `tunebook_opened` (`book`, `access`, `signed_in`, tune/set counts), `share_dialog_opened`, `book_shared_by_email` (`delivery`), `book_share_removed`, `book_visibility_changed` (`visibility`), `book_link_copied`, `shared_tune_saved`, `shared_book_saved`, `guest_save_sign_in` (`kind`). |
+| Sharing | `tunebook_opened` (`book`, `access`, `signed_in`, tune/set counts), `share_dialog_opened`, `book_shared_by_email` (`delivery`), `book_share_removed`, `book_visibility_changed` (`visibility`), `book_link_copied`, `shared_tune_saved`, `shared_book_saved`, `guest_save_sign_in` (`kind`), `guest_sign_in_clicked` (`source`: book_ability/finder_save). |
 | Playing and reading | `playback_started` (`tune`, `instrument`, `tempo`), `playback_paused/completed/failed/restarted`, `playback_sound_changed`, `playback_tempo_changed`, `playback_seeked`, `notation_opened`, `tune_source_opened`, `scores_toggled`, `contents_navigated`, `print_requested`, `preferences_saved`. |
 
 To verify production, sign in with tracking allowed and check the identify request to `analytics.jurek.dev/api/send`, then look for the person under Sessions in Umami. Their MCP calls appear as `mcp_tool_called` events in the same session. Useful funnels: `oauth_consent_shown` → `oauth_consent_decided` (accepted) → `mcp_tool_called` (`tool`: build_tunebook); and `auth_submitted` → `user_signed_in` → `tune_saved` → `tunebook_created`.
 
 ## AI agents (MCP)
 
-Libresession has a [Model Context Protocol](https://modelcontextprotocol.io) server, so AI assistants can search The Session and build tunebooks for you from prompts such as "a tunebook of 20 popular reels in D, in sets of three". Connect `https://libresession.com/api/mcp` (or `http://localhost:3000/api/mcp` locally):
+Tune Companion has a [Model Context Protocol](https://modelcontextprotocol.io) server, so AI assistants can search The Session and build tunebooks for you from prompts such as "a tunebook of 20 popular reels in D, in sets of three". Connect `https://libresession.com/api/mcp` (or `http://localhost:3000/api/mcp` locally):
 
 - **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector, and paste the URL.
 - **Claude Code:** `claude mcp add --transport http libresession https://libresession.com/api/mcp`, then run `/mcp` to sign in.
 - **Other clients:** any MCP client that supports streamable HTTP with OAuth.
 
-The client opens Libresession's sign-in page and then a consent screen. Agents act as you with two scopes: `tunebooks:read` searches the catalog and reads your library, tunebooks, sets and sharing; `tunebooks:write` saves tunes, creates and edits tunebooks, folders and sets, deletes them, and shares tunebooks by email or link. Destructive tools are annotated as such and their descriptions tell agents to confirm first; invitations send real emails. Agents cannot read other people's private tunebooks, change practice progress, or touch account settings. Access tokens last an hour and refresh tokens 30 days; to revoke an app, remove the connector in your client.
+The client opens Tune Companion's sign-in page and then a consent screen. Agents act as you with two scopes: `tunebooks:read` searches the catalog and reads your library, tunebooks, sets and sharing; `tunebooks:write` saves tunes, creates and edits tunebooks, folders and sets, deletes them, and shares tunebooks by email or link. Destructive tools are annotated as such and their descriptions tell agents to confirm first; invitations send real emails. Agents cannot read other people's private tunebooks, change practice progress, or touch account settings. Access tokens last an hour and refresh tokens 30 days; to revoke an app, remove the connector in your client.
 
 The main workflow is `libresession_search_catalog` (filter by title, type, key, mode, meter and popularity) followed by `libresession_build_tunebook`, which creates a book, saves the settings and groups sets in one call. Other tools read and edit the library: `get_library`, `list_saved_tunes`, `get_tune`, `get_tunebook`, `add_to_tunebook`, `reorder_tunebook`, `create_set`/`update_set`, `set_often_played`, folders, deletion and sharing, all prefixed `libresession_`. Read tools return Markdown by default or JSON with `response_format: "json"`, and list tools page with `limit`/`offset`.
 

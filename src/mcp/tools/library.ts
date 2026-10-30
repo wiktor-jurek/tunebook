@@ -11,7 +11,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
 
   server.registerTool("libresession_get_library", {
     title: "Get my library",
-    description: "Overview of the signed-in user's Libresession library: folders (with paths), tunebooks (with IDs and links), reusable sets, tunebooks shared with them, and how many tunes are saved. Start here to find IDs before editing.",
+    description: "Overview of the signed-in user's Tune Companion library: folders (with paths), tunebooks (with IDs and links), reusable sets, tunebooks shared with them, and how many tunes are saved. Start here to find IDs before editing.",
     inputSchema: { response_format: responseFormat },
     outputSchema: {
       folders: z.array(z.object({ id: z.string(), name: z.string(), parent_id: z.string().nullable(), path: z.string() })),
@@ -47,7 +47,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
       query: z.string().max(100).optional().describe("Case-insensitive title fragment"),
       kind: z.string().optional().describe('Tune type, e.g. "reel", "jig"'),
       mode: z.string().optional().describe('Key and mode as stored, e.g. "Dmajor", "Adorian", or a fragment like "D" or "dorian"'),
-      ability: z.enum(["unlearned", "learning", "learned", "mastered"]).optional().describe("Only tunes at this ability level"),
+      ability: z.enum(["unlearned", "wanted", "learning", "learned", "mastered"]).optional().describe("Only tunes at this progress level: unlearned = not assessed, wanted = want to learn, learning, learned = can play along, mastered = can lead"),
       ...pagination,
       response_format: responseFormat,
     },

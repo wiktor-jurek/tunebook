@@ -148,3 +148,27 @@ export const userPreferences = pgTable("user_preferences", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   defaultSound: integer("default_sound").notNull().default(74),
 });
+
+// A session recorded on a phone in session mode, uploaded to the private B2 bucket when it stops.
+// uploadedAt stays null until the upload finishes, so half-uploaded recordings never list.
+export const recordings = pgTable("recordings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  storageKey: text("storage_key").notNull(),
+  mime: text("mime").notNull(),
+  durationMs: integer("duration_ms").notNull().default(0),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("recording_storage_key_idx").on(t.storageKey), index("recording_user_idx").on(t.userId, t.recordedAt)]);
+
+// The setlist of a recording: each tune the finder named, and where it starts and ends.
+export const recordingTunes = pgTable("recording_tunes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
+  tuneId: integer("tune_id").notNull(),
+  settingId: integer("setting_id").notNull(),
+  startMs: integer("start_ms").notNull(),
+  endMs: integer("end_ms").notNull(),
+}, (t) => [index("recording_tune_recording_idx").on(t.recordingId, t.startMs)]);

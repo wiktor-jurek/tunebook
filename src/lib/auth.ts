@@ -17,14 +17,14 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
-      await sendEmail(user.email, "Reset your Tunebook password", `Reset your password: ${url}`);
+      await sendEmail(user.email, "Reset your Tune Companion password", `Reset your password: ${url}`);
     },
   },
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await sendEmail(user.email, "Verify your Tunebook email", `Verify your email: ${url}`);
+      await sendEmail(user.email, "Verify your Tune Companion email", `Verify your email: ${url}`);
     },
   },
   socialProviders: {
@@ -79,7 +79,7 @@ export const auth = betterAuth({
       scopes: ["openid", "profile", "email", "offline_access", ...MCP_SCOPES],
       // The plugin seeds resources when auth loads; skip that during `next build`, which only imports this file.
       ...(process.env.NEXT_PHASE === "phase-production-build" ? {} : {
-        resources: [{ identifier: MCP_RESOURCE, name: "Libresession MCP", allowedScopes: [...MCP_SCOPES] }],
+        resources: [{ identifier: MCP_RESOURCE, name: "Tune Companion MCP", allowedScopes: [...MCP_SCOPES] }],
         clientRegistrationDefaultResources: [MCP_RESOURCE],
       }),
       allowDynamicClientRegistration: true,

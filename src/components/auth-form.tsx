@@ -49,7 +49,7 @@ export function AuthForm({ mode, token, returnTo = "/" }: { mode: "sign-in" | "s
     finally { setBusy(false); }
   }
   const title = { "sign-in": "Welcome back", "sign-up": "Create your account", forgot: "Reset your password", reset: "Choose a new password" }[mode];
-  return <main className="auth-screen"><div className="auth-card"><Link href="/" className="brand auth-brand"><BrandMark /><span>Tunebook</span></Link><p className="eyebrow">YOUR MUSIC, IN ONE PLACE</p><h1>{title}</h1><p className="page-subtitle">Keep your tunes close and ready to play.</p>
+  return <main className="auth-screen"><div className="auth-card"><Link href="/" className="brand auth-brand"><BrandMark /><span>Tune Companion</span></Link><h1>{title}</h1>
     <form onSubmit={submit} className="auth-form">
       {mode === "sign-up" && <label className="field-label">Name<Input name="name" autoComplete="name" required /></label>}
       {mode !== "reset" && <label className="field-label">Email<Input name="email" type="email" autoComplete="email" required /></label>}

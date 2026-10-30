@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { getLibrary } from "@/lib/library";
+import { displayTitle, displaySetTitle } from "@/lib/titles";
 
 type Library = Awaited<ReturnType<typeof getLibrary>>;
 export function BookTuneControls({ bookId, available, sets }: { bookId: string; available: Library["tunes"]; sets: Library["sets"] }) {
@@ -23,5 +24,5 @@ export function BookTuneControls({ bookId, available, sets }: { bookId: string; 
     } catch (cause) { if (kind === "set") trackEvent("set_added_to_book", { outcome: "error", name: sets.find((set) => set.id === id)?.name }); else trackLibraryAction("addToBook", "error", { tune: available.find((tune) => tune.id === id)?.title }); setError(cause instanceof Error ? cause.message : "Could not update tunebook"); }
     finally { setBusy(false); }
   }
-  return <div className="book-add book-add-items"><label className="field-label">Add tune<select className="input" value="" disabled={busy} onChange={(event) => void add("tune", event.target.value)}><option value="">Choose a saved tune</option>{available.map((tune) => <option key={tune.id} value={tune.id}>{tune.emoji} {tune.title}</option>)}</select></label><label className="field-label">Add set<select className="input" value="" disabled={busy || !sets.length} onChange={(event) => void add("set", event.target.value)}><option value="">{sets.length ? "Choose a saved set" : "Group tunes below to create a set"}</option>{sets.map((set) => <option key={set.id} value={set.id}>{set.name}, {set.tunes.length} tunes</option>)}</select></label><Link className="book-my-sets" href="/sets">My sets</Link>{error && <span role="alert" className="inline-error">{error}</span>}</div>;
+  return <div className="book-add book-add-items"><label className="field-label">Add tune<select className="input" value="" disabled={busy} onChange={(event) => void add("tune", event.target.value)}><option value="">Choose a saved tune</option>{available.map((tune) => <option key={tune.id} value={tune.id}>{tune.emoji} {displayTitle(tune.title)}</option>)}</select></label><label className="field-label">Add set<select className="input" value="" disabled={busy || !sets.length} onChange={(event) => void add("set", event.target.value)}><option value="">{sets.length ? "Choose a saved set" : "Group tunes below to create a set"}</option>{sets.map((set) => <option key={set.id} value={set.id}>{displaySetTitle(set.name)}, {set.tunes.length} tunes</option>)}</select></label><Link className="book-my-sets" href="/sets">All sets</Link>{error && <span role="alert" className="inline-error">{error}</span>}</div>;
 }

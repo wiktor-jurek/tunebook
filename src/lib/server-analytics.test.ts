@@ -38,11 +38,11 @@ describe("server analytics", () => {
     expect(call.body).toEqual({ type: "identify", payload: expect.objectContaining({ id: "user-1", data: { name: "Ana", email: "ana@example.com" } }) });
   });
 
-  it("sends as Libresession instead of forwarding automated agents when asked", async () => {
+  it("sends as Tune Companion instead of forwarding automated agents when asked", async () => {
     const request = new Request("https://libresession.com/api/mcp", { headers: { "user-agent": "claude-code/2.1" } });
     analytics.trackServer("mcp_tool_called", {}, { request, serverAgent: true });
     await analytics.flushServerAnalytics();
-    expect(sent()[0].headers["User-Agent"]).toBe("Libresession/1.0 (Linux x86_64)");
+    expect(sent()[0].headers["User-Agent"]).toBe("TuneCompanion/1.0 (Linux x86_64)");
   });
 
   it("bounds long strings", () => {

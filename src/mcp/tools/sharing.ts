@@ -28,7 +28,7 @@ export function registerSharingTools(server: McpServer, context: Context) {
 
   server.registerTool("libresession_share_tunebook", {
     title: "Share a tunebook by email",
-    description: "Give someone view-only access to a tunebook you own, or remove it. Inviting SENDS A REAL EMAIL from Libresession to that address, so confirm the address with the user first. The person sees the book under Shared with me once they sign in with that verified email.",
+    description: "Give someone view-only access to a tunebook you own, or remove it. Inviting SENDS A REAL EMAIL from Tune Companion to that address, so confirm the address with the user first. The person sees the book under Shared with me once they sign in with that verified email.",
     inputSchema: {
       book_id: uuid("Tunebook you own"),
       email: z.email().max(254).describe("Recipient email address"),

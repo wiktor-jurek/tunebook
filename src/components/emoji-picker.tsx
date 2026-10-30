@@ -3,6 +3,12 @@
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { useEffect, useRef } from "react";
 
+// Follows the appearance chosen in preferences, or the system when none is.
+function pickerTheme() {
+  const chosen = typeof document === "undefined" ? undefined : document.documentElement.dataset.theme;
+  return chosen === "dark" ? Theme.DARK : chosen === "light" ? Theme.LIGHT : Theme.AUTO;
+}
+
 export default function TunebookEmojiPicker({ onSelect }: { onSelect: (emoji: string) => void }) {
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -27,7 +33,7 @@ export default function TunebookEmojiPicker({ onSelect }: { onSelect: (emoji: st
     width="100%"
     height="min(340px, calc(var(--radix-popover-content-available-height) - 96px))"
     emojiStyle={EmojiStyle.NATIVE}
-    theme={Theme.LIGHT}
+    theme={pickerTheme()}
     searchPlaceholder="Search emojis"
     previewConfig={{ showPreview: false }}
     lazyLoadEmojis

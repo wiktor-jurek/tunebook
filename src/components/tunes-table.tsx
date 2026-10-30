@@ -8,8 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TuneAbility } from "@/components/tune-ability";
 import { TuneActions } from "@/components/tune-actions";
 import { TuneIcon } from "@/components/tune-icon";
+import { keyName } from "@/lib/notation";
 import { ABILITY_LABELS, ABILITY_LEVELS, type AbilityLevel } from "@/lib/ability";
 import type { TuneWithPractice } from "@/lib/tune-practice";
+import { displayTitle } from "@/lib/titles";
 
 type SortKey = "title" | "kind" | "mode" | "ability" | "added";
 type Sort = { key: SortKey; descending: boolean };
@@ -53,19 +55,19 @@ export function TunesTable({ tunes }: { tunes: TuneWithPractice[] }) {
     <div className="table-toolbar">
       <label className="table-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search tunes</span><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, type, key or composer" />{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery("")}><X size={14} /></button>}</label>
       <select className="table-filter" value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Filter by type"><option value="">All types</option>{kinds.map((entry) => <option key={entry} value={entry}>{entry[0].toUpperCase() + entry.slice(1)}</option>)}</select>
-      <select className="table-filter" value={level} onChange={(event) => setLevel(event.target.value as AbilityLevel | "")} aria-label="Filter by ability"><option value="">Any ability</option>{ABILITY_LEVELS.map((entry) => <option key={entry} value={entry}>{ABILITY_LABELS[entry]}</option>)}</select>
+      <select className="table-filter" value={level} onChange={(event) => setLevel(event.target.value as AbilityLevel | "")} aria-label="Filter by progress"><option value="">Any progress</option>{ABILITY_LEVELS.map((entry) => <option key={entry} value={entry}>{ABILITY_LABELS[entry]}</option>)}</select>
       {filtered && <span className="table-count" role="status">{shown.length} of {tunes.length}</span>}
     </div>
     <Table>
-      <TableHeader><TableRow>{header("title", "Tune")}{header("kind", "Type", "table-wide")}{header("mode", "Key", "table-wide")}{header("ability", "Ability")}{header("added", "Added", "table-wide")}<TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow>{header("title", "Tune")}{header("kind", "Type", "table-wide")}{header("mode", "Key", "table-wide")}{header("ability", "Progress")}{header("added", "Added", "table-wide")}<TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
       <TableBody>
         {shown.map((tune) => <TableRow key={tune.id}>
-          <TableCell><div className="table-tune"><TuneIcon tune={tune} /><div><Link href={`/tunes/${tune.id}`} className="table-title">{tune.title}</Link><span className="table-meta">{tune.meter}<span className="table-narrow">{tune.kind && <>, <span className="table-kind">{tune.kind}</span></>}{tune.mode && `, ${tune.mode}`}</span></span></div></div></TableCell>
+          <TableCell><div className="table-tune"><TuneIcon tune={tune} /><div><Link href={`/tunes/${tune.id}`} className="table-title">{displayTitle(tune.title)}</Link><span className="table-meta">{tune.meter}<span className="table-narrow">{tune.kind && <>, <span className="table-kind">{tune.kind}</span></>}{tune.mode && `, ${keyName(tune.mode)}`}</span></span></div></div></TableCell>
           <TableCell className="table-wide table-kind">{tune.kind}</TableCell>
-          <TableCell className="table-wide">{tune.mode}</TableCell>
+          <TableCell className="table-wide">{keyName(tune.mode)}</TableCell>
           <TableCell><TuneAbility tune={tune} /></TableCell>
           <TableCell className="table-wide table-muted">{added.format(new Date(tune.createdAt))}</TableCell>
-          <TableCell className="table-actions"><TuneActions tuneId={tune.id} /></TableCell>
+          <TableCell className="table-actions"><TuneActions tuneId={tune.id} title={displayTitle(tune.title)} /></TableCell>
         </TableRow>)}
         {!shown.length && filtered && <TableRow><TableCell colSpan={6} className="table-empty">No tunes match. <button type="button" onClick={clear}>Clear filters</button></TableCell></TableRow>}
       </TableBody>

@@ -7,6 +7,8 @@ import { getMySets } from "@/lib/sets";
 import { displaySetName } from "@/lib/set-name";
 import { getTuneEmojiSuggestion, withTuneEmojis } from "@/lib/tune-emojis";
 import { withTunePractice, type TuneWithPractice } from "@/lib/tune-practice";
+import { libraryStatus } from "@/lib/library-status";
+import type { AbilityLevel } from "@/lib/ability";
 
 type Tune = TuneWithPractice & { oftenPlayed: boolean };
 export type BookSection = { kind: "tune"; entryId: string; tune: Tune } | { kind: "set"; entryId: string; setId: string; name: string; autoName: boolean; tunes: Tune[] };
@@ -73,10 +75,27 @@ export async function getBook(userId: string | null, id: string) {
   return { book, sections, tunes };
 }
 
+// What a link preview may show: only books anyone with the link can open, so restricted titles never leak.
+export async function getBookPreview(id: string) {
+  if (!isBookId(id)) return null;
+  const result = await db.execute<{ name: string; emoji: string | null; owner: string; tunes: number; sets: number }>(sql`
+    SELECT tb.name, tb.emoji, u.name AS owner,
+      (SELECT count(DISTINCT st.tune_id) FROM ${bookEntries} be LEFT JOIN ${setTunes} s ON s.set_id = be.set_id
+        JOIN ${savedTunes} st ON st.id = coalesce(be.tune_id, s.tune_id) WHERE be.book_id = tb.id)::integer AS tunes,
+      (SELECT count(*) FROM ${bookEntries} be WHERE be.book_id = tb.id AND be.set_id IS NOT NULL)::integer AS sets
+    FROM ${tunebooks} tb JOIN ${user} u ON u.id = tb.user_id
+    WHERE tb.id = ${id} AND tb.link_visible
+  `);
+  return result.rows[0] ?? null;
+}
+
 export async function getSavedTune(userId: string, id: string) {
   const [tune] = await db.select().from(savedTunes).where(and(eq(savedTunes.userId, userId), eq(savedTunes.id, id))).limit(1);
   return tune ? (await withTunePractice(userId, await withTuneEmojis([tune])))[0] : null;
 }
+
+/** Lower case, letters, digits and spaces only, with no leading article: how titles are compared. */
+export const bare = (text: string) => text.toLowerCase().replace(/^(the|an?)\s+/, "").replace(/[^a-z0-9 ]/g, "").trim();
 
 export async function searchCatalog(query: string) {
   const trimmed = query.trim().slice(0, 100);
@@ -87,9 +106,12 @@ export async function searchCatalog(query: string) {
       .where(parsed.settingId ? eq(catalogSettings.settingId, parsed.settingId) : eq(catalogSettings.tuneId, parsed.tuneId))
       .orderBy(asc(catalogSettings.settingId)).limit(100);
   }
-  const pattern = `%${trimmed.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+  // Titles are stored "Kesh, The", so a leading article is dropped: "The Kesh" and "Kesh" both find it.
+  const words = trimmed.replace(/^(the|an?)\s+/i, "") || trimmed;
+  const pattern = `%${words.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
   return db.select().from(catalogSettings)
-    .where(or(ilike(catalogSettings.title, pattern), sql`${catalogSettings.tuneId}::text = ${trimmed}`))
+    // Punctuation-blind too, so "cooleys" finds "Cooley's".
+    .where(or(ilike(catalogSettings.title, pattern), sql`regexp_replace(lower(${catalogSettings.title}), '[^a-z0-9 ]', '', 'g') LIKE ${`%${bare(words)}%`}`, sql`${catalogSettings.tuneId}::text = ${trimmed}`))
     .orderBy(asc(catalogSettings.title), asc(catalogSettings.settingId)).limit(50);
 }
 
@@ -156,6 +178,40 @@ export async function getCatalogTune(tuneId: number) {
     db.select({ tunebooks: catalogTunes.tunebooks }).from(catalogTunes).where(eq(catalogTunes.tuneId, tuneId)).limit(1),
   ]);
   return { settings, tunebooks: popularity?.tunebooks ?? 0 };
+}
+
+// What the Tune finder shows for the tunes it heard: each tune's first setting, its popularity,
+// and the user's saved copy if they have one.
+// What the tune finder shows for a heard tune: enough of a setting to start playing (its ABC), and for a
+// signed-in person, whether they already know it and where it is in their library.
+export type FinderTune = {
+  tuneId: number; settingId: number; title: string; kind: string | null; meter: string | null; mode: string | null; abc: string; tunebooks: number;
+  savedId: string | null; level: AbilityLevel; inBooks: { id: string; name: string; emoji: string | null }[];
+};
+// Guests (no userId) get the catalog's first setting and no library details.
+export async function getFinderTunes(userId: string | null, tuneIds: number[]): Promise<FinderTune[]> {
+  if (!tuneIds.length) return [];
+  const result = await db.execute<Omit<FinderTune, "savedId" | "level" | "inBooks">>(sql`
+    SELECT DISTINCT ON (cs.tune_id) cs.tune_id AS "tuneId", cs.setting_id AS "settingId", cs.title, cs.kind, cs.meter, cs.mode, cs.abc,
+      coalesce(ct.tunebooks, 0)::integer AS tunebooks
+    FROM catalog_settings cs LEFT JOIN catalog_tunes ct ON ct.tune_id = cs.tune_id
+    WHERE cs.tune_id IN (${sql.join(tuneIds.map((id) => sql`${id}`), sql`, `)})
+    ORDER BY cs.tune_id, cs.setting_id
+  `);
+  const catalog = result.rows;
+  if (!userId) return catalog.map((tune) => ({ ...tune, savedId: null, level: "unlearned", inBooks: [] }));
+  // A tune the person has saved shows their own setting: the one they play.
+  const [saved, practice, library] = await Promise.all([
+    db.select().from(savedTunes).where(and(eq(savedTunes.userId, userId), inArray(savedTunes.tuneId, tuneIds))).orderBy(asc(savedTunes.createdAt)),
+    withTunePractice(userId, catalog),
+    libraryStatus(userId, tuneIds),
+  ]);
+  return catalog.map((tune, i) => {
+    const own = saved.find((row) => row.tuneId === tune.tuneId);
+    const status = library.status(tune.tuneId, own?.settingId ?? tune.settingId);
+    const base = own ? { ...tune, settingId: own.settingId, title: own.title, kind: own.kind, meter: own.meter, mode: own.mode, abc: own.abc } : tune;
+    return { ...base, savedId: status.savedId, level: practice[i].practice.level, inBooks: status.inBooks.map(({ id, name, emoji }) => ({ id, name, emoji })) };
+  });
 }
 
 export async function saveCatalogSetting(userId: string, settingId: number) {

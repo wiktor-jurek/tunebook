@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import abcjs from "abcjs";
-import { abcForScore, abcForTune, noteNames } from "./notation";
+import { abcForScore, abcForTune, keyName, noteNames, openingPhrase } from "./notation";
 import type { savedTunes } from "@/db/schema";
 
 const tune = {
@@ -25,5 +25,32 @@ describe("notation preparation", () => {
     expect(source).toContain("T:Example jig");
     const music = (abc: string) => JSON.parse(JSON.stringify(abcjs.parseOnly(abc)[0].lines, (key, value) => key === "startChar" || key === "endChar" ? undefined : value));
     expect(music(visual)).toEqual(music(source));
+  });
+});
+
+describe("keyName", () => {
+  it("spaces the tonic from the mode", () => {
+    expect(keyName("Dmajor")).toBe("D major");
+    expect(keyName("F#minor")).toBe("F# minor");
+    expect(keyName("Bbmixolydian")).toBe("Bb mixolydian");
+  });
+  it("leaves other text alone", () => {
+    expect(keyName("D major")).toBe("D major");
+    expect(keyName(null)).toBe(null);
+  });
+});
+
+describe("openingPhrase", () => {
+  const tune = (abc: string) => ({ title: "Test", kind: "jig", meter: "6/8", mode: "Dmajor", abc });
+  it("keeps the first two bars and the headers", () => {
+    const abc = openingPhrase(tune("|:ABA cBA|dfe dBA|ABA cBA|d2e f3:|"));
+    expect(abc).toContain("K:Dmajor");
+    expect(abc.split("\n").at(-1)).toBe("ABA cBA | dfe dBA |]");
+  });
+  it("keeps a pickup before the first full bar", () => {
+    expect(openingPhrase(tune("A|dfe dBA|ABA cBA|d2e f3|]")).split("\n").at(-1)).toBe("A | dfe dBA | ABA cBA |]");
+  });
+  it("drops the tempo and rhythm headings", () => {
+    expect(openingPhrase(tune("ABA cBA|dfe dBA|"))).not.toMatch(/^[QR]:/m);
   });
 });

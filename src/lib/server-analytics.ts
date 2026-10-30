@@ -6,11 +6,11 @@ const UMAMI_HOST = (process.env.UMAMI_HOST || "https://analytics.jurek.dev").rep
 const WEBSITE_ID = process.env.UMAMI_WEBSITE_ID || "48e712da-7618-450e-8c2f-88ba9f613eb7";
 // Umami drops events whose user agent looks automated (isbot), which includes every MCP client and most
 // server-style agents, so server-originated events use this agent, verified against isbot 5.
-export const SERVER_AGENT = "Libresession/1.0 (Linux x86_64)";
+export const SERVER_AGENT = "TuneCompanion/1.0 (Linux x86_64)";
 
 type Value = string | number | boolean | null | undefined;
 export type EventData = Record<string, Value>;
-// serverAgent: send as Libresession itself (MCP and other non-browser callers) instead of forwarding the caller's agent.
+// serverAgent: send as Tune Companion itself (MCP and other non-browser callers) instead of forwarding the caller's agent.
 export type TrackContext = { userId?: string | null; request?: Request; url?: string; serverAgent?: boolean };
 
 const pending = new Set<Promise<void>>();

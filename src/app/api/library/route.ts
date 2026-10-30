@@ -30,12 +30,13 @@ export async function POST(request: Request) {
   try { input = await request.json(); } catch { return NextResponse.json({ error: "Invalid request" }, { status: 400 }); }
   try {
     const userId = user.id;
+    let created: { bookId: string } | null = null;
     switch (input.operation) {
       case "createFolder": await library.createFolder(userId, { name: input.name, parentId: input.parentId }); break;
       case "renameFolder": await library.renameFolder(userId, input.folderId, input.name); break;
       case "moveFolder": await library.moveFolder(userId, { folderId: input.folderId, parentId: input.parentId }); break;
       case "deleteFolder": await library.deleteFolder(userId, input.folderId); break;
-      case "createBook": await library.createBook(userId, { name: input.name, folderId: input.folderId, emoji: input.emoji }); break;
+      case "createBook": created = { bookId: await library.createBook(userId, { name: input.name, folderId: input.folderId, emoji: input.emoji }) }; break;
       case "renameBook": await library.renameBook(userId, { bookId: input.bookId, name: input.name, ...("emoji" in input ? { emoji: input.emoji } : {}) }); break;
       case "setBookEmoji": await library.setBookEmoji(userId, input.bookId, input.emoji); break;
       case "moveBook": await library.moveBook(userId, { bookId: input.bookId, folderId: input.folderId }); break;
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       case "deleteSavedTune": await library.deleteSavedTune(userId, input.tuneId); break;
       default: throw new LibraryError("Unknown operation");
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ...created });
   } catch (error) {
     return NextResponse.json({ error: error instanceof LibraryError ? error.message : "Request failed" }, { status: error instanceof LibraryError ? 400 : 500 });
   }

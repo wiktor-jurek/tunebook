@@ -18,6 +18,8 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   signed_out: { outcome: Outcome };
   tune_lookup: { source: "url" | "title"; outcome: Outcome; result_count?: number; query: string };
   tune_saved: { outcome: Outcome; tune?: string };
+  tune_finder_started: { outcome: Outcome; reason?: "denied" | "unsupported" | "model" };
+  tune_finder_matched: { tune?: string; seconds: number };
   tune_icon_changed: { outcome: Outcome; source: "suggested" | "custom" };
   tune_practice_updated: { outcome: Outcome; source: "tempo" | "level" | "reset" };
   set_created: { outcome: Outcome; tune_count: number; name?: string };
@@ -35,6 +37,7 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   shared_book_saved: { outcome: Outcome };
   tunebook_opened: { access: "owner" | "viewer"; signed_in: boolean; tune_count: number; set_count: number; book: string };
   guest_save_sign_in: { kind: "tune" | "book" };
+  guest_sign_in_clicked: { source: "book_ability" | "finder_save" };
   playback_started: { instrument: number; tempo: number; tune: string };
   playback_paused: Record<string, never>;
   playback_completed: Record<string, never>;
@@ -51,6 +54,12 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   contents_navigated: { kind: "tune" | "set" };
   print_requested: Record<string, never>;
   preferences_saved: { outcome: Outcome; instrument: number };
+  mode_switched: { mode: "practice" | "session" };
+  appearance_changed: { theme: "system" | "light" | "dark" };
+  session_book_made: { outcome: Outcome; tune_count: number };
+  session_score_opened: { tune?: string };
+  session_recording_started: Record<string, never>;
+  session_recording_uploaded: { outcome: Outcome; tune_count: number };
 };
 type Payload = Record<string, unknown>;
 type Tracker = {

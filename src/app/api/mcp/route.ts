@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { AUTH_ISSUER, MCP_RESOURCE, MCP_SCOPES } from "@/lib/mcp-config";
 import { oauthClientName } from "@/lib/oauth-clients";
 import { identifyUser } from "@/lib/user-analytics";
-import { createLibresessionServer } from "@/mcp/server";
+import { createTuneCompanionServer } from "@/mcp/server";
 
 const resourceClient = oauthProviderResourceClient(auth).getActions();
 // Refresh each agent user's Umami profile once per server process.
@@ -37,7 +37,7 @@ async function handle(request: Request) {
     identified.add(payload.sub);
     void identifyUser(payload.sub, { mcp_client: client, uses_mcp: true }, { request, serverAgent: true });
   }
-  const server = createLibresessionServer({ userId: payload.sub, canWrite: scopes.includes("tunebooks:write"), client, request });
+  const server = createTuneCompanionServer({ userId: payload.sub, canWrite: scopes.includes("tunebooks:write"), client, request });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);
   return transport.handleRequest(request);

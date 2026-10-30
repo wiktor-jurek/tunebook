@@ -5,3 +5,6 @@ node_modules
 .env.*.local
 *.tsbuildinfo
 coverage
+
+# Tune finder model, exported by ml/train/export_finder.py; too large for git
+public/finder/

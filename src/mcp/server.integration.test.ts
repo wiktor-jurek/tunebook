@@ -15,13 +15,13 @@ vi.mock("@/lib/server-analytics", () => ({ trackServer: vi.fn() }));
 
 import { sendEmail } from "@/lib/email";
 import { trackServer } from "@/lib/server-analytics";
-import { createLibresessionServer } from "./server";
+import { createTuneCompanionServer } from "./server";
 
 type Result = { isError?: boolean; content: { type: string; text: string }[]; structuredContent?: Record<string, unknown> };
 
 async function connect(userId: string, canWrite = true) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await createLibresessionServer({ userId, canWrite, client: "Test Agent" }).connect(serverTransport);
+  await createTuneCompanionServer({ userId, canWrite, client: "Test Agent" }).connect(serverTransport);
   const client = new Client({ name: "test", version: "1.0.0" });
   await client.connect(clientTransport);
   const call = async <T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}) => {
@@ -37,7 +37,7 @@ async function connect(userId: string, canWrite = true) {
 }
 
 // Opt-in tests run real queries and migrations in a temporary schema, never the app's tables.
-describe.skipIf(!process.env.TEST_DATABASE_URL)("Libresession MCP server (PostgreSQL)", () => {
+describe.skipIf(!process.env.TEST_DATABASE_URL)("Tune Companion MCP server (PostgreSQL)", () => {
   const schema = `mcp_test_${randomUUID().replaceAll("-", "")}`;
   const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, options: `-c search_path=${schema}`, connectionTimeoutMillis: 5000 });
   let owner: Awaited<ReturnType<typeof connect>>, stranger: Awaited<ReturnType<typeof connect>>;

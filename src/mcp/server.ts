@@ -8,7 +8,7 @@ import { registerSetTools } from "@/mcp/tools/sets";
 import { registerSharingTools } from "@/mcp/tools/sharing";
 import { registerTunebookTools } from "@/mcp/tools/tunebooks";
 
-const instructions = `Libresession organises Irish and folk tunes from The Session (thesession.org) into personal tunebooks and sets.
+const instructions = `Tune Companion organises Irish and folk tunes from The Session (thesession.org) into personal tunebooks and sets.
 
 Typical flow for "make me a tunebook of ...":
 1. libresession_search_catalog with kind, tonic, mode and sort="popularity" to choose tunes. Each result has a setting_id.
@@ -65,8 +65,8 @@ function instrument(server: McpServer, context: Context) {
     });
 }
 
-export function createLibresessionServer(context: Context) {
-  const server = new McpServer({ name: "libresession-mcp-server", version: "1.0.0" }, { instructions });
+export function createTuneCompanionServer(context: Context) {
+  const server = new McpServer({ name: "tune-companion-mcp-server", version: "1.0.0" }, { instructions });
   instrument(server, context);
   registerCatalogTools(server, context);
   registerLibraryTools(server, context);

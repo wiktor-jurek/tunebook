@@ -5,9 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { BrandMark } from "@/components/brand-mark";
-import { BookOpen, ChevronDown, ChevronRight, Folder, ListMusic, Music2, LogOut, Plus, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
+import { AudioLines, BookOpen, ChevronDown, ChevronRight, Database, Folder, ListMusic, Music2, LogOut, Plus, Smartphone, Disc3, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
+import { ModeSwitch } from "@/components/mode-switch";
 import { BookIcon } from "@/components/book-icon";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LibraryDialog, type LibraryTask as Task } from "@/components/library-dialog";
@@ -16,7 +17,7 @@ import type { getLibrary } from "@/lib/library";
 type Library = Awaited<ReturnType<typeof getLibrary>>;
 type FolderRow = Library["folders"][number];
 type BookRow = Library["books"][number];
-export function Sidebar({ library, userName, defaultSound }: { library: Library; userName?: string; defaultSound: number }) {
+export function Sidebar({ library, userName, defaultSound, admin = false }: { library: Library; userName?: string; defaultSound: number; admin?: boolean }) {
   const path = usePathname(), router = useRouter();
   const [task, setTask] = useState<Task | null>(null);
   const returnFocus = useRef<HTMLButtonElement | null>(null);
@@ -57,19 +58,19 @@ export function Sidebar({ library, userName, defaultSound }: { library: Library;
     {(open[folder.id] ?? true) && <div className="nav-children">{foldersByParent(folder.id).map(renderFolder)}{booksByFolder(folder.id).map(bookLink)}</div>}
   </div>;
   return <>
-    <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><BookOpen size={18} /> Tunebook</button>
+    <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><BookOpen size={18} /> Tune Companion</button>
     {mobileOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={closeMobile} />}
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
-      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><BrandMark /><span>Tunebook</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
+      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><BrandMark /><span>Tune Companion</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
-        <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link>}</div>
-        {!guest && <Link onClick={closeMobile} href="/sets" className={`nav-link nav-my-sets ${path === "/sets" ? "active" : ""}`} aria-current={path === "/sets" ? "page" : undefined}><ListMusic size={16} /> My sets <span className="nav-count">{library.sets.length}</span></Link>}
+        <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link>}{!guest && <Link onClick={closeMobile} href="/tunes/finder" className={`nav-link nav-sub ${path === "/tunes/finder" ? "active" : ""}`} aria-current={path === "/tunes/finder" ? "page" : undefined}><AudioLines size={15} /> Tune finder</Link>}</div>
+        {!guest && <Link onClick={closeMobile} href="/recordings" className={`nav-link nav-my-sets ${path.startsWith("/recordings") ? "active" : ""}`} aria-current={path === "/recordings" ? "page" : undefined}><Disc3 size={16} /> Recordings</Link>}{!guest && <Link onClick={closeMobile} href="/sets" className={`nav-link nav-my-sets ${path === "/sets" ? "active" : ""}`} aria-current={path === "/sets" ? "page" : undefined}><ListMusic size={16} /> Sets <span className="nav-count">{library.sets.length}</span></Link>}
         <div className="nav-label-row"><span>TUNEBOOKS</span>{!guest && creationMenu()}</div>
         {guest ? <Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunebooks</Link> : <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map(renderFolder)}</div>}
         <div className="nav-label-row nav-shared-label"><span>SHARED WITH ME</span></div>
         <div>{library.sharedBooks.map((book) => <Link key={book.id} onClick={closeMobile} href={`/books/${book.id}`} className={`nav-link nav-shared-book ${path === `/books/${book.id}` ? "active" : ""}`} aria-current={path === `/books/${book.id}` ? "page" : undefined}><BookIcon bookId={book.id} emoji={book.emoji} label="Tunebook icon" readOnly /><span>{book.name}</span></Link>)}{!library.sharedBooks.length && <p className="nav-empty">Tunebooks shared with you appear here.</p>}</div>
       </nav>
-      <div className="sidebar-bottom">{guest ? <Link onClick={closeMobile} href={signIn} className="nav-link">Log in to Tunebook</Link> : <><ProfilePreferences userName={userName} defaultSound={defaultSound} /><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { const result = await authClient.signOut(); trackEvent("signed_out", { outcome: result.error ? "error" : "success" }); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></>}</div>
+      <div className="sidebar-bottom">{guest ? <Link onClick={closeMobile} href={signIn} className="nav-link">Log in to Tune Companion</Link> : <><ProfilePreferences userName={userName} defaultSound={defaultSound} />{admin && <Link onClick={closeMobile} href="/admin/data" className="icon-button" aria-label="Training data" title="Training data"><Database size={16} aria-hidden="true" /></Link>}<ModeSwitch to="session" className="icon-button" title="Session mode: listen and read scores in the pub"><span className="sr-only">Session mode</span><Smartphone size={16} aria-hidden="true" /></ModeSwitch><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { const result = await authClient.signOut(); trackEvent("signed_out", { outcome: result.error ? "error" : "success" }); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></>}</div>
     </aside>
     {task && <LibraryDialog key={`${task.operation}-${task.bookId ?? task.folderId ?? "root"}`} task={task} library={library} onClose={() => setTask(null)} onMove={revealDestination} onReturnFocus={() => { requestAnimationFrame(() => { if (returnFocus.current?.isConnected) returnFocus.current.focus(); else newButton.current?.focus(); }); }} />}
   </>;
