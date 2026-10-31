@@ -347,3 +347,24 @@ body:has(.deck.is-dock) .group-bar{bottom:92px}
 .group-jump[data-before] .group-jump-more.is-before,.group-jump[data-after] .group-jump-more.is-after{opacity:1;pointer-events:auto}
 .group-jump-more:hover{background:var(--muted)}}
 .tunes-table .group-jump-more.is-before{left:0}.tunes-table .group-jump-more.is-after{right:0}
+
+/* Pick-one menus (ui/select): the trigger keeps the look of the field it sits in, and opens a menu like the app's own,
+   the current choice ticked. */
+.select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.select-trigger>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.select-trigger[data-placeholder]>span:first-child{color:var(--text-3)}
+.select-trigger:disabled{opacity:.6;cursor:default}
+.select-trigger:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.select-trigger.input{display:flex;font-size:13px}
+.select-icon{display:flex;flex:none;color:var(--text-3)}
+.select-trigger[data-state=open] .select-icon{color:var(--foreground)}
+.select-content{z-index:60;min-width:var(--radix-select-trigger-width);max-width:min(380px,calc(100vw - 24px));max-height:min(var(--radix-select-content-available-height),360px);overflow:hidden;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 35px #0000001a;animation:select-in .14s var(--ease)}
+.select-viewport{padding:5px}
+.select-item{position:relative;display:flex;align-items:center;padding:8px 10px 8px 30px;border-radius:5px;font-size:13px;color:var(--foreground);outline:none;cursor:pointer;user-select:none}
+.select-item[data-highlighted]{background:var(--muted)}
+.select-item[data-state=checked]{font-weight:600}
+.select-item[data-disabled]{opacity:.5;pointer-events:none}
+.select-indicator{position:absolute;left:9px;display:flex;align-items:center;color:var(--brand-ink)}
+.select-scroll{display:flex;align-items:center;justify-content:center;height:22px;color:var(--text-3);cursor:default}
+@keyframes select-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.select-content{animation:none}}

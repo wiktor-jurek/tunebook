@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { trackEvent } from "@/lib/analytics";
 import { useEffect, useRef, useState } from "react";
 import abcjs from "abcjs";
@@ -269,7 +270,7 @@ export function Score({ tune, defaultSound = DEFAULT_SOUND, showTitle = true, pl
         <Button size="icon" className="player-play" aria-label={playing ? "Pause" : "Play"} disabled={!ready || loading} onClick={() => { if (playing) { trackEvent("playback_paused", {}); pause(); } else void start(); }}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</Button>
         <input className="player-seek" type="range" min="0" max="100" value={progress} aria-label="Playback position" onPointerUp={() => trackEvent("playback_seeked", {})} onKeyUp={(event) => { if (trackKeys.includes(event.key)) trackEvent("playback_seeked", {}); }} onChange={(event) => void seek(Number(event.target.value))} />
         <label className="player-tempo"><span className="sr-only">Tempo</span><input type="range" min="50" max="150" step="5" value={speed} onChange={(event) => void changeSpeed(Number(event.target.value))} aria-label="Tempo percentage" onPointerUp={(event) => trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) })} onKeyUp={(event) => { if (trackKeys.includes(event.key)) trackEvent("playback_tempo_changed", { tempo: Number(event.currentTarget.value) }); }} /><output>{speed}%</output></label>
-        {!track && <select className="player-sound" value={instrument} onChange={(event) => void changeSound(event.target.value)} aria-label="Sound">{instruments.map((entry) => <option key={entry.program} value={entry.program}>{entry.label}</option>)}</select>}
+        {!track && <Select className="player-sound" value={String(instrument)} onValueChange={(value) => void changeSound(value)} aria-label="Sound" options={instruments.map((entry) => ({ value: String(entry.program), label: entry.label }))} />}
       </div>
       {showPractice && practiceEditable && <PracticeSpeed tune={tune} speed={speed} />}
       {loading && <p className="player-status">{track ? "Loading recording" : "Loading instrument"}</p>}{track && <p className="player-status">Play-along generated with <a href="https://huggingface.co/m-a-p/YuE2-3B" target="_blank" rel="noreferrer">YuE2</a>{track.otherSetting ? ", from another setting in the same key" : ""}.</p>}{error && <p role="alert" className="form-error">{error}</p>}

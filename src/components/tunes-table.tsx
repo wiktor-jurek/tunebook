@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Search, X } from "lucide-react";
@@ -59,9 +60,9 @@ export function TunesTable({ tunes, books = [] }: { tunes: TuneWithPractice[]; b
   return <div className="tunes-table">
     <div className="table-toolbar">
       <label className="table-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search tunes</span><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, type, key or composer" />{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery("")}><X size={14} /></button>}</label>
-      <select className="table-filter" value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Filter by type"><option value="">All types</option>{kinds.map((entry) => <option key={entry} value={entry}>{entry[0].toUpperCase() + entry.slice(1)}</option>)}</select>
-      <select className="table-filter" value={level} onChange={(event) => setLevel(event.target.value as AbilityLevel | "")} aria-label="Filter by progress"><option value="">Any progress</option>{ABILITY_LEVELS.map((entry) => <option key={entry} value={entry}>{ABILITY_LABELS[entry]}</option>)}</select>
-      <label className="table-group">Group by<select className="table-filter" value={groupBy} onChange={(event) => setGroupBy(event.target.value as GroupBy)}>{GROUP_BYS.map((entry) => <option key={entry} value={entry}>{GROUP_BY_LABELS[entry]}</option>)}</select></label>
+      <Select className="table-filter" value={kind || "all"} onValueChange={(value) => setKind(value === "all" ? "" : value)} aria-label="Filter by type" options={[{ value: "all", label: "All types" }, ...kinds.map((entry) => ({ value: entry, label: entry[0].toUpperCase() + entry.slice(1) }))]} />
+      <Select className="table-filter" value={level || "all"} onValueChange={(value) => setLevel(value === "all" ? "" : value as AbilityLevel)} aria-label="Filter by progress" options={[{ value: "all", label: "Any progress" }, ...ABILITY_LEVELS.map((entry) => ({ value: entry, label: ABILITY_LABELS[entry] }))]} />
+      <span className="table-group">Group by<Select className="table-filter" value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)} aria-label="Group by" options={GROUP_BYS.map((entry) => ({ value: entry, label: GROUP_BY_LABELS[entry] }))} /></span>
       {filtered && <span className="table-count" role="status">{shown.length} of {tunes.length}</span>}
     </div>
     <GroupJump groups={groups.map((group) => ({ key: group.key, label: group.label, count: group.tunes.length }))} />

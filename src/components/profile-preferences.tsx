@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { trackEvent } from "@/lib/analytics";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -29,6 +30,6 @@ export function ProfilePreferences({ userName, defaultSound }: { userName: strin
 
   return <Dialog.Root open={open} onOpenChange={(value) => { setOpen(value); if (value) { setSound(defaultSound); setError(""); } }}>
     <Dialog.Trigger asChild><button className="profile-button" aria-label={`Preferences for ${userName}`}><span className="user-initial">{userName.charAt(0).toUpperCase()}</span><span className="user-name">{userName}</span></button></Dialog.Trigger>
-    <Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog-content"><Dialog.Title className="dialog-title">Your preferences</Dialog.Title><Dialog.Description className="sr-only">Appearance on this device, and the sound score players start with.</Dialog.Description><div className="field-label">Appearance<AppearancePicker /></div><form onSubmit={save} className="preferences-form"><label className="field-label">Preferred default sound<select className="input" value={sound} onChange={(event) => setSound(Number(event.target.value))}>{SOUND_OPTIONS.map((entry) => <option key={entry.program} value={entry.program}>{entry.label}</option>)}</select></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="dialog-actions"><Dialog.Close asChild><Button type="button" variant="outline">Cancel</Button></Dialog.Close><Button disabled={busy}>{busy ? "Saving" : "Save"}</Button></div></form></Dialog.Content></Dialog.Portal>
+    <Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog-content"><Dialog.Title className="dialog-title">Your preferences</Dialog.Title><Dialog.Description className="sr-only">Appearance on this device, and the sound score players start with.</Dialog.Description><div className="field-label">Appearance<AppearancePicker /></div><form onSubmit={save} className="preferences-form"><label className="field-label">Preferred default sound<Select className="input" value={String(sound)} onValueChange={(value) => setSound(Number(value))} options={SOUND_OPTIONS.map((entry) => ({ value: String(entry.program), label: entry.label }))} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="dialog-actions"><Dialog.Close asChild><Button type="button" variant="outline">Cancel</Button></Dialog.Close><Button disabled={busy}>{busy ? "Saving" : "Save"}</Button></div></form></Dialog.Content></Dialog.Portal>
   </Dialog.Root>;
 }

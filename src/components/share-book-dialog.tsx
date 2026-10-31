@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { trackEvent } from "@/lib/analytics";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -76,7 +77,7 @@ export function ShareBookDialog({ bookId, name, ownerName, ownerEmail }: { bookI
               <div className="share-person"><span className="share-avatar"><UserRound size={18} /></span><div><strong>{ownerName} (you)</strong><span>{ownerEmail}</span></div><span className="share-role">Owner</span></div>
               {settings.shares.map((share) => <div className="share-person" key={share.email}><span className="share-avatar"><UserRound size={18} /></span><div><strong>{share.email}</strong><span>Viewer</span></div><Button variant="ghost" size="sm" disabled={busy} aria-label={`Remove access for ${share.email}`} onClick={() => void update({ operation: "remove", email: share.email })}>Remove</Button></div>)}
             </section>
-            <section className="share-general" aria-labelledby="share-general-title"><h2 id="share-general-title">General access</h2><div className="share-access-row"><span className={`share-avatar ${settings.linkVisible ? "share-public" : ""}`}>{settings.linkVisible ? <Globe size={19} /> : <LockKeyhole size={18} />}</span><div><label className="sr-only" htmlFor="share-visibility">General access</label><select id="share-visibility" className="input" disabled={busy} value={settings.linkVisible ? "public" : "restricted"} onChange={(event) => void update({ operation: "visibility", linkVisible: event.target.value === "public" })}><option value="restricted">Restricted</option><option value="public">Anyone with the link</option></select><p>{settings.linkVisible ? "Anyone with the link can view, without logging in." : "Only you and people added by email can open this tunebook."}</p></div><span className="share-role">Viewer</span></div></section>
+            <section className="share-general" aria-labelledby="share-general-title"><h2 id="share-general-title">General access</h2><div className="share-access-row"><span className={`share-avatar ${settings.linkVisible ? "share-public" : ""}`}>{settings.linkVisible ? <Globe size={19} /> : <LockKeyhole size={18} />}</span><div><label className="sr-only" htmlFor="share-visibility">General access</label><Select id="share-visibility" className="input" disabled={busy} value={settings.linkVisible ? "public" : "restricted"} onValueChange={(value) => void update({ operation: "visibility", linkVisible: value === "public" })} options={[{ value: "restricted", label: "Restricted" }, { value: "public", label: "Anyone with the link" }]} /><p>{settings.linkVisible ? "Anyone with the link can view, without logging in." : "Only you and people added by email can open this tunebook."}</p></div><span className="share-role">Viewer</span></div></section>
           </>}
           {error && <p role="alert" className="form-error">{error}{!settings && <Button variant="ghost" size="sm" onClick={() => { setError(""); setReload((value) => value + 1); }}>Try again</Button>}</p>}
           {message && <p role="status" className="muted">{message}</p>}
