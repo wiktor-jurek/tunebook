@@ -76,7 +76,9 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   // How far the sheet travels between closed and open, and a correction that keeps it in place when its height changes.
   const range = useMotionValue(0);
   const shift = useMotionValue(0);
-  const y = useTransform(() => (1 - open.get()) * range.get() + shift.get());
+  // The phone's sheet stretches past open or closed under the finger and keeps its top steady as it changes height (its
+  // foot is off screen). The dock floats in a corner, so it does neither: past either end it would lift off the corner.
+  const y = useTransform(() => dock ? (1 - unit(open.get())) * range.get() : (1 - open.get()) * range.get() + shift.get());
   const scrim = useTransform(() => unit(open.get()));
   const small = dock ? DOCK_MINI : MINI, large = dock ? DOCK_BIG : BIG;
   // The dock floats above the window's edge, so the part of it slid down out of sight is clipped away instead of off screen.
@@ -87,10 +89,12 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   // How much of the record button's slot is still below the top of the scrolling sheet: scrolled up under the header,
   // the button fades away with it rather than floating over the title.
   const bigShown = useMotionValue(1);
-  const grow = useSpring(useTransform(() => (big.get() ? unit(open.get()) : 0)), MIC_SPRING);
-  // It swings up in a curve rather than a straight line: rising first, then drifting to the middle.
-  const dialX = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.x + (b.x - a.x) * p * Math.abs(p) - small / 2; });
-  const dialY = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.y + (b.y - a.y) * (1 - (1 - p) * Math.abs(1 - p)) - small / 2; });
+  const trailing = useSpring(useTransform(() => (big.get() ? unit(open.get()) : 0)), MIC_SPRING);
+  // In the dock the microphone moves in step with the card: a small card shows any lag as the button left behind.
+  const grow = useTransform(() => dock ? (big.get() ? unit(open.get()) : 0) : trailing.get());
+  // On the phone it swings up in a curve rather than a straight line: rising first, then drifting to the middle.
+  const dialX = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.x + (b.x - a.x) * (dock ? p : p * Math.abs(p)) - small / 2; });
+  const dialY = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.y + (b.y - a.y) * (dock ? p : 1 - (1 - p) * Math.abs(1 - p)) - small / 2; });
   const dialScale = useTransform(() => 1 + (large / small - 1) * grow.get());
   const dialFade = useTransform(() => (big.get() ? mix(1, bigShown.get(), unit(grow.get())) : unit(1 - open.get() * 1.8)));
   const dialPress = useTransform(() => (dialFade.get() < 0.4 ? "none" : "auto"));
@@ -262,7 +266,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     const travel = Math.max(range.get(), 1);
     const raw = p.from - dy / travel;
     // The sheet follows the finger between closed and open; beyond, it resists. A named tune can be pulled down and away.
-    open.set(raw > 1 ? 1 + rubber((raw - 1) * travel, 60) / travel : raw < 0 && !shown ? rubber(raw * travel, 60) / travel : raw);
+    open.set(dock ? unit(raw) : raw > 1 ? 1 + rubber((raw - 1) * travel, 60) / travel : raw < 0 && !shown ? rubber(raw * travel, 60) / travel : raw);
   };
   const onPointerEnd = (event: PointerEvent) => {
     const p = pointer.current;
