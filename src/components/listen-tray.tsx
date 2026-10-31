@@ -26,7 +26,6 @@ const SHAPE_SPRING = { stiffness: 280, damping: 24 };
 // The microphone in the deck's head, and the record button it grows into.
 const MINI = 50, BIG = 104;
 // How long a newly named tune stays open while recording before the deck folds back down.
-const RESULT_MS = 8000;
 const TABS = [
   { href: "/", label: "Tunebooks", icon: BookOpen, active: (path: string) => path === "/" || path.startsWith("/books") || path.startsWith("/tunes/") },
   { href: "/recordings", label: "Recordings", icon: Disc3, active: (path: string) => path.startsWith("/recordings") },
@@ -109,15 +108,8 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
 
   // Guesses stay out of the docked sheet while it listens: they come and go, and a card that grows and shrinks with them
   // jumps about. It shows the tune once it is named, or the best guess once listening stops.
-  const result = answer && answer.tuneId !== dismissed && (status === "match" || !listening) ? answer : null;
-  // Open while recording, the tune playing now already leads the sheet; it is not shown twice.
-  const shown = result && !(recording && full) ? result : null;
-  // While recording, a named tune is a passing notice: it folds away after a few seconds.
-  useEffect(() => {
-    if (!recording || !result || full) return;
-    const timer = window.setTimeout(() => setDismissed(result.tuneId), RESULT_MS);
-    return () => window.clearTimeout(timer);
-  }, [recording, result, full]);
+  // A live session keeps the deck folded: the tune playing now shows in its head instead, and its music in the open sheet.
+  const shown = answer && !recording && answer.tuneId !== dismissed && (status === "match" || !listening) ? answer : null;
 
   const canRecord = signedIn && recorder.supported;
 
@@ -228,21 +220,22 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
   const loaded = progress?.total ? progress.loaded / progress.total : 0;
   const arc = answer ? (status === "match" ? 1 : certainty) : listening ? certainty : 0;
   const count = recording ? recording.tunes.length : listener.heard.length;
-  const statusText = recording ? `Live session ${clock(recorder.elapsed)}, ${count} ${count === 1 ? "tune" : "tunes"}`
+  // In a live session: the tune playing now (the last one named), and the ones before it since the recording began.
+  const startedAt = recording ? Date.parse(recording.recordedAt) : 0;
+  const tonight = recording ? listener.heard.filter((h) => h.at >= startedAt) : [];
+  const now = tonight[0]?.tune ?? null;
+  const earlier = tonight.slice(1);
+  const live = `Live ${clock(recorder.elapsed)}, ${count} ${count === 1 ? "tune" : "tunes"}`;
+  const statusText = recording ? (now ? displayTitle(now.title) : "Listening for a tune")
     : phase === "loading" ? `Loading the tune model${progress?.total ? `, ${Math.round(100 * loaded)}%` : ""}`
     : phase === "starting" ? "Asking for the microphone"
     : phase === "denied" ? "Allow the microphone to listen"
     : phase === "error" ? "The tune finder stopped"
     : listening ? (status === "quiet" ? "Too quiet, move closer" : "Listening")
     : answer ? "Tap to name another tune" : "Name a tune";
-  const hint = recording ? (listener.awake ? "Drag up for tonight's tunes" : "Keep the screen on while it records")
+  const hint = recording ? (listener.awake ? live : `${live}. Keep the screen on.`)
     : canRecord ? "Drag up to record the whole session"
     : count > 0 ? `${count} heard tonight` : null;
-  // In a live session: the tune playing now, and the ones named since the recording began.
-  const startedAt = recording ? Date.parse(recording.recordedAt) : 0;
-  const tonight = recording ? listener.heard.filter((h) => h.at >= startedAt) : [];
-  const now = recording ? (answer ?? null) : null;
-  const earlier = tonight.filter((h) => h.tune.tuneId !== now?.tuneId);
   const label = full && canRecord ? (recording ? "Stop recording" : "Start recording the session") : recording ? "Live session: open it" : listening ? "Stop listening" : "Name the tune that's playing";
   const grab = { onPointerDown, onPointerMove, onPointerUp: onPointerEnd, onPointerCancel: onPointerEnd,
     onClickCapture: (event: React.MouseEvent) => { if (dragged.current) { dragged.current = false; event.stopPropagation(); event.preventDefault(); } } };
@@ -257,7 +250,7 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
           <motion.div className="deck-listen" style={{ opacity: headRow }} inert={full}>
             <span ref={miniSlot} className="deck-mic-slot" aria-hidden="true" />
             <button type="button" className="deck-status" onClick={() => go(true)} aria-label={`${statusText}. ${recording ? "Open the live session" : "Open the session recorder"}`}>
-              <span className="deck-status-text">{recording && <span className="finder-rec-dot" aria-hidden="true" />}{statusText}{listening && !recording && status !== "quiet" && <span className="finder-dots" aria-hidden="true"><i /><i /></span>}</span>
+              <span className={`deck-status-text ${now ? "is-tune" : ""}`}>{recording && <span className="finder-rec-dot" aria-hidden="true" />}<span className="deck-status-label">{statusText}</span>{listening && !now && status !== "quiet" && <span className="finder-dots" aria-hidden="true"><i /><i /></span>}</span>
               {hint && <span className="deck-hint">{hint}</span>}
             </button>
             {shown && !full && <button type="button" className="icon-button deck-close" aria-label="Close this tune" onClick={() => setDismissed(shown.tuneId)}><X size={18} /></button>}
@@ -288,27 +281,25 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
 
         {/* The rest of the sheet, below the fold: the recorder, or the live session. */}
         {hydrated && <div className="deck-more" inert={!full}>
-          <div className="deck-record-start">
+          <div className={`deck-record-start ${recording ? "is-live" : ""}`}>
             {canRecord ? <span ref={bigSlot} className="deck-record-slot" aria-hidden="true" /> : null}
-            {recording ? <>
+            {/* Live, the Stop button sits beside the clock, so the tune playing now is the first thing below it. */}
+            {recording ? <div className="deck-live-info">
               <p className="deck-live-clock">{clock(recorder.elapsed)}</p>
-              <p className="deck-copy">{recording.tunes.length} {recording.tunes.length === 1 ? "tune" : "tunes"} so far. Tap to stop and upload.</p>
-            </> : <p className="deck-copy">{canRecord ? "Records the whole session and names each tune as it goes. Tap any tune for its music." : "This browser can't record. You can still name tunes one at a time from the microphone."}</p>}
+              <p className="deck-copy">{!listener.awake ? "Keep the screen on. " : ""}Tap Stop to finish and upload.</p>
+              <Button size="sm" variant="ghost" onClick={() => { go(false); setDimmed(true); }}><Moon size={14} /> Dim the screen</Button>
+            </div> : <p className="deck-copy">{canRecord ? "Records the whole session and names each tune as it goes. Tap any tune for its music." : "This browser can't record. You can still name tunes one at a time from the microphone."}</p>}
           </div>
 
           {recording ? <>
-            <div className="deck-live-bar">
-              {!listener.awake && <span className="finder-warning">Keep the screen on</span>}
-              <Button size="sm" variant="ghost" onClick={() => { go(false); setDimmed(true); }}><Moon size={14} /> Dim the screen</Button>
-            </div>
             {now ? <button type="button" className="deck-now" onClick={() => setScore(now)} aria-label={`${displayTitle(now.title)}: open the full score`}>
-              <span className="deck-now-label">{status === "match" ? "Now playing" : "Possibly"}</span>
+              <span className="deck-now-label">Now playing</span>
               <span className="deck-now-title">{displayTitle(now.title)}</span>
               <span className="deck-now-meta">{[meta(now), standing(now)].filter(Boolean).join(", ")}</span>
               <OpeningPhrase tune={now} />
               <span className="deck-now-more">Tap for the full score</span>
-            </button> : <p className="deck-waiting">Listening for the next tune<span className="finder-dots" aria-hidden="true"><i /><i /></span></p>}
-            {earlier.length > 0 && <section><h3 className="deck-section">Earlier tonight</h3>
+            </button> : <p className="deck-waiting">Listening for the first tune<span className="finder-dots" aria-hidden="true"><i /><i /></span></p>}
+            {earlier.length > 0 && <section><h3 className="deck-section">Played tonight</h3>
               <ul className="deck-tunes">{earlier.map((h) => <li key={`${h.tune.tuneId}-${h.at}`}><button type="button" onClick={() => setScore(h.tune)}>
                 <span className="deck-tune-title">{displayTitle(h.tune.title)}</span><span className="deck-tune-meta">{[meta(h.tune), standing(h.tune), time(h.at)].filter(Boolean).join(", ")}</span>
               </button></li>)}</ul>

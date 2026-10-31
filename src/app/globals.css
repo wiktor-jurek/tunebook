@@ -197,6 +197,7 @@
 .deck.is-recording .finder-dial.is-mini .finder-button{background:var(--brand-dot);color:var(--on-brand-dot)}
 .deck-status{display:grid;flex:1;min-width:0;gap:1px;padding:4px 0;border:0;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}
 .deck-status-text{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}.deck-status .finder-dots{margin-left:0}
+.deck-status-label{min-width:0;overflow:hidden;text-overflow:ellipsis}.deck-status-text.is-tune{font:400 20px/1.2 var(--font-music);letter-spacing:-.02em}
 .deck-hint{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .deck-close{flex:none;width:36px;height:36px;border-radius:50%;background:var(--muted)}
 .deck-scroll{flex:1 1 auto;min-height:0;overflow:hidden;overscroll-behavior:contain;-webkit-user-select:text;user-select:text}.deck[data-open] .deck-scroll{overflow-y:auto}
@@ -222,7 +223,7 @@
 .finder-dial.is-deck .finder-icon{position:relative;display:grid;place-items:center}
 .finder-dial.is-deck .finder-button{color:var(--on-brand-ink)}.deck.is-recording .finder-dial.is-deck .finder-button{color:var(--on-brand-dot)}
 .deck-copy{margin:0;max-width:340px;font-size:14px;line-height:1.45;color:var(--muted-foreground)}
-.deck-live-bar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 10px}.deck-live-clock{margin:-4px 0 0;font:600 28px var(--font-sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.deck-record-start.is-live{grid-template-columns:auto 1fr;align-items:center;justify-items:start;gap:18px;padding:6px 8px 2px;text-align:left}.deck-record-start.is-live .deck-record-slot{margin:0}.deck-live-info{display:grid;justify-items:start;gap:2px}.deck-live-info .button{margin:4px 0 0 -10px}.deck-live-clock{margin:0;font:600 28px var(--font-sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .deck-now{display:grid;justify-items:center;gap:2px;width:100%;padding:16px 14px 12px;border:0;border-radius:16px;background:var(--brand-dot-soft);color:var(--foreground);font:inherit;text-align:center;cursor:pointer;animation:deck-grow var(--duration) var(--ease)}
 .deck-now-label{font-size:12px;font-weight:650;color:var(--brand-dot-text)}.deck-now-title{font:30px/1.15 var(--font-music);letter-spacing:-.02em}.deck-now-meta{font-size:13px;color:var(--muted-foreground)}
 .deck-now .opening-phrase{margin:10px auto 2px}.deck-now-more{font-size:12px;color:var(--text-3)}
