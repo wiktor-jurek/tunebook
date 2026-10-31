@@ -60,6 +60,7 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   session_score_opened: { tune?: string };
   session_recording_started: Record<string, never>;
   session_recording_uploaded: { outcome: Outcome; tune_count: number };
+  session_tune_rejected: { tune: string };
 };
 type Payload = Record<string, unknown>;
 type Tracker = {

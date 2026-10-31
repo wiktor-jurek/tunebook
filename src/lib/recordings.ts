@@ -31,7 +31,7 @@ export async function createRecording(userId: string, input: { name: string; mim
 }
 
 /** Marks an uploaded recording finished and stores its setlist. */
-export async function finishRecording(userId: string, id: string, input: { durationMs: number; tunes: { tuneId: number; settingId: number; startMs: number; endMs: number }[] }) {
+export async function finishRecording(userId: string, id: string, input: { durationMs: number; tunes: { tuneId: number; settingId: number; startMs: number; endMs: number; rejected?: boolean }[] }) {
   await db.transaction(async (tx) => {
     const [row] = await tx.update(recordings).set({ durationMs: input.durationMs, uploadedAt: new Date() })
       .where(and(eq(recordings.id, id), eq(recordings.userId, userId))).returning({ id: recordings.id });
@@ -46,7 +46,7 @@ export async function listRecordings(userId: string) {
   return db.select({ id: recordings.id, name: recordings.name, durationMs: recordings.durationMs, recordedAt: recordings.recordedAt, tunes: sql<number>`count(${recordingTunes.id})::integer`,
     // The first tunes heard, so two recordings from the same day can be told apart.
     firstTunes: sql<string[]>`coalesce((array_agg(${catalogSettings.title} ORDER BY ${recordingTunes.startMs}) FILTER (WHERE ${catalogSettings.title} IS NOT NULL))[1:3], '{}')` })
-    .from(recordings).leftJoin(recordingTunes, eq(recordingTunes.recordingId, recordings.id))
+    .from(recordings).leftJoin(recordingTunes, and(eq(recordingTunes.recordingId, recordings.id), eq(recordingTunes.rejected, false)))
     .leftJoin(catalogSettings, eq(catalogSettings.settingId, recordingTunes.settingId))
     .where(and(eq(recordings.userId, userId), isNotNull(recordings.uploadedAt)))
     .groupBy(recordings.id).orderBy(desc(recordings.recordedAt));
@@ -58,7 +58,7 @@ export async function getRecording(userId: string, id: string) {
   const tunes = await db.select({ id: recordingTunes.id, tuneId: recordingTunes.tuneId, settingId: recordingTunes.settingId, startMs: recordingTunes.startMs, endMs: recordingTunes.endMs,
     title: catalogSettings.title, kind: catalogSettings.kind, meter: catalogSettings.meter, mode: catalogSettings.mode, abc: catalogSettings.abc })
     .from(recordingTunes).innerJoin(catalogSettings, eq(catalogSettings.settingId, recordingTunes.settingId))
-    .where(eq(recordingTunes.recordingId, id)).orderBy(asc(recordingTunes.startMs));
+    .where(and(eq(recordingTunes.recordingId, id), eq(recordingTunes.rejected, false))).orderBy(asc(recordingTunes.startMs));
   const [withPractice, library] = await Promise.all([withTunePractice(userId, tunes), libraryStatus(userId, tunes.map((tune) => tune.tuneId))]);
   return { ...recording, audioUrl: signedBlobUrl(recording.storageKey), books: library.books,
     tunes: withPractice.map((tune) => ({ ...tune, ...library.status(tune.tuneId, tune.settingId) })) };
@@ -67,7 +67,8 @@ export async function getRecording(userId: string, id: string) {
 export async function removeRecordingTune(userId: string, recordingId: string, entryId: string) {
   const owned = await db.select({ id: recordings.id }).from(recordings).where(and(eq(recordings.id, recordingId), eq(recordings.userId, userId))).limit(1);
   if (!owned.length) throw new RecordingError("Recording not found", 404);
-  await db.delete(recordingTunes).where(and(eq(recordingTunes.id, entryId), eq(recordingTunes.recordingId, recordingId)));
+  // Kept, not deleted: a tune named wrongly is training data for the finder.
+  await db.update(recordingTunes).set({ rejected: true }).where(and(eq(recordingTunes.id, entryId), eq(recordingTunes.recordingId, recordingId)));
 }
 
 /** Deletes the recording, its setlist and its audio in the bucket. */

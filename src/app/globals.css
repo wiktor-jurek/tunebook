@@ -218,19 +218,24 @@
 /* The deck's one microphone. It sits over its slot in the head and, as the sheet opens, travels to the record slot and
    grows; --record (0 to 1) fills it with orange from the centre out, so it never passes through a muddy mix. Its icon changes shape in MicShape. */
 .finder-dial.is-deck{position:absolute;left:0;top:0;z-index:2;width:50px;height:50px;will-change:transform}.finder-dial.is-deck[data-hidden]{pointer-events:none}
-.deck-record-slot{display:block;width:104px;height:104px;margin:10px 0 14px}
+.deck-record-slot{display:block;width:88px;height:88px;margin:10px 0 14px}
 .deck-dial-record{position:absolute;inset:0;border-radius:50%;background:var(--brand-dot);transform:scale(var(--record));pointer-events:none}
 .finder-dial.is-deck .finder-icon{position:relative;display:grid;place-items:center}
 .finder-dial.is-deck .finder-button{color:var(--on-brand-ink)}.deck.is-recording .finder-dial.is-deck .finder-button{color:var(--on-brand-dot)}
 .deck-copy{margin:0;max-width:340px;font-size:14px;line-height:1.45;color:var(--muted-foreground)}
 .deck-record-start.is-live{grid-template-columns:auto 1fr;align-items:center;justify-items:start;gap:18px;padding:6px 8px 2px;text-align:left}.deck-record-start.is-live .deck-record-slot{margin:0}.deck-live-info{display:grid;justify-items:start;gap:2px}.deck-live-info .button{margin:4px 0 0 -10px}.deck-live-clock{margin:0;font:600 28px var(--font-sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.deck-now{display:grid;justify-items:center;gap:2px;width:100%;padding:16px 14px 12px;border:0;border-radius:16px;background:var(--brand-dot-soft);color:var(--foreground);font:inherit;text-align:center;cursor:pointer;animation:deck-grow var(--duration) var(--ease)}
-.deck-now-label{font-size:12px;font-weight:650;color:var(--brand-dot-text)}.deck-now-title{font:30px/1.15 var(--font-music);letter-spacing:-.02em}.deck-now-meta{font-size:13px;color:var(--muted-foreground)}
-.deck-now .opening-phrase{margin:10px auto 2px}.deck-now-more{font-size:12px;color:var(--text-3)}
+.deck-now-label{font-size:12px;font-weight:650;color:var(--brand-dot-text)}.deck-now-more{font-size:12px;color:var(--text-3)}
 .deck-waiting{margin:0;padding:22px 0;text-align:center;font-size:15px;color:var(--muted-foreground)}
 .deck-section{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--text-3)}
-.deck-tunes{list-style:none;margin:0;padding:0}.deck-tunes li+li{border-top:1px solid var(--border)}
-.deck-tunes button{display:grid;gap:1px;width:100%;min-height:52px;padding:8px 2px;border:0;background:transparent;color:var(--foreground);font:inherit;text-align:left;cursor:pointer}.deck-tunes button:active{background:var(--muted)}
-.deck-tune-title{font:19px/1.25 var(--font-music)}.deck-tune-meta{font-size:12px;color:var(--text-3)}
+.deck-setlist{display:grid;list-style:none;margin:0;padding:0}.deck-setlist>.deck-section{margin:14px 2px 2px}
+.deck-setlist-item{position:relative;touch-action:pan-y;border-radius:16px;transition:background var(--duration) var(--ease)}.deck-setlist-item+.deck-setlist-item:not([data-open]){border-top:1px solid var(--border);border-radius:0}
+.deck-setlist-item[data-open]{background:var(--brand-dot-soft)}.deck-setlist-item[data-open]+.deck-setlist-item{border-top:0}
+.deck-setlist-item>button{display:grid;gap:1px;width:100%;min-height:56px;padding:9px 4px;border:0;background:transparent;color:var(--foreground);font:inherit;text-align:left;cursor:pointer;-webkit-user-select:none;user-select:none}
+.deck-setlist-item[data-open]>button{padding:14px 14px 12px}.deck-setlist-item:not([data-open])>button:active{background:var(--muted)}
+.deck-setlist-music{display:grid;overflow:hidden}.deck-setlist-music .opening-phrase{margin:10px 0 4px}
+.deck-countdown{position:absolute;inset:-2px;width:calc(100% + 4px);height:calc(100% + 4px);transform:rotate(-90deg);pointer-events:none}.deck-countdown circle{fill:none;stroke:var(--brand-dot);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:100;animation:deck-countdown linear forwards;animation-duration:inherit}
+@keyframes deck-countdown{to{stroke-dashoffset:100}}
+.deck-close{position:relative}
+.deck-tune-title{font:21px/1.25 var(--font-music);letter-spacing:-.01em}.deck-tune-meta{font-size:12px;color:var(--text-3)}
 .deck.is-recording{box-shadow:0 -8px 32px #0000001a,0 -2px 0 var(--brand-dot)}
-.deck-now-meta::first-letter,.deck-tune-meta::first-letter{text-transform:uppercase}
+.deck-tune-meta::first-letter{text-transform:uppercase}

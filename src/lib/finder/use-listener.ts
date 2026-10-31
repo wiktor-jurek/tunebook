@@ -173,8 +173,12 @@ export function useTuneListener() {
 
   // A confident answer that differs from the last one heard joins the list: a set moving on.
   const leader = candidates[0] ? tunes[candidates[0].tuneId] ?? null : null;
+  // A tune said to be wrong is not heard again until the finder has moved on to another.
+  const refused = useRef<number | null>(null);
   useEffect(() => {
     if (status !== "match" || !leader) return;
+    if (leader.tuneId === refused.current) return;
+    refused.current = null;
     heardStore.update((current) => {
       if (current[0]?.tune.tuneId === leader.tuneId) return current;
       trackEvent("tune_finder_matched", { tune: leader.title, seconds: Math.floor((Date.now() - started.current) / 1000) });
@@ -217,6 +221,11 @@ export function useTuneListener() {
 
   const alternatives = candidates.slice(1, 5).flatMap((c) => tunes[c.tuneId] ? [tunes[c.tuneId]] : []);
   const clearHeard = useCallback(() => heardStore.update(() => []), []);
+  /** Drops one heard tune that was named wrongly. */
+  const forgetHeard = useCallback((heard: Heard) => {
+    refused.current = heard.tune.tuneId;
+    heardStore.update((current) => current.filter((h) => !(h.at === heard.at && h.tune.tuneId === heard.tune.tuneId)));
+  }, []);
 
   /** Puts tonight's heard tunes, in the order they were played, into a new tunebook and returns its id. */
   const makeBook = useCallback(async (name: string) => {
@@ -229,5 +238,5 @@ export function useTuneListener() {
   }, [heard]);
   // 0 to 1; a margin of 0.08 is as sure as the finder gets (the old confidence bar used the same scale).
   const certainty = Math.min(1, margin / 0.08);
-  return { phase, progress, status, certainty, awake, tunes, leader, alternatives, heard, level, error, saving, start, stop, restart, save, learnLater, clearHeard, makeBook, stream: () => audio.current?.stream ?? null };
+  return { phase, progress, status, certainty, awake, tunes, leader, alternatives, heard, level, error, saving, start, stop, restart, save, learnLater, clearHeard, forgetHeard, makeBook, stream: () => audio.current?.stream ?? null };
 }

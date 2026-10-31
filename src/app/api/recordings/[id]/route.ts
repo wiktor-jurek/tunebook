@@ -3,7 +3,7 @@ import { z } from "zod";
 import { currentUser } from "@/lib/session";
 import { deleteRecording, finishRecording, RecordingError, removeRecordingTune } from "@/lib/recordings";
 
-const tune = z.object({ tuneId: z.number().int().positive(), settingId: z.number().int().positive(), startMs: z.number().int().min(0), endMs: z.number().int().min(0) }).strict();
+const tune = z.object({ tuneId: z.number().int().positive(), settingId: z.number().int().positive(), startMs: z.number().int().min(0), endMs: z.number().int().min(0), rejected: z.boolean().optional() }).strict();
 const input = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("finish"), durationMs: z.number().int().min(0), tunes: z.array(tune).max(500) }).strict(),
   z.object({ operation: z.literal("removeTune"), entryId: z.uuid() }).strict(),

@@ -12,7 +12,8 @@ const CHUNK_MS = 10_000;
 const NAMING_DELAY_MS = 8_000;
 const TYPES = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"];
 
-export type SetlistEntry = { tuneId: number; settingId: number; title: string; startMs: number; endMs: number };
+// A rejected entry is one the person swiped away as wrong; it uploads anyway, as a labelled mistake.
+export type SetlistEntry = { tuneId: number; settingId: number; title: string; startMs: number; endMs: number; rejected?: boolean };
 export type LocalRecording = { id: string; name: string; mime: string; recordedAt: string; durationMs: number; tunes: SetlistEntry[]; finished: boolean };
 export type UploadState = { id: string; status: "uploading" | "failed"; error?: string };
 
@@ -55,7 +56,7 @@ async function upload(recording: LocalRecording) {
   const put = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": recording.mime.split(";")[0] }, body: audio });
   if (!put.ok) throw new Error("The upload did not finish");
   const finished = await fetch(`/api/recordings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ operation: "finish", durationMs: Math.round(recording.durationMs), tunes: recording.tunes.map(({ tuneId, settingId, startMs, endMs }) => ({ tuneId, settingId, startMs: Math.round(startMs), endMs: Math.round(endMs) })) }) });
+    body: JSON.stringify({ operation: "finish", durationMs: Math.round(recording.durationMs), tunes: recording.tunes.map(({ tuneId, settingId, startMs, endMs, rejected }) => ({ tuneId, settingId, startMs: Math.round(startMs), endMs: Math.round(endMs), rejected: !!rejected })) }) });
   if (!finished.ok) throw new Error((await finished.json()).error || "Could not save the setlist");
   await forget(recording.id);
   return id as string;
@@ -127,6 +128,18 @@ export function useSessionRecorder(enabled: boolean) {
     setActive({ ...state.meta });
   }, []);
 
+  /** Marks a tune's latest setlist entry as wrong. It stays in the setlist, hidden, so the mistake can teach the finder. */
+  const reject = useCallback((tuneId: number) => {
+    const state = recorder.current;
+    if (!state) return;
+    const entry = state.meta.tunes.findLast((t) => t.tuneId === tuneId && !t.rejected);
+    if (!entry) return;
+    entry.rejected = true;
+    void saveMeta(state.meta).catch(() => undefined);
+    setActive({ ...state.meta });
+    trackEvent("session_tune_rejected", { tune: entry.title });
+  }, []);
+
   const stop = useCallback(async () => {
     const state = recorder.current;
     if (!state) return;
@@ -144,5 +157,5 @@ export function useSessionRecorder(enabled: boolean) {
 
   const discard = useCallback(async (id: string) => { await forget(id); await refresh(); }, [refresh]);
 
-  return { supported, active, elapsed, pending, uploads, start, mark, stop, retry: send, discard };
+  return { supported, active, elapsed, pending, uploads, start, mark, reject, stop, retry: send, discard };
 }

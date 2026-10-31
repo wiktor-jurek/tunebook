@@ -1,0 +1,1 @@
+ALTER TABLE "recording_tunes" ADD COLUMN "rejected" boolean DEFAULT false NOT NULL;

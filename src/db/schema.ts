@@ -163,7 +163,8 @@ export const recordings = pgTable("recordings", {
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("recording_storage_key_idx").on(t.storageKey), index("recording_user_idx").on(t.userId, t.recordedAt)]);
 
-// The setlist of a recording: each tune the finder named, and where it starts and ends.
+// The setlist of a recording: each tune the finder named, and where it starts and ends. A tune the person said was wrong
+// (swiped away live, or removed later) stays, marked rejected and hidden: it is a labelled mistake for training the finder.
 export const recordingTunes = pgTable("recording_tunes", {
   id: uuid("id").primaryKey().defaultRandom(),
   recordingId: uuid("recording_id").notNull().references(() => recordings.id, { onDelete: "cascade" }),
@@ -171,4 +172,5 @@ export const recordingTunes = pgTable("recording_tunes", {
   settingId: integer("setting_id").notNull(),
   startMs: integer("start_ms").notNull(),
   endMs: integer("end_ms").notNull(),
+  rejected: boolean("rejected").notNull().default(false),
 }, (t) => [index("recording_tune_recording_idx").on(t.recordingId, t.startMs)]);

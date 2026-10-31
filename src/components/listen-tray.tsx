@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle, type MotionValue } from "motion/react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle, type MotionValue } from "motion/react";
 import { BookOpen, ChevronDown, Disc3, MicOff, Moon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { FinderTune } from "@/lib/library";
-import { useTuneListener } from "@/lib/finder/use-listener";
+import { useTuneListener, type Heard } from "@/lib/finder/use-listener";
 import { useSessionRecorder, type LocalRecording } from "@/lib/finder/use-recorder";
 import { clock, FinderAlternatives, FinderAnswer, FinderHeard, FinderScore, FinderSearch, meta, standing, time, type FinderContext } from "@/components/finder-parts";
 import { OpeningPhrase } from "@/components/opening-phrase";
@@ -24,8 +24,11 @@ const MIC_SPRING = { stiffness: 300, damping: 30, mass: 0.9 };
 // The icon's change of shape (microphone, dot, square) can afford a little more play.
 const SHAPE_SPRING = { stiffness: 280, damping: 24 };
 // The microphone in the deck's head, and the record button it grows into.
-const MINI = 50, BIG = 104;
-// How long a newly named tune stays open while recording before the deck folds back down.
+const MINI = 50, BIG = 88;
+// How long the deck opens for when a live session names a new tune, before it folds back down.
+const PEEK_MS = 5000;
+// How far, or how fast, a tune in the live setlist must be swiped to go.
+const SWIPE = 110, SWIPE_SPEED = 600;
 const TABS = [
   { href: "/", label: "Tunebooks", icon: BookOpen, active: (path: string) => path === "/" || path.startsWith("/books") || path.startsWith("/tunes/") },
   { href: "/recordings", label: "Recordings", icon: Disc3, active: (path: string) => path.startsWith("/recordings") },
@@ -57,6 +60,8 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
   const [dismissed, setDismissed] = useState<number | null>(null);
   const [dimmed, setDimmed] = useState(false);
   const [discarding, setDiscarding] = useState<LocalRecording | null>(null);
+  // While a newly named tune is shown for a moment in a live session; any touch on the deck keeps it open.
+  const [peeking, setPeeking] = useState(false);
   // The hidden part of the sheet renders only once the deck can measure and tuck it away, so a page never loads with it open.
   const hydrated = useSyncExternalStore(noop, () => true, () => false);
   const context: FinderContext = { listener, signedIn, next: "/", onScore: setScore };
@@ -113,9 +118,23 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
 
   const canRecord = signedIn && recorder.supported;
 
+  // In a live session: the tune playing now (the last one named), and the ones before it since the recording began.
+  const startedAt = recording ? Date.parse(recording.recordedAt) : 0;
+  const tonight = recording ? listener.heard.filter((h) => h.at >= startedAt) : [];
+  const now = tonight[0]?.tune ?? null;
+  // A newly named tune opens the folded deck for a moment, then it folds itself away again.
+  const newestKey = tonight[0] ? `${tonight[0].tune.tuneId}-${tonight[0].at}` : null;
+  const [seenKey, setSeenKey] = useState(newestKey);
+  if (newestKey !== seenKey) {
+    setSeenKey(newestKey);
+    if (newestKey && recording && !full && !dimmed) { setFull(true); setPeeking(true); }
+  }
+  const { reject } = recorder, { forgetHeard } = listener;
+  /** A tune swiped away was named wrongly: it leaves the list, and the recording keeps it, marked, for training the finder. */
+  const refuse = useCallback((heard: Heard) => { reject(heard.tune.tuneId); forgetHeard(heard); }, [reject, forgetHeard]);
+
   /** Opens or closes the sheet, springing from wherever it is with the finger's speed (px per second, down positive). */
-  function go(target: boolean, speed = 0) {
-    setFull(target);
+  const slide = useCallback((target: boolean, speed = 0) => {
     if (!target && scroller.current) scroller.current.scrollTop = 0;
     springs.current.forEach((s) => s.stop());
     if (reduced) { open.set(target ? 1 : 0); shift.set(0); springs.current = []; return; }
@@ -123,7 +142,15 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
       animate(open, target ? 1 : 0, { ...SPRING, velocity: -speed / Math.max(range.get(), 1) }),
       animate(shift, 0, SPRING),
     ];
-  }
+  }, [reduced, open, shift, range]);
+  const go = useCallback((target: boolean, speed = 0) => { setFull(target); setPeeking(false); slide(target, speed); }, [slide]);
+  // Peeking, the deck rises, and the ring on its fold button runs down to when it folds again.
+  useEffect(() => {
+    if (!peeking) return;
+    slide(true);
+    const timer = window.setTimeout(() => go(false), PEEK_MS);
+    return () => window.clearTimeout(timer);
+  }, [peeking, slide, go]);
   function listen() { setDismissed(null); void start(); }
   async function startRecording() {
     if (!canRecord || recording) return;
@@ -219,12 +246,7 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
 
   const loaded = progress?.total ? progress.loaded / progress.total : 0;
   const arc = answer ? (status === "match" ? 1 : certainty) : listening ? certainty : 0;
-  const count = recording ? recording.tunes.length : listener.heard.length;
-  // In a live session: the tune playing now (the last one named), and the ones before it since the recording began.
-  const startedAt = recording ? Date.parse(recording.recordedAt) : 0;
-  const tonight = recording ? listener.heard.filter((h) => h.at >= startedAt) : [];
-  const now = tonight[0]?.tune ?? null;
-  const earlier = tonight.slice(1);
+  const count = recording ? recording.tunes.filter((t) => !t.rejected).length : listener.heard.length;
   const live = `Live ${clock(recorder.elapsed)}, ${count} ${count === 1 ? "tune" : "tunes"}`;
   const statusText = recording ? (now ? displayTitle(now.title) : "Listening for a tune")
     : phase === "loading" ? `Loading the tune model${progress?.total ? `, ${Math.round(100 * loaded)}%` : ""}`
@@ -243,7 +265,7 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
 
   return <>
     <motion.div className="deck-scrim" data-open={full ? "" : undefined} style={{ opacity: scrim }} onClick={() => go(false)} aria-hidden="true" />
-    <motion.section ref={deck} className={`deck ${recording ? "is-recording" : ""}`} data-open={full ? "" : undefined} aria-label={recording ? "Live session" : "Listening and navigation"} style={{ y }}>
+    <motion.section ref={deck} className={`deck ${recording ? "is-recording" : ""}`} data-open={full ? "" : undefined} aria-label={recording ? "Live session" : "Listening and navigation"} style={{ y }} onPointerDownCapture={() => setPeeking(false)}>
       <div className="deck-head" {...grab}>
         <span className="deck-grip" aria-hidden="true" />
         <div className="deck-head-layers">
@@ -257,7 +279,11 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
           </motion.div>
           <motion.div className="deck-full-head" style={{ opacity: headTitle }} inert={!full}>
             <h2 className="deck-title">{recording ? "Live session" : "Record a session"}</h2>
-            <button type="button" className="icon-button deck-close" aria-label="Fold the deck down" onClick={() => go(false)}><ChevronDown size={18} /></button>
+            <button type="button" className="icon-button deck-close" aria-label={peeking ? "Fold the deck down now (it folds by itself in a moment)" : "Fold the deck down"} onClick={() => go(false)}>
+              {/* Opened by a new tune, the ring runs down to when it folds by itself. */}
+              {peeking && <svg className="deck-countdown" viewBox="0 0 40 40" aria-hidden="true" style={{ animationDuration: `${PEEK_MS}ms` }}><circle cx="20" cy="20" r="18.5" pathLength={100} /></svg>}
+              <ChevronDown size={18} />
+            </button>
           </motion.div>
         </div>
 
@@ -292,18 +318,8 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
           </div>
 
           {recording ? <>
-            {now ? <button type="button" className="deck-now" onClick={() => setScore(now)} aria-label={`${displayTitle(now.title)}: open the full score`}>
-              <span className="deck-now-label">Now playing</span>
-              <span className="deck-now-title">{displayTitle(now.title)}</span>
-              <span className="deck-now-meta">{[meta(now), standing(now)].filter(Boolean).join(", ")}</span>
-              <OpeningPhrase tune={now} />
-              <span className="deck-now-more">Tap for the full score</span>
-            </button> : <p className="deck-waiting">Listening for the first tune<span className="finder-dots" aria-hidden="true"><i /><i /></span></p>}
-            {earlier.length > 0 && <section><h3 className="deck-section">Played tonight</h3>
-              <ul className="deck-tunes">{earlier.map((h) => <li key={`${h.tune.tuneId}-${h.at}`}><button type="button" onClick={() => setScore(h.tune)}>
-                <span className="deck-tune-title">{displayTitle(h.tune.title)}</span><span className="deck-tune-meta">{[meta(h.tune), standing(h.tune), time(h.at)].filter(Boolean).join(", ")}</span>
-              </button></li>)}</ul>
-            </section>}
+            {tonight.length ? <LiveSetlist tonight={tonight} onScore={setScore} onReject={refuse} />
+              : <p className="deck-waiting">Listening for the first tune<span className="finder-dots" aria-hidden="true"><i /><i /></span></p>}
             {recorder.pending.map((r) => <p className="finder-upload" key={r.id} role="status">{r.name}, waiting to upload</p>)}
           </> : <>
             {recorder.pending.map((r) => { const state = recorder.uploads[r.id]; return <div className="finder-upload" key={r.id} role="status">
@@ -326,6 +342,56 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
     {dimmed && <button type="button" className="finder-pocket" onClick={() => setDimmed(false)} aria-label="Wake the screen"><span>Recording {clock(recorder.elapsed)}</span></button>}
     {score && <FinderScore tune={listener.tunes[score.tuneId] ?? score} context={context} onClose={() => setScore(null)} />}
   </>;
+}
+
+/**
+ * A live session's tunes, newest first. One is open, with its opening bars: the tune playing now, until another is tapped
+ * (a new tune takes it back). Tapping the open one shows its full score. A tune swiped sideways goes, as named wrongly.
+ */
+function LiveSetlist({ tonight, onScore, onReject }: { tonight: Heard[]; onScore: (tune: FinderTune) => void; onReject: (heard: Heard) => void }) {
+  const key = (heard: Heard) => `${heard.tune.tuneId}-${heard.at}`;
+  const newest = key(tonight[0]);
+  const [chosen, setChosen] = useState<{ key: string; newest: string } | null>(null);
+  const openKey = chosen && chosen.newest === newest && tonight.some((h) => key(h) === chosen.key) ? chosen.key : newest;
+  return <ul className="deck-setlist">
+    <AnimatePresence initial={false}>
+      {tonight.flatMap((heard, index) => {
+        const item = <SetlistItem key={key(heard)} heard={heard} now={index === 0} open={key(heard) === openKey}
+          onOpen={() => setChosen({ key: key(heard), newest })} onScore={() => onScore(heard.tune)} onReject={() => onReject(heard)} />;
+        return index === 1 ? [<motion.li layout="position" key="played" className="deck-section" exit={{ opacity: 0 }}>Played tonight</motion.li>, item] : [item];
+      })}
+    </AnimatePresence>
+  </ul>;
+}
+
+function SetlistItem({ heard, now, open, onOpen, onScore, onReject }: { heard: Heard; now: boolean; open: boolean; onOpen: () => void; onScore: () => void; onReject: () => void }) {
+  const { tune, at } = heard;
+  const x = useMotionValue(0);
+  const fade = useTransform(() => 1 - unit(Math.abs(x.get()) / 240));
+  // A swipe that ends over the tune is not also a tap.
+  const swiped = useRef(false);
+  const title = displayTitle(tune.title);
+  return <motion.li layout="position" className="deck-setlist-item" data-open={open ? "" : undefined} style={{ x, opacity: fade }}
+    drag="x" dragDirectionLock dragSnapToOrigin dragElastic={0.9} onDragStart={() => { swiped.current = true; }}
+    onDragEnd={(_, info) => {
+      if (Math.abs(info.offset.x) < SWIPE && Math.abs(info.velocity.x) < SWIPE_SPEED) return;
+      const away = Math.sign(info.offset.x || info.velocity.x) * window.innerWidth;
+      void animate(x, away, { duration: 0.2, ease: "easeOut" }).then(onReject);
+    }}
+    exit={{ height: 0, opacity: 0, transition: { duration: 0.22 } }}
+    onClickCapture={(event) => { if (swiped.current) { swiped.current = false; event.stopPropagation(); } }}>
+    <button type="button" onClick={open ? onScore : onOpen} aria-label={open ? `${title}: open the full score` : `${title}: show its opening bars`}>
+      {(open || now) && <span className="deck-now-label">{now ? "Now playing" : `Played at ${time(at)}`}</span>}
+      <span className="deck-tune-title">{title}</span>
+      <span className="deck-tune-meta">{[meta(tune), standing(tune), open || now ? null : time(at)].filter(Boolean).join(", ")}</span>
+      <AnimatePresence initial={false}>
+        {open && <motion.span className="deck-setlist-music" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ type: "spring", stiffness: 300, damping: 35 }}>
+          <OpeningPhrase tune={tune} />
+          <span className="deck-now-more">Tap for the full score. Swipe it away if it is wrong.</span>
+        </motion.span>}
+      </AnimatePresence>
+    </button>
+  </motion.li>;
 }
 
 /**
