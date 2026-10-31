@@ -216,14 +216,12 @@
 .deck-full-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.deck-full-head .deck-title{margin:0}
 .deck-record-start{display:grid;justify-items:center;gap:12px;padding:14px 8px 6px;text-align:center}
 /* The deck's one microphone. It sits over its slot in the head and, as the sheet opens, travels to the record slot and
-   grows; --record (0 to 1) blends it from green into the orange record button. Recording, its dot softens into Stop. */
+   grows; --record (0 to 1) fills it with orange from the centre out, so it never passes through a muddy mix. Its icon changes shape in MicShape. */
 .finder-dial.is-deck{position:absolute;left:0;top:0;z-index:2;width:50px;height:50px;will-change:transform}.finder-dial.is-deck[data-hidden]{pointer-events:none}
 .deck-record-slot{display:block;width:104px;height:104px;margin:10px 0 14px}
-.deck-dial-record{position:absolute;inset:0;border-radius:50%;background:var(--brand-dot);opacity:var(--record);pointer-events:none}
-.finder-dial.is-deck .finder-icon,.deck-dial-glyph{grid-area:1/1;position:relative;display:grid;place-items:center}
+.deck-dial-record{position:absolute;inset:0;border-radius:50%;background:var(--brand-dot);transform:scale(var(--record));pointer-events:none}
+.finder-dial.is-deck .finder-icon{position:relative;display:grid;place-items:center}
 .finder-dial.is-deck .finder-button{color:var(--on-brand-ink)}.deck.is-recording .finder-dial.is-deck .finder-button{color:var(--on-brand-dot)}
-.deck-dial-glyph .deck-rec-glyph{width:14px;height:14px;border-radius:50%;background:var(--on-brand-dot);transition:border-radius .35s var(--ease),width .35s var(--ease),height .35s var(--ease)}
-.deck.is-recording .deck-dial-glyph .deck-rec-glyph{width:11px;height:11px;border-radius:2.5px}
 .deck-copy{margin:0;max-width:340px;font-size:14px;line-height:1.45;color:var(--muted-foreground)}
 .deck-live-bar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 10px}.deck-live-clock{margin:-4px 0 0;font:600 28px var(--font-sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .deck-now{display:grid;justify-items:center;gap:2px;width:100%;padding:16px 14px 12px;border:0;border-radius:16px;background:var(--brand-dot-soft);color:var(--foreground);font:inherit;text-align:center;cursor:pointer;animation:deck-grow var(--duration) var(--ease)}

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle } from "motion/react";
-import { BookOpen, ChevronDown, Disc3, Mic, MicOff, Moon, Square, X } from "lucide-react";
+import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle, type MotionValue } from "motion/react";
+import { BookOpen, ChevronDown, Disc3, MicOff, Moon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { FinderTune } from "@/lib/library";
@@ -17,10 +17,12 @@ import { displayTitle } from "@/lib/titles";
 const DRAG_START = 8, DRAG_DONE = 44;
 // A flick counts as much as a long drag: px per ms.
 const FLICK = 0.3;
-// Damped just short of still, so the sheet lands with a small overshoot, like iOS sheets.
-const SPRING = { type: "spring", stiffness: 340, damping: 26 } as const;
-// The microphone follows the sheet on a looser spring of its own: it trails the finger a touch and settles with a bounce.
-const MIC_SPRING = { stiffness: 260, damping: 17, mass: 0.9 };
+// Critically damped, as iOS sheets are: quick, and it comes to rest without bouncing.
+const SPRING = { type: "spring", stiffness: 300, damping: 35 } as const;
+// The microphone follows the sheet on a spring of its own, so it trails the finger a touch and settles with the faintest give.
+const MIC_SPRING = { stiffness: 300, damping: 30, mass: 0.9 };
+// The icon's change of shape (microphone, dot, square) can afford a little more play.
+const SHAPE_SPRING = { stiffness: 280, damping: 24 };
 // The microphone in the deck's head, and the record button it grows into.
 const MINI = 50, BIG = 104;
 // How long a newly named tune stays open while recording before the deck folds back down.
@@ -33,6 +35,7 @@ const TABS = [
 const rubber = (distance: number, limit: number) => (distance * limit) / (limit + Math.abs(distance));
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 const noop = () => () => undefined;
+const mix = (from: number, to: number, amount: number) => from + (to - from) * amount;
 type Spot = { x: number; y: number };
 
 /**
@@ -78,8 +81,12 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
   const dialFade = useTransform(() => (big.get() ? 1 : unit(1 - open.get() * 1.8)));
   const headRow = useTransform(() => unit(1 - open.get() * 1.8));
   const headTitle = useTransform(() => unit((open.get() - 0.45) / 0.55));
-  const iconMic = useTransform(() => unit(1 - grow.get()));
   const recordTint = useTransform(() => unit(grow.get()));
+  // Stop shows as a square: always while recording, and while listening for one tune with the deck closed.
+  const recordingNow = useMotionValue(0), listeningNow = useMotionValue(0);
+  useEffect(() => { recordingNow.set(recording ? 1 : 0); listeningNow.set(listening ? 1 : 0); }, [recording, listening, recordingNow, listeningNow]);
+  const recordingShape = useSpring(recordingNow, SHAPE_SPRING), listeningShape = useSpring(listeningNow, SHAPE_SPRING);
+  const squareness = useTransform(() => unit(Math.max(recordingShape.get(), listeningShape.get() * (1 - unit(grow.get())))));
 
   const deck = useRef<HTMLElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -234,8 +241,6 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
   const tonight = recording ? listener.heard.filter((h) => h.at >= startedAt) : [];
   const now = recording ? (answer ?? null) : null;
   const earlier = tonight.filter((h) => h.tune.tuneId !== now?.tuneId);
-  const iconKey = recording || listening ? "stop" : phase === "denied" ? "denied" : "mic";
-  const icon = { stop: <Square size={16} fill="currentColor" />, denied: <MicOff size={20} />, mic: <Mic size={20} /> }[iconKey];
   const label = full && canRecord ? (recording ? "Stop recording" : "Start recording the session") : recording ? "Live session: open it" : listening ? "Stop listening" : "Name the tune that's playing";
   const grab = { onPointerDown, onPointerMove, onPointerUp: onPointerEnd, onPointerCancel: onPointerEnd,
     onClickCapture: (event: React.MouseEvent) => { if (dragged.current) { dragged.current = false; event.stopPropagation(); event.preventDefault(); } } };
@@ -267,8 +272,7 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
           <svg className="finder-arc" viewBox="0 0 100 100" aria-hidden="true"><circle className="finder-arc-track" cx="50" cy="50" r="48" /><circle className="finder-arc-fill" data-empty={arc <= 0 ? "" : undefined} cx="50" cy="50" r="48" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - 100 * arc} /></svg>
           <button type="button" className="finder-button" data-phase={phase} disabled={busy} onClick={press} aria-label={label}>
             <span className="deck-dial-record" aria-hidden="true" />
-            <motion.span className="finder-icon" key={iconKey} style={{ opacity: iconMic }}>{icon}</motion.span>
-            <motion.span className="deck-dial-glyph" style={{ opacity: recordTint }} aria-hidden="true"><span className="deck-rec-glyph" /></motion.span>
+            <span className="finder-icon">{phase === "denied" ? <MicOff size={20} /> : <MicShape dot={recordTint} square={squareness} />}</span>
           </button>
         </motion.div>
       </div>
@@ -329,4 +333,23 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
     {dimmed && <button type="button" className="finder-pocket" onClick={() => setDimmed(false)} aria-label="Wake the screen"><span>Recording {clock(recorder.elapsed)}</span></button>}
     {score && <FinderScore tune={listener.tunes[score.tuneId] ?? score} context={context} onClose={() => setScore(null)} />}
   </>;
+}
+
+/**
+ * The deck's microphone, drawn so it can change shape: as the deck opens its stand undraws and the capsule swells and fills
+ * into the record dot (`dot`, 0 to 1); listening or recording, it squares off into Stop (`square`, 0 to 1).
+ */
+function MicShape({ dot, square }: { dot: MotionValue<number>; square: MotionValue<number> }) {
+  // Lucide's microphone capsule, the record dot and the stop square, in its 24-unit box.
+  const round = useTransform(() => unit(Math.max(dot.get(), square.get())));
+  const between = (capsule: number, disc: number, box: number) => mix(mix(capsule, disc, round.get()), box, square.get());
+  const width = useTransform(() => between(6, 16, 12)), height = useTransform(() => between(13, 16, 12)), corner = useTransform(() => between(3, 8, 2.5));
+  const x = useTransform(() => 12 - width.get() / 2);
+  const y = useTransform(() => between(2, 4, 6));
+  const stand = useTransform(() => 1 - round.get());
+  return <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <motion.rect width={width} height={height} rx={corner} fill="currentColor" fillOpacity={round} style={{ x, y }} />
+    <motion.path d="M19 10v2a7 7 0 0 1-14 0v-2" style={{ pathLength: stand, opacity: stand }} />
+    <motion.path d="M12 19v3" style={{ pathLength: stand, opacity: stand }} />
+  </svg>;
 }
