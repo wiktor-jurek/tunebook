@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BookOpen, ChevronRight } from "lucide-react";
-import { getLibrary } from "@/lib/library";
+import { getLibrary, getTuneBooks } from "@/lib/library";
 import { SessionBook } from "@/components/session-book";
 
 type BookRow = { id: string; name: string; emoji: string | null };
@@ -22,14 +22,16 @@ export async function SessionBookList({ userId }: { userId: string }) {
   return <div className="session-screen"><h1 className="session-title">Tunebooks</h1><BookRows books={books} sharedBooks={sharedBooks} /></div>;
 }
 
-/** Session mode's home: every tune you have, each opening to its score, or the same tunes as your tunebooks. */
-export async function SessionTunes({ userId, view }: { userId: string; view: "tunes" | "books" }) {
-  const { tunes, books, sharedBooks } = await getLibrary(userId);
-  const tab = (value: typeof view, href: string, label: string) => <Link href={href} replace className="appearance-option" aria-current={view === value ? "page" : undefined}>{label}</Link>;
-  return <div className="session-screen"><h1 className="session-title">Tunes</h1>
-    <nav className="appearance-picker session-switch" aria-label="Show">{tab("tunes", "/", "All tunes")}{tab("books", "/?view=books", "Tunebooks")}</nav>
-    {view === "books" ? <BookRows books={books} sharedBooks={sharedBooks} />
-      : tunes.length ? <SessionBook name="Tunes" searchable groupable sections={tunes.map((tune) => ({ kind: "tune", entryId: tune.id, tune: { ...tune, oftenPlayed: false } }))} />
-      : <p className="session-empty">Save tunes at home, or name one that&apos;s playing with the microphone below, and they appear here.</p>}
+/**
+ * Session mode's home: every tune you have, each opening to its score, grouped as you choose. Grouped by tunebook, each
+ * book's heading opens it, and books shared with you follow.
+ */
+export async function SessionTunes({ userId }: { userId: string }) {
+  const [{ tunes, sharedBooks }, books] = await Promise.all([getLibrary(userId), getTuneBooks(userId)]);
+  if (!tunes.length) return <div className="session-screen"><h1 className="session-title">Tunes</h1>
+    <p className="session-empty">Save tunes at home, or name one that&apos;s playing with the microphone below, and they appear here.</p>
+    {sharedBooks.length > 0 && <BookRows books={[]} sharedBooks={sharedBooks} />}</div>;
+  return <div className="session-screen">
+    <SessionBook name="Tunes" searchable groupable books={books} shared={sharedBooks} sections={tunes.map((tune) => ({ kind: "tune", entryId: tune.id, tune: { ...tune, oftenPlayed: false } }))} />
   </div>;
 }

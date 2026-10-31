@@ -27,6 +27,26 @@ export async function getLibrary(userId: string) {
   return { folders: allFolders, books: allBooks, tunes: allTunes, sharedBooks, sets };
 }
 
+export type TuneBook = { id: string; name: string; emoji: string | null; tuneIds: string[] };
+
+/** Each of the person's tunebooks with the saved tunes in it (a set's tunes included), in playing order. */
+export async function getTuneBooks(userId: string): Promise<TuneBook[]> {
+  const rows = await db.execute<{ id: string; name: string; emoji: string | null; tuneId: string | null }>(sql`
+    SELECT b.id, b.name, b.emoji, coalesce(be.tune_id, st.tune_id) AS "tuneId"
+    FROM ${tunebooks} b
+    LEFT JOIN ${bookEntries} be ON be.book_id = b.id
+    LEFT JOIN ${setTunes} st ON st.set_id = be.set_id
+    WHERE b.user_id = ${userId}
+    ORDER BY lower(b.name), b.id, be.position, st.position`);
+  const books = new Map<string, TuneBook>();
+  for (const row of rows.rows) {
+    const book = books.get(row.id) ?? { id: row.id, name: row.name, emoji: row.emoji, tuneIds: [] };
+    if (row.tuneId && !book.tuneIds.includes(row.tuneId)) book.tuneIds.push(row.tuneId);
+    books.set(row.id, book);
+  }
+  return [...books.values()];
+}
+
 export async function getSavedTunes(userId: string) {
   const tunes = await db.select().from(savedTunes).where(eq(savedTunes.userId, userId)).orderBy(asc(savedTunes.title));
   return withTunePractice(userId, await withTuneEmojis(tunes));

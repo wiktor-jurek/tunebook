@@ -313,8 +313,14 @@ body:has(.deck.is-dock) .group-bar{bottom:92px}
 .table-group-row>th{padding:22px 12px 8px;font-size:13px;font-weight:650;color:var(--foreground);background:transparent;text-align:left}
 .table-group-row:first-child>th{padding-top:10px}
 .table-group-count,.session-group-count{margin-left:8px;font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}
-.session-tools{display:flex;gap:8px;align-items:center;margin:0 0 12px}
-.session-tools .session-search{flex:1;min-width:0;margin:0}
-.session-group-by select{min-height:44px;max-width:46vw;padding:0 10px;border:1px solid var(--input);border-radius:var(--radius-row,10px);background:var(--card);color:var(--foreground);font:inherit;font-size:14px}
 .session-list>section:first-child>.session-group-title{margin-top:4px}
 .recordings-list .session-row-meta{text-transform:none}.recordings-list .session-row-meta::first-letter{text-transform:uppercase}
+
+/* The Tunes screen on a phone: the title with a quiet grouping button level with it, then a filled search bar. */
+.session-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.group-menu-button{display:inline-flex;align-items:center;gap:4px;flex:none;min-height:36px;padding:0 12px;border:0;border-radius:18px;background:var(--muted);color:var(--foreground);font:600 14px var(--font-ui);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.group-menu-button:active{opacity:.7}.group-menu-button[data-state=open]{background:var(--brand-dot-soft)}
+.session-screen .session-search{min-height:40px;margin:0 0 14px;border-color:transparent;background:var(--muted)}
+.session-group-link{display:inline-flex;align-items:center;gap:6px;color:inherit}.session-group-link:hover{text-decoration:none;color:var(--foreground)}
+.session-group-link>svg:last-child{margin-left:-2px;opacity:.7}
+.table-group-link{color:inherit;text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:3px}

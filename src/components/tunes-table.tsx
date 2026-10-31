@@ -12,7 +12,7 @@ import { keyName } from "@/lib/notation";
 import { ABILITY_LABELS, ABILITY_LEVELS, type AbilityLevel } from "@/lib/ability";
 import type { TuneWithPractice } from "@/lib/tune-practice";
 import { displayTitle } from "@/lib/titles";
-import { GROUP_BYS, GROUP_BY_LABELS, groupTunes, setGroupBy, useGroupBy, type GroupBy } from "@/lib/tune-groups";
+import { GROUP_BYS, GROUP_BY_LABELS, groupTunes, setGroupBy, useGroupBy, type GroupBook, type GroupBy } from "@/lib/tune-groups";
 
 type SortKey = "title" | "kind" | "mode" | "ability" | "added";
 type Sort = { key: SortKey; descending: boolean };
@@ -28,7 +28,7 @@ const SORTS: Record<SortKey, (a: TuneWithPractice, b: TuneWithPractice) => numbe
   added: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
 };
 
-export function TunesTable({ tunes }: { tunes: TuneWithPractice[] }) {
+export function TunesTable({ tunes, books = [] }: { tunes: TuneWithPractice[]; books?: GroupBook[] }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("");
   const [level, setLevel] = useState<AbilityLevel | "">("");
@@ -44,7 +44,7 @@ export function TunesTable({ tunes }: { tunes: TuneWithPractice[] }) {
   const filtered = Boolean(query || kind || level);
   // Grouped, each group keeps the chosen sort inside it.
   const groupBy = useGroupBy();
-  const groups = useMemo(() => groupTunes(shown, groupBy), [shown, groupBy]);
+  const groups = useMemo(() => groupTunes(shown, groupBy, books), [shown, groupBy, books]);
 
   function header(key: SortKey, label: string, className?: string) {
     const active = sort.key === key;
@@ -67,7 +67,7 @@ export function TunesTable({ tunes }: { tunes: TuneWithPractice[] }) {
       <TableHeader><TableRow>{header("title", "Tune")}{header("kind", "Type", "table-wide")}{header("mode", "Key", "table-wide")}{header("ability", "Progress")}{header("added", "Added", "table-wide table-added")}<TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
       <TableBody>
         {groups.map((group) => <Fragment key={group.key}>
-          {group.label && <TableRow className="table-group-row"><TableHead colSpan={6} scope="colgroup">{group.label}<span className="table-group-count">{group.tunes.length}</span></TableHead></TableRow>}
+          {group.label && <TableRow className="table-group-row"><TableHead colSpan={6} scope="colgroup">{group.book ? <Link className="table-group-link" href={`/books/${group.book.id}`}>{group.label}</Link> : group.label}<span className="table-group-count">{group.tunes.length}</span></TableHead></TableRow>}
           {group.tunes.map((tune) => <TableRow key={tune.id}>
           <TableCell><div className="table-tune"><div><span className="table-title-line"><TuneIcon tune={tune} size="inline" /><Link href={`/tunes/${tune.id}`} className="table-title">{displayTitle(tune.title)}</Link></span><span className="table-meta">{tune.meter}<span className="table-narrow">{tune.kind && <>, <span className="table-kind">{tune.kind}</span></>}{tune.mode && `, ${keyName(tune.mode)}`}</span></span></div></div></TableCell>
           <TableCell className="table-wide table-kind">{tune.kind}</TableCell>
