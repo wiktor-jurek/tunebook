@@ -9,7 +9,7 @@ export function registerSetTools(server: McpServer, context: Context) {
 
   server.registerTool("libresession_create_set", {
     title: "Group tunes into a set",
-    description: "Create a set (2-100 tunes played together, in order) inside a tunebook. Tunes not yet in the tunebook are added; individual entries for these tunes are replaced by the set, placed where the first of them was. A set is reusable: add it to other tunebooks with libresession_add_to_tunebook.",
+    description: "Create a set (2-100 tunes played together, in order) inside a tunebook. Tunes not yet in the tunebook are added; individual entries for these tunes are replaced by the set, placed where the first of them was. A set belongs to its tunebook (the session it is played at); to use it elsewhere, copy it with libresession_add_to_tunebook.",
     inputSchema: {
       book_id: uuid("Tunebook to create the set in"),
       saved_tune_ids: z.array(z.uuid()).min(2).max(100).describe("Saved tune IDs in playing order"),
@@ -24,7 +24,7 @@ export function registerSetTools(server: McpServer, context: Context) {
 
   server.registerTool("libresession_update_set", {
     title: "Edit a set",
-    description: "Change a set's tunes, their playing order and/or its name. Changes apply in every tunebook that uses the set. Omitted fields stay the same; saved_tune_ids replaces the whole membership.",
+    description: "Change a set's tunes, their playing order and/or its name. Omitted fields stay the same; saved_tune_ids replaces the whole membership.",
     inputSchema: {
       set_id: uuid("Set to edit"),
       saved_tune_ids: z.array(z.uuid()).min(2).max(100).optional().describe("New full list of saved tune IDs in playing order"),
@@ -45,7 +45,7 @@ export function registerSetTools(server: McpServer, context: Context) {
 
   server.registerTool("libresession_delete_set", {
     title: "Delete a set",
-    description: "Delete a set everywhere. In every tunebook that used it, its tunes stay as individual entries in the same place; saved tunes are not deleted. Confirm with the user first.",
+    description: "Delete a set. In its tunebook, its tunes stay as individual entries in the same place; saved tunes are not deleted. Confirm with the user first.",
     inputSchema: { set_id: uuid("Set to delete") },
     outputSchema: { deleted: z.boolean() },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },

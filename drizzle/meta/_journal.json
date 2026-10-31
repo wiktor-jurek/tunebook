@@ -113,6 +113,13 @@
       "when": 1793450396872,
       "tag": "0017_recording_tune_rejected",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793520000000,
+      "tag": "0018_set_lives_in_book",
+      "breakpoints": true
     }
   ]
 }

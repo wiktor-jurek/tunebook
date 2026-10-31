@@ -11,18 +11,18 @@ const state = vi.hoisted(() => ({ db: null as unknown as NodePgDatabase, user: n
 vi.mock("@/db", () => ({ get db() { return state.db; } }));
 vi.mock("@/lib/session", () => ({ currentUser: async () => state.user }));
 
-import { addSet, changeEntry, deleteSet, editSet, getMySets, getOftenPlayedWith, groupTunes, moveSetTune } from "./sets";
+import { changeEntry, copySet, deleteSet, editSet, getMySets, getOftenPlayedWith, groupTunes, moveSetTune } from "./sets";
 import { getBook } from "./library";
 import { POST as setsRoute } from "@/app/api/sets/route";
 import { POST as libraryRoute } from "@/app/api/library/route";
 import { POST as saveBook } from "@/app/api/books/[id]/save/route";
 
-describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreSQL)", () => {
+describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered sets, each in its own tunebook (PostgreSQL)", () => {
   const schema = `sets_test_${randomUUID().replaceAll("-", "")}`;
   const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, options: `-c search_path=${schema}`, connectionTimeoutMillis: 5000 });
   let owner: typeof user.$inferSelect, stranger: typeof user.$inferSelect;
   let tunes: (typeof savedTunes.$inferSelect)[], sourceId: string, secondId: string, privateId: string;
-  let setId: string;
+  let setId: string, copiedId: string;
   const legacySetId = randomUUID();
   const request = (body: unknown) => new Request("http://localhost:3000/api/sets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const book = (id = sourceId) => getBook(owner.id, id);
@@ -69,30 +69,32 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
     expect((await getMySets(owner.id))[0].books.map((book) => book.id)).toEqual([sourceId]);
   });
 
-  it("adds a reusable set and absorbs existing individual members without duplicates", async () => {
+  it("copies a set into another tunebook as its own set, absorbing existing individual members", async () => {
     await state.db.insert(bookEntries).values([{ bookId: secondId, tuneId: tunes[0].id, position: 0 }, { bookId: secondId, tuneId: tunes[1].id, position: 1 }]);
-    await addSet(owner.id, secondId, setId);
+    copiedId = await copySet(owner.id, secondId, setId);
+    expect(copiedId).not.toBe(setId);
     expect(await titles(secondId)).toEqual(["B", "C", "A"]);
-    expect((await getMySets(owner.id))[0].books).toHaveLength(2);
-    await expect(addSet(owner.id, secondId, setId)).rejects.toThrow("already in");
+    expect((await getMySets(owner.id)).map((set) => set.books.length)).toEqual([1, 1]);
+    await expect(copySet(owner.id, secondId, copiedId)).rejects.toThrow("already in");
+    await expect(state.db.insert(bookEntries).values({ bookId: secondId, setId, position: 9 })).rejects.toThrow();
   });
 
-  it("moves sets as a unit and updates internal order across linked books", async () => {
+  it("moves sets as a unit, and a copy keeps its own order and name", async () => {
     const placement = (await book(secondId))!.sections.find((section) => section.kind === "set")!;
     await changeEntry(owner.id, secondId, placement.entryId, "up");
     expect(await titles(secondId)).toEqual(["C", "A", "B"]);
     await moveSetTune(owner.id, setId, tunes[0].id, "up");
     expect(await titles()).toEqual(["A", "C", "B", "D"]);
-    expect(await titles(secondId)).toEqual(["A", "C", "B"]);
+    expect(await titles(secondId)).toEqual(["C", "A", "B"]);
     await editSet(owner.id, setId, "Renamed set", [tunes[3].id, tunes[2].id, tunes[0].id]);
-    expect((await book(secondId))!.sections[0]).toMatchObject({ name: "Renamed set" });
-    expect(await titles(secondId)).toEqual(["D", "C", "A", "B"]);
+    expect((await book(secondId))!.sections[0]).toMatchObject({ name: "My jigs" });
+    expect(await titles(secondId)).toEqual(["C", "A", "B"]);
     expect(await titles()).toEqual(["D", "C", "A", "B", "D"]);
     expect(new Set((await book())!.tunes.map((row) => row.instanceId)).size).toBe(5);
   });
 
-  it("counts tune relationships once per set rather than once per linked book", async () => {
-    expect((await getOftenPlayedWith(owner.id, tunes[0].tuneId)).rows).toEqual([{ tuneId: 3, setCount: 1 }, { tuneId: 4, setCount: 1 }]);
+  it("counts how many sets pair two tunes, across every tunebook", async () => {
+    expect((await getOftenPlayedWith(owner.id, tunes[0].tuneId)).rows).toEqual([{ tuneId: 3, setCount: 2 }, { tuneId: 4, setCount: 1 }]);
   });
 
   it("shares grouped contents and saves private set copies with the same playing order", async () => {
@@ -115,39 +117,30 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
 
   it("rejects grouping private data, invalid membership and unauthenticated edits", async () => {
     state.user = null;
-    expect((await setsRoute(request({ operation: "add", bookId: secondId, setId }))).status).toBe(401);
+    expect((await setsRoute(request({ operation: "copy", bookId: secondId, setId }))).status).toBe(401);
     state.user = stranger;
-    for (const body of [{ operation: "add", bookId: privateId, setId }, { operation: "edit", setId, name: "Hijacked", tuneIds: [tunes[0].id, tunes[1].id] }, { operation: "delete", setId }]) {
+    for (const body of [{ operation: "copy", bookId: privateId, setId }, { operation: "edit", setId, name: "Hijacked", tuneIds: [tunes[0].id, tunes[1].id] }, { operation: "fromTunes", bookId: privateId, tuneIds: [tunes[0].id, tunes[1].id] }]) {
       expect((await setsRoute(request(body))).status).toBe(400);
     }
-    await expect(addSet(owner.id, privateId, setId)).rejects.toThrow("Tunebook not found");
+    await expect(copySet(owner.id, privateId, setId)).rejects.toThrow("Tunebook not found");
     await expect(editSet(owner.id, setId, "Invalid", [tunes[0].id, tunes[0].id])).rejects.toThrow("different tunes");
     await expect(editSet(owner.id, setId, "Invalid", [tunes[0].id, randomUUID()])).rejects.toThrow("not in your library");
     state.user = owner;
     expect((await setsRoute(request({ operation: "edit", setId, name: "", tuneIds: [tunes[0].id] }))).status).toBe(400);
     expect((await libraryRoute(request({ operation: "deleteSavedTune", tuneId: tunes[0].id }))).status).toBe(400);
-    expect((await getMySets(owner.id))[0].name).toBe("Updated original");
+    expect((await getMySets(owner.id)).find((set) => set.id === setId)?.name).toBe("Updated original");
   });
 
-  it("ungroups one placement without changing the reusable set or other books", async () => {
+  it("ungroups a set into single tunes in place, which ends that set and no other", async () => {
     const placement = (await book(secondId))!.sections.find((section) => section.kind === "set")!;
     await changeEntry(owner.id, secondId, placement.entryId, "ungroup");
-    expect(await titles(secondId)).toEqual(["A", "C", "B"]);
+    expect(await titles(secondId)).toEqual(["C", "A", "B"]);
     expect((await book(secondId))!.sections.every((section) => section.kind === "tune")).toBe(true);
-    expect((await getMySets(owner.id))[0].books).toHaveLength(1);
+    expect(await state.db.select().from(tuneSets).where(eq(tuneSets.id, copiedId))).toEqual([]);
     expect((await book())!.sections[0].kind).toBe("set");
   });
 
-  it("keeps removed sets in My sets and can insert them again", async () => {
-    const placement = (await book())!.sections.find((section) => section.kind === "set")!;
-    await changeEntry(owner.id, sourceId, placement.entryId, "remove");
-    expect(await titles()).toEqual(["B", "D"]);
-    expect((await getMySets(owner.id))[0].books).toHaveLength(0);
-    await addSet(owner.id, sourceId, setId);
-    expect(await titles()).toEqual(["B", "D", "A", "C"]);
-  });
-
-  it("deletes a set definition while preserving tunes and order in linked books", async () => {
+  it("deletes a set while preserving its tunes and order in its tunebook", async () => {
     const before = await titles();
     await deleteSet(owner.id, setId);
     expect(await titles()).toEqual(before);
@@ -155,6 +148,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
     expect(await state.db.select().from(setTunes).where(eq(setTunes.setId, setId))).toEqual([]);
     expect(await state.db.select().from(tuneSets).where(eq(tuneSets.id, setId))).toEqual([]);
     expect((await state.db.select().from(savedTunes).where(and(eq(savedTunes.userId, owner.id), eq(savedTunes.id, tunes[0].id))))).toHaveLength(1);
+  });
+
+  it("removes a set and its tunes from the tunebook, ending the set", async () => {
+    const sections = (await book())!.sections;
+    const removedId = await groupTunes(owner.id, sourceId, undefined, [sections[2].entryId, sections[3].entryId]);
+    const placement = (await book())!.sections.find((section) => section.kind === "set")!;
+    await changeEntry(owner.id, sourceId, placement.entryId, "remove");
+    expect(await titles()).toEqual(["A", "C"]);
+    expect(await state.db.select().from(tuneSets).where(eq(tuneSets.id, removedId))).toEqual([]);
   });
 
   it("retains cascading account cleanup with linked sets", async () => {
@@ -169,7 +171,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
     expect(await state.db.select().from(tuneSets).where(eq(tuneSets.id, set.id))).toEqual([]);
   });
 
-  it("defaults to slash-separated playing order, follows changes across books, and preserves the mode in shared copies", async () => {
+  it("defaults to slash-separated playing order, copies drift on their own, and shared copies keep the mode", async () => {
     state.user = owner;
     const [autoBook] = await state.db.insert(tunebooks).values({ userId: owner.id, name: "Automatic names", linkVisible: true }).returning();
     const entries = await state.db.insert(bookEntries).values(tunes.slice(0, 3).map((tune, position) => ({ bookId: autoBook.id, tuneId: tune.id, position }))).returning();
@@ -177,10 +179,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ordered reusable sets (PostgreS
     expect(grouped.status).toBe(200);
     const { setId: autoSetId } = await grouped.json();
     expect((await book(autoBook.id))!.sections[0]).toMatchObject({ name: "C / A", autoName: true });
-    await addSet(owner.id, secondId, autoSetId);
+    await copySet(owner.id, secondId, autoSetId);
     await moveSetTune(owner.id, autoSetId, tunes[0].id, "up");
     expect((await getMySets(owner.id)).find((set) => set.id === autoSetId)?.name).toBe("A / C");
-    expect((await book(secondId))!.sections.find((section) => section.kind === "set")).toMatchObject({ name: "A / C", autoName: true });
+    expect((await book(secondId))!.sections.find((section) => section.kind === "set")).toMatchObject({ name: "C / A", autoName: true });
     expect((await getBook(null, autoBook.id))!.sections[0]).toMatchObject({ name: "A / C" });
     state.user = stranger;
     const response = await saveBook(request({ operation: "book" }), { params: Promise.resolve({ id: autoBook.id }) });

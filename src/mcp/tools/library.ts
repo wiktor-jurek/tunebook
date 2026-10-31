@@ -11,7 +11,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
 
   server.registerTool("libresession_get_library", {
     title: "Get my library",
-    description: "Overview of the signed-in user's Tune Companion library: folders (with paths), tunebooks (with IDs and links), reusable sets, tunebooks shared with them, and how many tunes are saved. Start here to find IDs before editing.",
+    description: "Overview of the signed-in user's Tune Companion library: folders (with paths), tunebooks (with IDs and links), sets (each in the tunebook it is played in), tunebooks shared with them, and how many tunes are saved. Start here to find IDs before editing.",
     inputSchema: { response_format: responseFormat },
     outputSchema: {
       folders: z.array(z.object({ id: z.string(), name: z.string(), parent_id: z.string().nullable(), path: z.string() })),

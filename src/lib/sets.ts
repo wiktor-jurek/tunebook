@@ -77,18 +77,22 @@ export async function groupTunes(userId: string, bookId: string, name: string | 
   });
 }
 
-export async function addSet(userId: string, bookId: string, setId: string) {
+// A set belongs to the tunebook it is played in. Taking one to another session copies it, so each can drift on its own.
+export async function copySet(userId: string, bookId: string, setId: string) {
   return db.transaction(async (tx) => {
     const entries = await lockBook(tx, userId, bookId);
-    await ownSet(tx, userId, setId);
+    const source = await ownSet(tx, userId, setId);
     if (entries.some((entry) => entry.setId === setId)) throw new SetError("This set is already in the tunebook");
-    const members = await tx.select().from(setTunes).where(eq(setTunes.setId, setId));
+    const members = await tx.select().from(setTunes).where(eq(setTunes.setId, setId)).orderBy(asc(setTunes.position));
     await ownTunes(tx, userId, members.map((member) => member.tuneId));
+    const [copy] = await tx.insert(tuneSets).values({ userId, name: source.name, autoName: source.autoName }).returning();
+    await tx.insert(setTunes).values(members.map(({ tuneId, position }) => ({ setId: copy.id, tuneId, position })));
     // Existing individual tunes become part of the inserted set rather than being duplicated.
     const memberIds = new Set(members.map((member) => member.tuneId));
     const singles = entries.filter((entry) => entry.tuneId && memberIds.has(entry.tuneId));
     if (singles.length) await tx.delete(bookEntries).where(inArray(bookEntries.id, singles.map((entry) => entry.id)));
-    await tx.insert(bookEntries).values({ bookId, setId, position: (entries.at(-1)?.position ?? -1) + 1 });
+    await tx.insert(bookEntries).values({ bookId, setId: copy.id, position: (entries.at(-1)?.position ?? -1) + 1 });
+    return copy.id;
   });
 }
 
@@ -119,14 +123,16 @@ export async function changeEntry(userId: string, bookId: string, entryId: strin
     const entries = await lockBook(tx, userId, bookId);
     const index = entries.findIndex((entry) => entry.id === entryId), entry = entries[index];
     if (!entry) throw new SetError("Tunebook item not found");
+    // A set lives only in this tunebook, so taking it out, or splitting it into its tunes, ends it.
     if (operation === "remove") {
-      await tx.delete(bookEntries).where(eq(bookEntries.id, entryId));
+      if (entry.setId) await tx.delete(tuneSets).where(and(eq(tuneSets.id, entry.setId), eq(tuneSets.userId, userId)));
+      else await tx.delete(bookEntries).where(eq(bookEntries.id, entryId));
     } else if (operation === "ungroup") {
       if (!entry.setId) throw new SetError("Choose a set to ungroup");
       await ownSet(tx, userId, entry.setId);
       const members = await tx.select().from(setTunes).where(eq(setTunes.setId, entry.setId)).orderBy(asc(setTunes.position));
       const replacements = members.length ? await tx.insert(bookEntries).values(members.map((member) => ({ bookId, tuneId: member.tuneId, position: index }))).returning() : [];
-      await tx.delete(bookEntries).where(eq(bookEntries.id, entryId));
+      await tx.delete(tuneSets).where(eq(tuneSets.id, entry.setId));
       await reorderEntries(tx, entries.flatMap((item) => item.id === entryId ? replacements.map((item) => item.id) : [item.id]));
     } else {
       const next = index + (operation === "up" ? -1 : 1);
@@ -174,7 +180,7 @@ export async function createSetFromTunes(userId: string, bookId: string, savedTu
 
 export async function deleteSet(userId: string, setId: string) {
   return db.transaction(async (tx) => {
-    // Match addSet's book-then-set lock order, including concurrent new placements.
+    // Match copySet's book-then-set lock order, including concurrent new placements.
     await tx.select({ id: tunebooks.id }).from(tunebooks).where(eq(tunebooks.userId, userId)).orderBy(asc(tunebooks.id)).for("update");
     await ownSet(tx, userId, setId);
     const placements = await tx.select().from(bookEntries).where(eq(bookEntries.setId, setId));
@@ -189,7 +195,7 @@ export async function deleteSet(userId: string, setId: string) {
   });
 }
 
-// Count distinct reusable sets, not how many tunebooks happen to contain each set.
+// Count the sets a tune is played in, across every session's tunebook.
 export async function getOftenPlayedWith(userId: string, tuneId: number) {
   return db.execute(sql`
     SELECT other.tune_id AS "tuneId", count(DISTINCT membership.set_id)::integer AS "setCount"

@@ -12,7 +12,7 @@ import { TuneAbility } from "@/components/tune-ability";
 import { AbilityMark, AbilitySummary } from "@/components/ability-mark";
 import { TuneIcon } from "@/components/tune-icon";
 import { RepeatMark } from "@/components/repeat-mark";
-import { EntryControls, SetControls, SetTuneOrder } from "@/components/set-controls";
+import { EntryControls, GroupBar, SetControls, SetTuneOrder } from "@/components/set-controls";
 import type { BookSection, getLibrary } from "@/lib/library";
 import type { Playalong } from "@/lib/playalongs";
 import { keyName } from "@/lib/notation";
@@ -21,8 +21,8 @@ import { displayTitle, displaySetTitle } from "@/lib/titles";
 type Library = Awaited<ReturnType<typeof getLibrary>>;
 const members = (section: BookSection) => section.kind === "tune" ? [section.tune] : section.tunes;
 
-export function BookScores({ bookId, sections, defaultSound, readOnly = false, editing = false, signedIn = true, libraryTunes = [], mySets = [], playalongs = {} }: {
-  bookId: string; sections: BookSection[]; defaultSound: number; readOnly?: boolean; editing?: boolean; signedIn?: boolean; libraryTunes?: Library["tunes"]; mySets?: Library["sets"]; playalongs?: Record<number, Playalong[]>;
+export function BookScores({ bookId, sections, defaultSound, readOnly = false, editing = false, signedIn = true, libraryTunes = [], playalongs = {} }: {
+  bookId: string; sections: BookSection[]; defaultSound: number; readOnly?: boolean; editing?: boolean; signedIn?: boolean; libraryTunes?: Library["tunes"]; playalongs?: Record<number, Playalong[]>;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // A long book opens on its first score; its contents are one tap away.
@@ -32,6 +32,8 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, e
   const [popularBusy, setPopularBusy] = useState<Set<number>>(new Set());
   const [popularError, setPopularError] = useState("");
   const [onlyPopular, setOnlyPopular] = useState(false);
+  // Tunes ticked to group into a set, in the order they were ticked: that is the playing order.
+  const [picked, setPicked] = useState<string[]>([]);
   const isPopular = (tune: ReturnType<typeof members>[number]) => popularChanges.get(tune.tuneId) ?? tune.oftenPlayed;
   const tunes = sections.flatMap((section) => members(section).map((tune) => ({ tune, instanceId: `${section.entryId}-${tune.id}` })));
   const visibleTunes = tunes.filter(({ tune }) => !onlyPopular || isPopular(tune));
@@ -59,8 +61,8 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, e
     ? isPopular(tune) && <span className="often-played-mark" role="img" aria-label="Often played in this session" title="Often played in this session"><Star size={15} fill="currentColor" /></span>
     : <button type="button" className="often-played-button" aria-pressed={isPopular(tune)} aria-label={`${isPopular(tune) ? "Unmark" : "Mark"} ${displayTitle(tune.title)} as often played in this session`} title={isPopular(tune) ? "Often played in this session. Click to unmark." : "Mark as often played in this session"} disabled={popularBusy.has(tune.tuneId)} onClick={() => void changePopularity(tune)}><Star size={16} fill={isPopular(tune) ? "currentColor" : "none"} /></button>;
   const positions = new Map(tunes.map((row, index) => [row.instanceId, index]));
-  const singles = sections.filter((section) => section.kind === "tune");
-  const choices = singles.filter((section, index) => singles.findIndex((other) => other.tune.id === section.tune.id) === index).map((section) => ({ id: section.entryId, title: section.tune.title }));
+  const pickedTitles = picked.flatMap((id) => sections.flatMap((section) => section.kind === "tune" && section.entryId === id ? [section.tune.title] : []));
+  const pick = (entryId: string, on: boolean) => setPicked((current) => on ? [...current, entryId] : current.filter((id) => id !== entryId));
   function setExpanded(instanceId: string, expanded: boolean) {
     if (expanded === collapsed.has(instanceId)) trackEvent("scores_toggled", { action: expanded ? "expand" : "collapse", scope: "tune" });
     if (!expanded) pauseTune(instanceId);
@@ -77,7 +79,7 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, e
     const instanceId = `${section.entryId}-${tune.id}`, expanded = !collapsed.has(instanceId), index = positions.get(instanceId)!;
     const Heading = section.kind === "set" ? "h3" : "h2";
     return <section className="book-tune" id={`book-tune-${instanceId}`} key={instanceId}>
-      <div className="book-tune-head"><TuneIcon tune={tune} readOnly={readOnly} size="book" /><Heading><button type="button" className="book-tune-toggle" id={`toggle-${instanceId}`} aria-expanded={expanded} aria-controls={`score-${instanceId}`} onClick={() => setExpanded(instanceId, !expanded)}>
+      <div className="book-tune-head">{editing && section.kind === "tune" && <input type="checkbox" className="book-pick" checked={picked.includes(section.entryId)} onChange={(event) => pick(section.entryId, event.target.checked)} aria-label={`Pick ${displayTitle(tune.title)} for a set`} title="Pick for a set" />}<TuneIcon tune={tune} readOnly={readOnly} size="book" /><Heading><button type="button" className="book-tune-toggle" id={`toggle-${instanceId}`} aria-expanded={expanded} aria-controls={`score-${instanceId}`} onClick={() => setExpanded(instanceId, !expanded)}>
         {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}<span className="contents-number">{String(index + 1).padStart(2, "0")}</span><span className="book-tune-title">{displayTitle(tune.title)}</span>
       </button></Heading><div className="book-tune-tools">{popularityMark(tune)}{signedIn && <TuneAbility tune={tune} editable={!readOnly} />}{readOnly ? <SaveSharedBook bookId={bookId} tuneId={tune.id} signedIn={signedIn} alreadySaved={libraryTunes.some((saved) => saved.settingId === tune.settingId)} /> : !editing ? null : section.kind === "set" ? <SetTuneOrder setId={section.setId} tuneId={tune.id} first={memberIndex === 0} last={memberIndex === section.tunes.length - 1} /> : <><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /><TuneActions tuneId={tune.id} title={displayTitle(tune.title)} currentBookId={bookId} /></>}</div></div>
       <div className="book-tune-panel" id={`score-${instanceId}`} role="region" aria-labelledby={`toggle-${instanceId}`} hidden={!expanded}><Score tune={tune} defaultSound={defaultSound} showTitle={false} playbackId={instanceId} practiceEditable={!readOnly} showPractice={signedIn} playalongs={playalongs[tune.settingId]} /></div>
@@ -93,7 +95,6 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, e
     {popularError && <p role="alert" className="form-error">{popularError}</p>}
     <nav className="book-contents" aria-label="Tunebook contents">
       <div className="book-contents-head"><h2><button type="button" className="book-contents-toggle" aria-expanded={contentsOpen} onClick={() => setContentsOpen(!contentsOpen)}>{contentsOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}Contents <span>{visibleTunes.length} {visibleTunes.length === 1 ? "tune" : "tunes"}{setCount > 0 && `, ${setCount} ${setCount === 1 ? "set" : "sets"}`}</span></button></h2><div className="book-expand-actions">
-        {editing && <SetControls task={{ mode: "group", bookId }} choices={choices} />}
         {allExpanded ? <Button variant="ghost" size="sm" onClick={() => { trackEvent("scores_toggled", { action: "collapse", scope: "all" }); visibleTunes.forEach((row) => pauseTune(row.instanceId)); setCollapsed((current) => new Set([...current, ...visibleTunes.map((row) => row.instanceId)])); }}>Collapse all</Button>
           : <Button variant="ghost" size="sm" onClick={() => { trackEvent("scores_toggled", { action: "expand", scope: "all" }); setCollapsed((current) => { const next = new Set(current); visibleTunes.forEach((row) => next.delete(row.instanceId)); return next; }); }}>Expand all</Button>}
       </div></div>
@@ -101,8 +102,9 @@ export function BookScores({ bookId, sections, defaultSound, readOnly = false, e
     </nav>
     {onlyPopular && !visibleTunes.length && <div className="empty-state"><h2>No often played tunes yet.</h2><p>{readOnly ? "The owner hasn't marked any tunes for this session." : "Choose Edit, then star this session's regular tunes."}</p><Button variant="outline" size="sm" onClick={() => setOnlyPopular(false)}>Show all tunes</Button></div>}
     <div className="book-scores">{sections.map((section, sectionIndex) => section.kind === "tune" ? renderTune(section, sectionIndex, section.tune, 0) : onlyPopular && !section.tunes.some(isPopular) ? null : <section className="book-set" id={`book-set-${section.entryId}`} key={section.entryId} aria-labelledby={`set-heading-${section.entryId}`}>
-      <header className="book-set-head"><div><p className="book-set-count"><RepeatMark />{onlyPopular ? `${section.tunes.filter(isPopular).length} of ` : ""}{section.tunes.length} tunes</p><h2 id={`set-heading-${section.entryId}`}>{displaySetTitle(section.name)}</h2>{signedIn && <AbilitySummary tunes={section.tunes} />}</div>{editing && <div className="book-set-tools"><SetControls task={{ mode: "edit", setId: section.setId, name: section.name, autoName: section.autoName, tuneIds: section.tunes.map((tune) => tune.id), bookCount: mySets.find((set) => set.id === section.setId)?.books.length ?? 1 }} choices={libraryTunes.map((tune) => ({ id: tune.id, title: tune.title }))} /><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /></div>}</header>
+      <header className="book-set-head"><div><p className="book-set-count"><RepeatMark />{onlyPopular ? `${section.tunes.filter(isPopular).length} of ` : ""}{section.tunes.length} tunes</p><h2 id={`set-heading-${section.entryId}`}>{displaySetTitle(section.name)}</h2>{signedIn && <AbilitySummary tunes={section.tunes} />}</div>{editing && <div className="book-set-tools"><SetControls set={{ setId: section.setId, name: section.name, autoName: section.autoName, tuneIds: section.tunes.map((tune) => tune.id) }} choices={libraryTunes.map((tune) => ({ id: tune.id, title: tune.title }))} /><EntryControls bookId={bookId} section={section} first={sectionIndex === 0} last={sectionIndex === sections.length - 1} /></div>}</header>
       {section.tunes.map((tune, index) => renderTune(section, sectionIndex, tune, index))}
     </section>)}</div>
+    {editing && <GroupBar bookId={bookId} entryIds={picked} titles={pickedTitles} onDone={() => setPicked([])} />}
   </>;
 }

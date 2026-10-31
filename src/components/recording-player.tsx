@@ -7,6 +7,8 @@ import { BookPlus, Music, Pause, Play, Repeat, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { makeTunebook } from "@/lib/finder/make-book";
+import { playedSets } from "@/lib/finder/played-sets";
+import { RepeatMark } from "@/components/repeat-mark";
 import { keyName } from "@/lib/notation";
 import { ABILITY_LABELS, playAlongSentence } from "@/lib/ability";
 import { TuneAbility } from "@/components/tune-ability";
@@ -84,7 +86,7 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
   async function makeBook() {
     setBusy("book"); setError("");
     try {
-      const { bookId } = await makeTunebook(`Session, ${title}`, tunes);
+      const { bookId } = await makeTunebook(`Session, ${title}`, tunes, undefined, sets.map((set) => set.map((entry) => tunes.indexOf(entry))));
       trackEvent("session_book_made", { outcome: "success", tune_count: tunes.length });
       router.push(`/books/${bookId}`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not make the tunebook"); setBusy(null); }
@@ -96,13 +98,15 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
     done();
   }
 
-  // The setlist as a timeline: each tune at its time, and any long stretch between tunes that had none named.
-  const rows: ({ kind: "tune"; entry: Entry } | { kind: "gap"; from: number; to: number })[] = [];
+  // The setlist as a timeline: each tune at its time, tunes played back to back marked as a set, and any long
+  // stretch between tunes that had none named.
+  const sets = playedSets(tunes);
+  const rows: ({ kind: "tune"; entry: Entry; inSet: boolean } | { kind: "gap"; from: number; to: number } | { kind: "set"; from: number; count: number })[] = [];
   let edge = 0;
-  for (const entry of tunes) {
-    if (entry.startMs - edge >= GAP_MS) rows.push({ kind: "gap", from: edge, to: entry.startMs });
-    rows.push({ kind: "tune", entry });
-    edge = Math.max(edge, entry.endMs);
+  for (const set of sets) {
+    if (set[0].startMs - edge >= GAP_MS) rows.push({ kind: "gap", from: edge, to: set[0].startMs });
+    if (set.length > 1) rows.push({ kind: "set", from: set[0].startMs, count: set.length });
+    for (const entry of set) { rows.push({ kind: "tune", entry, inSet: set.length > 1 }); edge = Math.max(edge, entry.endMs); }
   }
 
   return <div className="recording">
@@ -138,7 +142,8 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
     <ol className="recording-setlist" aria-label="What was played">
       {rows.map((row) => row.kind === "gap"
         ? <li key={`gap-${row.from}`} className="recording-gap"><span className="recording-at">{clock(row.from)}</span><span>{minutes(row.to - row.from)}, no tune named</span></li>
-        : <SetlistRow key={row.entry.id} entry={row.entry} open={row.entry.id === selected} playing={playing && current?.id === row.entry.id} looping={loop && row.entry.id === selected}
+        : row.kind === "set" ? <li key={`set-${row.from}`} className="recording-set-head"><RepeatMark /><span>A set of {row.count}, played back to back</span></li>
+        : <SetlistRow key={row.entry.id} entry={row.entry} inSet={row.inSet} open={row.entry.id === selected} playing={playing && current?.id === row.entry.id} looping={loop && row.entry.id === selected}
           onToggle={() => setSelected(row.entry.id === selected ? null : row.entry.id)} onPlay={() => playFrom(row.entry)} onLoop={() => { setSelected(row.entry.id); setLoop(!(loop && row.entry.id === selected)); }}
           onScore={() => setScore(row.entry)} books={<RecordingTuneBooks title={displayTitle(row.entry.title)} settingId={row.entry.settingId} savedId={row.entry.savedId} inBooks={row.entry.inBooks} books={recording.books} />}
           onReject={() => void change({ method: "PATCH", body: JSON.stringify({ operation: "removeTune", entryId: row.entry.id }) }, () => { setSelected(null); router.refresh(); })} />)}
@@ -156,12 +161,12 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
 }
 
 /** One tune in the setlist: when it started, what it is, and whether you can play it. Open, it shows how it goes and what to do with it. */
-function SetlistRow({ entry, open, playing, looping, onToggle, onPlay, onLoop, onScore, onReject, books }: {
-  entry: Entry; open: boolean; playing: boolean; looping: boolean; books: React.ReactNode;
+function SetlistRow({ entry, inSet, open, playing, looping, onToggle, onPlay, onLoop, onScore, onReject, books }: {
+  entry: Entry; inSet: boolean; open: boolean; playing: boolean; looping: boolean; books: React.ReactNode;
   onToggle: () => void; onPlay: () => void; onLoop: () => void; onScore: () => void; onReject: () => void;
 }) {
   const title = displayTitle(entry.title);
-  return <li className="recording-entry" data-standing={standingOf(entry)} data-open={open ? "" : undefined} data-playing={playing ? "" : undefined}>
+  return <li className="recording-entry" data-in-set={inSet ? "" : undefined} data-standing={standingOf(entry)} data-open={open ? "" : undefined} data-playing={playing ? "" : undefined}>
     <button type="button" className="recording-tune" aria-expanded={open} onClick={onToggle}>
       <span className="recording-at">{clock(entry.startMs)}</span>
       <span className="recording-dot" aria-hidden="true" />

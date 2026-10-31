@@ -135,14 +135,15 @@ export const setTunes = pgTable("set_tunes", {
   position: integer("position").notNull(),
 }, (t) => [primaryKey({ columns: [t.setId, t.tuneId] }), index("set_tune_order_idx").on(t.setId, t.position), index("set_tune_membership_idx").on(t.tuneId), check("set_position_nonnegative", sql`${t.position} >= 0`)]);
 
-// Keep the existing table and migrate its individual tunes into ordered entries.
+// Keep the existing table and migrate its individual tunes into ordered entries. A set lives in one tunebook, the
+// session it is played at, so a set appears in at most one entry; the same tunes elsewhere are a separate set.
 export const bookEntries = pgTable("book_tunes", {
   id: uuid("id").primaryKey().defaultRandom(),
   bookId: uuid("book_id").notNull().references(() => tunebooks.id, { onDelete: "cascade" }),
   tuneId: uuid("tune_id").references(() => savedTunes.id, { onDelete: "cascade" }),
   setId: uuid("set_id").references(() => tuneSets.id, { onDelete: "cascade" }),
   position: integer("position").notNull(),
-}, (t) => [index("book_tune_order_idx").on(t.bookId, t.position), uniqueIndex("book_set_idx").on(t.bookId, t.setId), check("position_nonnegative", sql`${t.position} >= 0`), check("book_entry_one_kind", sql`(${t.tuneId} IS NULL) <> (${t.setId} IS NULL)`)]);
+}, (t) => [index("book_tune_order_idx").on(t.bookId, t.position), uniqueIndex("book_set_idx").on(t.setId), check("position_nonnegative", sql`${t.position} >= 0`), check("book_entry_one_kind", sql`(${t.tuneId} IS NULL) <> (${t.setId} IS NULL)`)]);
 
 export const userPreferences = pgTable("user_preferences", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),

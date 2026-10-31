@@ -4,7 +4,7 @@ import { updateBookPopularity } from "@/lib/book-popularity";
 import { getBook, saveCatalogSetting, type BookSection } from "@/lib/library";
 import { addToBook, createBook, deleteBook, moveBook, renameBook, setBookEmoji } from "@/lib/library-actions";
 import { bookUrl } from "@/lib/mcp-config";
-import { addSet, changeEntry, createSetFromTunes, reorderBook } from "@/lib/sets";
+import { changeEntry, copySet, createSetFromTunes, reorderBook } from "@/lib/sets";
 import { fail, guard, ok, responseFormat, toolError, tuneLine, tuneOut, tuneShape, uuid, type Context } from "@/mcp/format";
 
 const sectionShape = z.object({
@@ -138,7 +138,7 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     inputSchema: {
       book_id: uuid("Tunebook to add to"),
       tunes: z.array(tuneRef).max(100).default([]).describe("Tunes to append, each {saved_tune_id} or {setting_id}"),
-      set_ids: z.array(z.uuid()).max(50).default([]).describe("Existing set IDs (from libresession_get_library) to append"),
+      set_ids: z.array(z.uuid()).max(50).default([]).describe("Set IDs from other tunebooks (from libresession_get_library) to copy in; each copy is a new set of its own"),
     },
     outputSchema: { added_tunes: z.array(z.string()), added_sets: z.array(z.string()) },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -150,8 +150,9 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
       await addToBook(userId, { bookId: book_id, tuneId });
       added.push(tuneId);
     }
-    for (const setId of set_ids) await addSet(userId, book_id, setId);
-    return ok({ added_tunes: added, added_sets: set_ids }, `Added ${added.length} tunes and ${set_ids.length} sets. Call libresession_get_tunebook to see the new order.`);
+    const copies = [];
+    for (const setId of set_ids) copies.push(await copySet(userId, book_id, setId));
+    return ok({ added_tunes: added, added_sets: copies }, `Added ${added.length} tunes and ${set_ids.length} sets. Call libresession_get_tunebook to see the new order.`);
   }));
 
   server.registerTool("libresession_reorder_tunebook", {

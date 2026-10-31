@@ -42,13 +42,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("session repertoire (PostgreSQL)
     await state.db.delete(tuneSets);
     const books = await state.db.insert(tunebooks).values([{ userId: owner.id, name: "Session A", linkVisible: true }, { userId: owner.id, name: "Session B" }]).returning();
     [bookId, otherBookId] = books.map((book) => book.id);
-    const [set] = await state.db.insert(tuneSets).values({ userId: owner.id, name: "Shared set" }).returning();
-    await state.db.insert(setTunes).values([{ setId: set.id, tuneId: tunes[0].id, position: 0 }, { setId: set.id, tuneId: tunes[2].id, position: 1 }]);
-    await state.db.insert(bookEntries).values([{ bookId, setId: set.id, position: 0 }, { bookId, tuneId: tunes[1].id, position: 1 }, { bookId: otherBookId, setId: set.id, position: 0 }]);
+    // Each session has its own set of the same two tunes, as a copied set would.
+    const [set, copy] = await state.db.insert(tuneSets).values([{ userId: owner.id, name: "Shared set" }, { userId: owner.id, name: "Shared set" }]).returning();
+    await state.db.insert(setTunes).values([set, copy].flatMap(({ id }) => [{ setId: id, tuneId: tunes[0].id, position: 0 }, { setId: id, tuneId: tunes[2].id, position: 1 }]));
+    await state.db.insert(bookEntries).values([{ bookId, setId: set.id, position: 0 }, { bookId, tuneId: tunes[1].id, position: 1 }, { bookId: otherBookId, setId: copy.id, position: 0 }]);
   });
   afterAll(async () => { await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await pool.end(); });
 
-  it("defaults to unmarked and keeps marks specific to the session, including reused sets", async () => {
+  it("defaults to unmarked and keeps marks specific to the session, including the same set in another session", async () => {
     expect((await getBook(owner.id, bookId))!.tunes.every(({ tune }) => !tune.oftenPlayed)).toBe(true);
     const response = await popularity(request({ tuneId: tunes[0].id, oftenPlayed: true }), context(bookId));
     expect(response.status).toBe(200);
