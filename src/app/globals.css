@@ -181,8 +181,8 @@
 
 
 
-/* The bottom deck: one sheet across the foot of every session screen. Listening sits above the tabs; the deck grows to a
-   named tune (result) and, dragged up, to Tonight (full). */
+/* The bottom deck: one sheet across the foot of every session screen, above the tabs. All of it is always there, moved by
+   Motion: closed, only its head (and a named tune) shows; opened, the rest, with the microphone grown into the record button. */
 :root{--deck-peek:136px;--deck-tabs:54px}
 .session-main{padding-bottom:calc(var(--deck-peek) + 16px + env(safe-area-inset-bottom))}
 .deck{position:fixed;z-index:24;left:0;right:0;bottom:calc(var(--deck-tabs) + env(safe-area-inset-bottom));display:flex;flex-direction:column;max-height:calc(90dvh - var(--deck-tabs));padding:0 max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left));border-radius:22px 22px 0 0;background:var(--card);box-shadow:0 -8px 32px #0000001a,0 -1px 0 var(--border);will-change:transform;-webkit-user-select:none;user-select:none}
@@ -190,6 +190,8 @@
 .deck::after{content:"";position:absolute;left:0;right:0;top:100%;height:100vh;background:var(--card);pointer-events:none}
 .deck.is-recording{bottom:0;max-height:90dvh;padding-bottom:env(safe-area-inset-bottom)}
 .deck-head{flex:none;touch-action:none;padding:6px 4px 8px;cursor:grab}
+.deck-head-layers{display:grid;min-height:58px}.deck-head-layers>*{grid-area:1/1}
+.deck-mic-slot{flex:none;width:50px;height:50px}
 .deck-grip{display:block;width:36px;height:5px;margin:0 auto 6px;border-radius:3px;background:var(--line-strong)}
 .deck-listen{display:flex;align-items:center;gap:12px}
 .finder-dial.is-mini{margin:0;flex:none}.finder-dial.is-mini .finder-button{width:50px;height:50px}.finder-dial.is-mini{--halo:.4}.finder-dial.is-mini .finder-arc{inset:-5px;width:calc(100% + 10px);height:calc(100% + 10px)}
@@ -198,28 +200,32 @@
 .deck-status-text{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}.deck-status .finder-dots{margin-left:0}
 .deck-hint{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .deck-close{flex:none;width:36px;height:36px;border-radius:50%;background:var(--muted)}
-.deck-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 4px 12px;-webkit-user-select:text;user-select:text;animation:deck-fade .3s var(--ease)}
-.deck-result{max-height:min(58dvh,520px);text-align:center}.deck-result .finder-answer h2{font-size:30px}.deck-result .finder-others{margin-top:10px;text-align:left}
-.deck-next{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3)}
-.deck-record svg{color:var(--brand-dot)}
-.deck-full{display:grid;align-content:start;gap:14px;height:min(72dvh,640px)}.deck-title{margin:2px 0 0;font-size:24px;font-weight:700;letter-spacing:-.02em}
-.deck-full .finder-search{max-width:none}.deck-full .finder-search-field{background:var(--muted);border-color:transparent}.deck-full .finder-heard{margin:0}
-.deck-panel{display:grid;gap:8px;padding:12px;border-radius:12px;background:var(--background)}.deck-panel .finder-recording{justify-content:flex-start;margin:0}
+.deck-scroll{flex:1 1 auto;min-height:0;overflow:hidden;overscroll-behavior:contain;-webkit-user-select:text;user-select:text}.deck[data-open] .deck-scroll{overflow-y:auto}
+.deck-more{display:grid;align-content:start;gap:14px;min-height:min(64dvh,560px);padding:0 4px 16px}
+.deck-result{padding:4px 4px 14px;text-align:center;animation:deck-fade .3s var(--ease)}.deck-result .finder-answer h2{font-size:30px}.deck-result .finder-others{margin-top:10px;text-align:left}
+.deck-title{margin:2px 0 0;font-size:24px;font-weight:700;letter-spacing:-.02em}
+.deck-more .finder-search{max-width:none}.deck-more .finder-search-field{background:var(--muted);border-color:transparent}.deck-more .finder-heard{margin:0}
 .deck-tabs{position:fixed;z-index:25;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:8px;height:calc(var(--deck-tabs) + env(safe-area-inset-bottom));padding:0 0 env(safe-area-inset-bottom);border-top:.5px solid var(--border);background:var(--card)}
 .deck-tab{display:grid;justify-items:center;gap:2px;min-width:96px;padding:4px 12px;color:var(--text-3);font-size:11px;font-weight:500}.deck-tab:hover{text-decoration:none}.deck-tab[aria-current=page]{color:var(--brand-ink)}
-.deck-scrim{position:fixed;z-index:23;inset:0;background:rgba(20,20,18,.28)}
+.deck-scrim{position:fixed;z-index:23;inset:0;background:rgba(20,20,18,.28);opacity:0;pointer-events:none}.deck-scrim[data-open]{pointer-events:auto}
 @keyframes deck-grow{from{opacity:0;transform:translateY(12px)}}@keyframes deck-fade{from{opacity:0}}
 @media (min-width:640px){.deck,.deck-tabs{margin:0 auto;max-width:600px}}
-@media (orientation:landscape) and (max-height:500px){:root{--deck-peek:112px;--deck-tabs:38px}.deck-tab{display:flex;align-items:center;gap:6px;font-size:13px}.deck-tab svg{width:19px;height:19px}.deck-result{max-height:calc(100dvh - 140px)}.deck-full{height:calc(100dvh - 150px)}.deck,.deck-tabs{margin:0 auto;max-width:620px}}
+@media (orientation:landscape) and (max-height:500px){:root{--deck-peek:112px;--deck-tabs:38px}.deck-tab{display:flex;align-items:center;gap:6px;font-size:13px}.deck-tab svg{width:19px;height:19px}.deck-more{min-height:calc(100dvh - 150px)}.deck,.deck-tabs{margin:0 auto;max-width:620px}}
 @media print{.deck,.deck-tabs,.deck-scrim{display:none!important}}
 /* Dragged up: the session recorder, then the live session. */
-.deck-full-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 2px}.deck-full-head .deck-title{margin:0}
-.deck-record-start{display:grid;justify-items:center;gap:14px;padding:18px 8px 10px;text-align:center}
-.finder-dial.is-record .finder-button{width:96px;height:96px;background:var(--brand-dot);color:var(--on-brand-dot)}
-.deck-rec-glyph{display:block;width:30px;height:30px;border-radius:50%;background:currentColor}
+.deck-full-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.deck-full-head .deck-title{margin:0}
+.deck-record-start{display:grid;justify-items:center;gap:12px;padding:14px 8px 6px;text-align:center}
+/* The deck's one microphone. It sits over its slot in the head and, as the sheet opens, travels to the record slot and
+   grows; --record (0 to 1) blends it from green into the orange record button. Recording, its dot softens into Stop. */
+.finder-dial.is-deck{position:absolute;left:0;top:0;z-index:2;width:50px;height:50px;will-change:transform}.finder-dial.is-deck[data-hidden]{pointer-events:none}
+.deck-record-slot{display:block;width:104px;height:104px;margin:10px 0 14px}
+.deck-dial-record{position:absolute;inset:0;border-radius:50%;background:var(--brand-dot);opacity:var(--record);pointer-events:none}
+.finder-dial.is-deck .finder-icon,.deck-dial-glyph{grid-area:1/1;position:relative;display:grid;place-items:center}
+.finder-dial.is-deck .finder-button{color:var(--on-brand-ink)}.deck.is-recording .finder-dial.is-deck .finder-button{color:var(--on-brand-dot)}
+.deck-dial-glyph .deck-rec-glyph{width:14px;height:14px;border-radius:50%;background:var(--on-brand-dot);transition:border-radius .35s var(--ease),width .35s var(--ease),height .35s var(--ease)}
+.deck.is-recording .deck-dial-glyph .deck-rec-glyph{width:11px;height:11px;border-radius:2.5px}
 .deck-copy{margin:0;max-width:340px;font-size:14px;line-height:1.45;color:var(--muted-foreground)}
-.deck-live{gap:16px}
-.deck-live-bar{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}.deck-live-clock{font:600 22px var(--font-sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em}.deck-live-bar .deck-copy{font-size:13px}.deck-live-actions{display:flex;gap:4px;margin-left:auto}
+.deck-live-bar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 10px}.deck-live-clock{margin:-4px 0 0;font:600 28px var(--font-sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .deck-now{display:grid;justify-items:center;gap:2px;width:100%;padding:16px 14px 12px;border:0;border-radius:16px;background:var(--brand-dot-soft);color:var(--foreground);font:inherit;text-align:center;cursor:pointer;animation:deck-grow var(--duration) var(--ease)}
 .deck-now-label{font-size:12px;font-weight:650;color:var(--brand-dot-text)}.deck-now-title{font:30px/1.15 var(--font-music);letter-spacing:-.02em}.deck-now-meta{font-size:13px;color:var(--muted-foreground)}
 .deck-now .opening-phrase{margin:10px auto 2px}.deck-now-more{font-size:12px;color:var(--text-3)}
