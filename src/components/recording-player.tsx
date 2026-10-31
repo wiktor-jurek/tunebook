@@ -80,6 +80,12 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
     if (audio.current) audio.current.currentTime = ms / 1000;
     setNow(ms);
   }
+  // Tapping the timeline opens the tune played there in the setlist below, and stops looping the one before.
+  function scrub(ms: number) {
+    seek(ms);
+    const there = at(ms);
+    if (there && there.id !== selected) { setSelected(there.id); setLoop(false); }
+  }
   async function play() { await audio.current?.play().catch(() => setError("Could not play the recording")); }
   async function toggle() { if (audio.current?.paused) await play(); else audio.current?.pause(); }
   function playFrom(entry: Entry) { setSelected(entry.id); seek(entry.startMs); void play(); }
@@ -126,10 +132,10 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
       <p className="recording-now" aria-live="polite">{current ? displayTitle(current.title) : now > 0 ? "No tune named here" : " "}</p>
       {/* The whole session as one strip: each tune coloured by whether you can join in, gaps where none was named. */}
       <div className="recording-track">
-        {tunes.map((entry) => <span key={entry.id} className="recording-segment" data-standing={standingOf(entry)} data-selected={entry.id === selected ? "" : undefined} style={{ left: percent(entry.startMs), width: percent(Math.max(entry.endMs - entry.startMs, duration / 200)) }} />)}
+        {tunes.map((entry) => <span key={entry.id} className="recording-segment" data-standing={standingOf(entry)} data-selected={entry.id === selected ? "" : undefined} style={{ left: percent(entry.startMs), width: percent(Math.max(entry.endMs - entry.startMs, duration / 200)) }}><span aria-hidden="true">{displayTitle(entry.title)}</span></span>)}
         <span className="recording-playhead" style={{ left: percent(now) }} />
         <input type="range" min={0} max={duration} step={250} value={now} aria-label="Position in the recording" aria-valuetext={`${clock(now)}${current ? `, ${displayTitle(current.title)}` : ""}`}
-          onChange={(event) => seek(Number(event.target.value))} />
+          onChange={(event) => scrub(Number(event.target.value))} />
       </div>
       <div className="recording-transport">
         <Button size="icon" className="player-play" aria-label={playing ? "Pause" : "Play"} disabled={!recording.audioUrl} onClick={() => void toggle()}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</Button>

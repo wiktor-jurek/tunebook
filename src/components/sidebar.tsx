@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { BrandMark } from "@/components/brand-mark";
-import { AudioLines, BookOpen, ChevronDown, ChevronRight, Database, Folder, Music2, LogOut, Plus, Smartphone, Disc3, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Database, Folder, Music2, LogOut, Plus, Smartphone, Disc3, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
 import { ModeSwitch } from "@/components/mode-switch";
@@ -64,10 +64,9 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><BrandMark /><span>Tune Companion</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
-        {/* One list, each of equal weight: your tunes, then listening (naming a tune, recorded sessions). */}
+        {/* One list, each of equal weight: your tunes, and recorded sessions. Naming a tune is the dock in the corner. */}
         <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <>
           {main("/", <Music2 size={16} />, "Tunes", path === "/", library.tunes.length)}
-          {main("/tunes/finder", <AudioLines size={16} />, "Tune finder", path === "/tunes/finder")}
           {main("/recordings", <Disc3 size={16} />, "Recordings", path.startsWith("/recordings"))}
         </>}</div>
         <div className="nav-label-row"><span>TUNEBOOKS</span>{!guest && creationMenu()}</div>

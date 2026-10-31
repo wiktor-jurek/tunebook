@@ -25,6 +25,7 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [cookieStore, user, { mode }] = await Promise.all([cookies(), currentUser(), getMode()]);
   const theme = parseTheme(cookieStore.get(THEME_COOKIE)?.value);
-  // The listen tray lives here, above every page, so a phone keeps listening and recording while moving between screens.
-  return <html lang="en" data-theme={theme === "system" ? undefined : theme}><body>{children}{user && mode === "session" && <ListenTray signedIn />}<Analytics /></body></html>;
+  // The listen tray lives here, above every page, so listening and recording carry on while moving between screens: the
+  // deck at the foot of a phone, or a dock in the corner of a desktop.
+  return <html lang="en" data-theme={theme === "system" ? undefined : theme}><body>{children}{user && <ListenTray signedIn dock={mode !== "session"} />}<Analytics /></body></html>;
 }

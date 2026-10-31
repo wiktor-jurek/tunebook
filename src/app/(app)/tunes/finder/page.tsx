@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
-import { getMode } from "@/lib/mode";
 import { TuneFinder } from "@/components/tune-finder";
 import { PublicHeader } from "@/components/public-header";
 
@@ -9,8 +8,8 @@ export const metadata = { title: "Tune finder", description: "Hold your phone up
 
 export default async function TuneFinderPage() {
   const user = await currentUser();
-  // A signed-in phone listens from the tray on every screen; a second listener here would compete for the microphone.
-  if (user && (await getMode()).mode === "session") redirect("/");
+  // Signed in, the tray (a phone's deck, a desktop's dock) listens on every screen; a second listener here would compete for the microphone.
+  if (user) redirect("/");
   const page = <div className="page-wrap finder-page"><h1 className="sr-only">Tune finder</h1><TuneFinder signedIn={!!user} /><p className="finder-footnote">Names over 23,000 tunes from The Session. <Link href="/tunes/finder/benchmark">How well it works</Link></p></div>;
   return user ? page : <div className="landing"><PublicHeader next="/tunes/finder" />{page}</div>;
 }
