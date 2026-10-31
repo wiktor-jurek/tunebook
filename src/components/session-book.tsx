@@ -3,16 +3,29 @@
 import { trackEvent } from "@/lib/analytics";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import abcjs from "abcjs";
-import { ChevronLeft, Star } from "lucide-react";
+import { ChevronLeft, Search, Star } from "lucide-react";
 import { abcForScore, keyName } from "@/lib/notation";
 import type { BookSection } from "@/lib/library";
 import { RepeatMark } from "@/components/repeat-mark";
+import { AbilityMark } from "@/components/ability-mark";
 import { displayTitle, displaySetTitle } from "@/lib/titles";
 
 type Tune = Extract<BookSection, { kind: "tune" }>["tune"];
 type Page = { tune: Tune; set: string | null; key: string };
 
 const meta = (tune: Tune) => [tune.kind, keyName(tune.mode)].filter(Boolean).join(", ");
+
+type Run = { kind: "tunes"; key: string; tunes: Tune[] } | { kind: "set"; section: Extract<BookSection, { kind: "set" }> };
+function runs(sections: BookSection[]) {
+  const result: Run[] = [];
+  for (const section of sections) {
+    const last = result[result.length - 1];
+    if (section.kind === "set") result.push({ kind: "set", section });
+    else if (last?.kind === "tunes") last.tunes.push(section.tune);
+    else result.push({ kind: "tunes", key: section.entryId, tunes: [section.tune] });
+  }
+  return result;
+}
 
 // A phone on its side: wide but short. Matches the CSS for the same layout.
 const LANDSCAPE = "(orientation: landscape) and (max-height: 500px)";
@@ -47,8 +60,16 @@ function useWakeLock(active: boolean) {
   }, [active]);
 }
 
-/** A tunebook in session mode: tunes as large rows, then each score full screen, swiping through in playing order. */
-export function SessionBook({ name, sections }: { name: string; sections: BookSection[] }) {
+/**
+ * A tunebook in session mode (or all your tunes): tunes as large rows with your progress on each, then each score full
+ * screen, swiping through in playing order. `searchable` adds a filter by title, for long lists.
+ */
+export function SessionBook({ name, sections: all, searchable = false }: { name: string; sections: BookSection[]; searchable?: boolean }) {
+  const [query, setQuery] = useState("");
+  const words = query.trim().toLowerCase();
+  const matches = (tune: Tune) => !words || displayTitle(tune.title).toLowerCase().includes(words) || tune.title.toLowerCase().includes(words);
+  const sections = words ? all.flatMap((section): BookSection[] => section.kind === "tune" ? (matches(section.tune) ? [section] : [])
+    : section.tunes.some(matches) ? [{ ...section, tunes: section.tunes.filter(matches) }] : []) : all;
   const pages = sections.flatMap((section): Page[] => section.kind === "tune" ? [{ tune: section.tune, set: null, key: `${section.entryId}-${section.tune.id}` }]
     : section.tunes.map((tune) => ({ tune, set: section.name, key: `${section.entryId}-${tune.id}` })));
   const [open, setOpen] = useState<number | null>(null);
@@ -91,14 +112,18 @@ export function SessionBook({ name, sections }: { name: string; sections: BookSe
       <span className="session-row-emoji" aria-hidden="true">{tune.emoji}</span>
       <span className="session-row-text"><span className="session-row-title">{displayTitle(tune.title)}</span><span className="session-row-meta">{meta(tune)}</span></span>
       {tune.oftenPlayed && <Star size={15} fill="currentColor" className="session-star" aria-label="Often played" />}
+      <AbilityMark practice={tune.practice} />
     </button></li>;
   };
 
   return <>
-    <div className="session-list">{sections.map((section) => section.kind === "tune"
-      ? <ul className="session-group" key={section.entryId}>{row(section.tune)}</ul>
-      : <section key={section.entryId}><h2 className="session-group-title"><RepeatMark />{displaySetTitle(section.name)}</h2><ul className="session-group">{section.tunes.map(row)}</ul></section>)}
+    {searchable && <label className="finder-search-field session-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Find a tune</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a tune" enterKeyHint="search" /></label>}
+    {/* Single tunes next to each other share one group; each set is a group of its own under its name. */}
+    <div className="session-list">{runs(sections).map((run) => run.kind === "tunes"
+      ? <ul className="session-group" key={run.key}>{run.tunes.map(row)}</ul>
+      : <section key={run.section.entryId}><h2 className="session-group-title"><RepeatMark />{displaySetTitle(run.section.name)}</h2><ul className="session-group">{run.section.tunes.map(row)}</ul></section>)}
     </div>
+    {words && !pages.length && <p className="session-empty">No tune called that.</p>}
     {open !== null && <div className="session-reader" role="dialog" aria-modal="true" aria-label={name}>
       <header className="session-reader-bar">
         <button type="button" className="session-back" onClick={() => setOpen(null)}><ChevronLeft size={22} /> <span>{name}</span></button>

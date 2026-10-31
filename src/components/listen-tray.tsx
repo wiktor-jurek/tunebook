@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle, type MotionValue } from "motion/react";
-import { BookOpen, ChevronDown, Disc3, MicOff, Moon, X } from "lucide-react";
+import { ChevronDown, Disc3, MicOff, Moon, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { FinderTune } from "@/lib/library";
@@ -30,7 +30,7 @@ const PEEK_MS = 5000;
 // How far, or how fast, a tune in the live setlist must be swiped to go.
 const SWIPE = 110, SWIPE_SPEED = 600;
 const TABS = [
-  { href: "/", label: "Tunebooks", icon: BookOpen, active: (path: string) => path === "/" || path.startsWith("/books") || path.startsWith("/tunes/") },
+  { href: "/", label: "Tunes", icon: Music, active: (path: string) => path === "/" || path.startsWith("/books") || path.startsWith("/tunes/") },
   { href: "/recordings", label: "Recordings", icon: Disc3, active: (path: string) => path.startsWith("/recordings") },
 ];
 /** Past where the deck can go, the finger pulls against more and more resistance. */
