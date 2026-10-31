@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { animate, motion, useMotionValue, useReducedMotion, useTransform, type AnimationPlaybackControls, type MotionStyle } from "motion/react";
+import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle } from "motion/react";
 import { BookOpen, ChevronDown, Disc3, Mic, MicOff, Moon, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -17,7 +17,10 @@ import { displayTitle } from "@/lib/titles";
 const DRAG_START = 8, DRAG_DONE = 44;
 // A flick counts as much as a long drag: px per ms.
 const FLICK = 0.3;
-const SPRING = { type: "spring", stiffness: 380, damping: 36 } as const;
+// Damped just short of still, so the sheet lands with a small overshoot, like iOS sheets.
+const SPRING = { type: "spring", stiffness: 340, damping: 26 } as const;
+// The microphone follows the sheet on a looser spring of its own: it trails the finger a touch and settles with a bounce.
+const MIC_SPRING = { stiffness: 260, damping: 17, mass: 0.9 };
 // The microphone in the deck's head, and the record button it grows into.
 const MINI = 50, BIG = 104;
 // How long a newly named tune stays open while recording before the deck folds back down.
@@ -67,14 +70,16 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
   // Where the microphone sits in the head, and where the record button sits in the open sheet (none if it cannot record).
   const mini = useMotionValue<Spot>({ x: 0, y: 0 });
   const big = useMotionValue<Spot | null>(null);
-  const grow = useTransform(() => (big.get() ? unit(open.get()) : 0));
-  const dialX = useTransform(() => { const a = mini.get(), b = big.get() ?? a; return a.x + (b.x - a.x) * grow.get() - MINI / 2; });
-  const dialY = useTransform(() => { const a = mini.get(), b = big.get() ?? a; return a.y + (b.y - a.y) * grow.get() - MINI / 2; });
+  const grow = useSpring(useTransform(() => (big.get() ? unit(open.get()) : 0)), MIC_SPRING);
+  // It swings up in a curve rather than a straight line: rising first, then drifting to the middle.
+  const dialX = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.x + (b.x - a.x) * p * Math.abs(p) - MINI / 2; });
+  const dialY = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.y + (b.y - a.y) * (1 - (1 - p) * Math.abs(1 - p)) - MINI / 2; });
   const dialScale = useTransform(() => 1 + (BIG / MINI - 1) * grow.get());
   const dialFade = useTransform(() => (big.get() ? 1 : unit(1 - open.get() * 1.8)));
   const headRow = useTransform(() => unit(1 - open.get() * 1.8));
   const headTitle = useTransform(() => unit((open.get() - 0.45) / 0.55));
-  const iconMic = useTransform(() => 1 - grow.get());
+  const iconMic = useTransform(() => unit(1 - grow.get()));
+  const recordTint = useTransform(() => unit(grow.get()));
 
   const deck = useRef<HTMLElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -234,7 +239,7 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
   const label = full && canRecord ? (recording ? "Stop recording" : "Start recording the session") : recording ? "Live session: open it" : listening ? "Stop listening" : "Name the tune that's playing";
   const grab = { onPointerDown, onPointerMove, onPointerUp: onPointerEnd, onPointerCancel: onPointerEnd,
     onClickCapture: (event: React.MouseEvent) => { if (dragged.current) { dragged.current = false; event.stopPropagation(); event.preventDefault(); } } };
-  const dialStyle = { x: dialX, y: dialY, scale: dialScale, opacity: dialFade, "--level": listener.level, "--loaded": loaded, "--record": grow } as unknown as MotionStyle;
+  const dialStyle = { x: dialX, y: dialY, scale: dialScale, opacity: dialFade, "--level": listener.level, "--loaded": loaded, "--record": recordTint } as unknown as MotionStyle;
 
   return <>
     <motion.div className="deck-scrim" data-open={full ? "" : undefined} style={{ opacity: scrim }} onClick={() => go(false)} aria-hidden="true" />
@@ -263,7 +268,7 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
           <button type="button" className="finder-button" data-phase={phase} disabled={busy} onClick={press} aria-label={label}>
             <span className="deck-dial-record" aria-hidden="true" />
             <motion.span className="finder-icon" key={iconKey} style={{ opacity: iconMic }}>{icon}</motion.span>
-            <motion.span className="deck-dial-glyph" style={{ opacity: grow }} aria-hidden="true"><span className="deck-rec-glyph" /></motion.span>
+            <motion.span className="deck-dial-glyph" style={{ opacity: recordTint }} aria-hidden="true"><span className="deck-rec-glyph" /></motion.span>
           </button>
         </motion.div>
       </div>
