@@ -384,3 +384,9 @@ body[data-navigating] :is(.main-content,.session-main,.landing>:not(header)){opa
 .nav-count+.link-pending{margin-left:6px}
 @keyframes link-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.nav-progress>span,.link-pending[data-pending]{animation:none}.nav-progress[data-phase=loading]>span{transform:scaleX(.6)}}
+/* A list of found tunes: the details in sentence case, and the actions in one column at the right of every row. */
+.finder-row .finder-meta{text-transform:none}.finder-row .finder-meta::first-letter{text-transform:uppercase}
+.finder-row-head>div:first-child{flex:1}
+.finder-row-head>.finder-actions{flex-wrap:nowrap;justify-content:flex-end;margin:0 -8px 0 auto}
+.finder-row-standing{color:var(--muted-foreground)}
+.finder-row{grid-template-columns:minmax(0,1fr)}

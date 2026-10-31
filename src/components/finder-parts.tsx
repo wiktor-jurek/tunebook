@@ -25,32 +25,33 @@ export type FinderContext = { listener: Listener; signedIn: boolean; next: strin
 export const dialStyle = (listener: Listener, loaded: number) => ({ "--level": listener.level, "--loaded": loaded }) as unknown as MotionStyle;
 export const meta = (tune: FinderTune) => [tune.kind, keyName(tune.mode)].filter(Boolean).join(", ");
 export const known = (tune: FinderTune) => tune.level === "learned" || tune.level === "mastered";
-export const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+export const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 export const clock = (ms: number) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`; };
 
-/** Where a heard tune stands for this person: "In Madrid Session, Can play along", "Want to learn", "In your library". */
+/** Where a heard tune stands for this person, to follow other details: "can play along, in Madrid Session", "in your library". */
 export function standing(tune: FinderTune) {
   const parts: string[] = [];
-  if (tune.inBooks.length) parts.push(`In ${tune.inBooks.length === 1 ? tune.inBooks[0].name : `${tune.inBooks.length} of your tunebooks`}`);
-  if (tune.level !== "unlearned") parts.push(ABILITY_LABELS[tune.level]);
-  else if (tune.savedId && !tune.inBooks.length) parts.push("In your library");
+  if (tune.level !== "unlearned") parts.push(ABILITY_LABELS[tune.level].toLowerCase());
+  if (tune.inBooks.length) parts.push(`in ${tune.inBooks.length === 1 ? tune.inBooks[0].name : `${tune.inBooks.length} of your tunebooks`}`);
+  else if (tune.savedId && tune.level === "unlearned") parts.push("in your library");
   return parts.join(", ");
 }
 
 /** One tap to keep a tune for later: saved and marked Want to learn. Nothing for a tune already known. */
-export function LearnLater({ tune, context }: { tune: FinderTune; context: FinderContext }) {
+/** `quiet` (in a list) is a plain text button, like Score beside it; the answer's own is outlined. */
+export function LearnLater({ tune, context, quiet = false }: { tune: FinderTune; context: FinderContext; quiet?: boolean }) {
   const { listener, signedIn, next } = context;
   if (known(tune)) return null;
   if (tune.level === "wanted") return <span className="finder-kept"><Check size={14} /> On your list</span>;
-  if (!signedIn) return <Link className="button button-outline button-sm" onClick={() => trackEvent("guest_sign_in_clicked", { source: "finder_save" })} href={`/sign-up?next=${encodeURIComponent(next)}`}><Bookmark size={14} /> Learn later</Link>;
-  return <Button size="sm" variant="outline" disabled={listener.saving === tune.tuneId} onClick={() => void listener.learnLater(tune)}><Bookmark size={14} /> {listener.saving === tune.tuneId ? "Saving" : "Learn later"}</Button>;
+  if (!signedIn) return <Link onClick={() => trackEvent("guest_sign_in_clicked", { source: "finder_save" })} href={`/sign-up?next=${encodeURIComponent(next)}`} className={`button ${quiet ? "button-ghost" : "button-outline"} button-sm`}><Bookmark size={14} /> Learn later</Link>;
+  return <Button size="sm" variant={quiet ? "ghost" : "outline"} disabled={listener.saving === tune.tuneId} onClick={() => void listener.learnLater(tune)}><Bookmark size={14} /> {listener.saving === tune.tuneId ? "Saving" : "Learn later"}</Button>;
 }
 
 /** The answer leads to music: the full score first, then keeping it for later. */
 export function FinderActions({ tune, context, primary = false }: { tune: FinderTune; context: FinderContext; primary?: boolean }) {
   return <div className="finder-actions">
     <Button size="sm" variant={primary ? "default" : "ghost"} onClick={() => context.onScore(tune)}><Music size={14} /> {primary ? "Open full score" : "Score"}</Button>
-    <LearnLater tune={tune} context={context} />
+    <LearnLater tune={tune} context={context} quiet={!primary} />
   </div>;
 }
 
@@ -65,7 +66,7 @@ export function standingSentence(tune: FinderTune) {
 
 export function FinderRow({ tune, detail, context, phrase = false }: { tune: FinderTune; detail: string; context: FinderContext; phrase?: boolean }) {
   return <li className="finder-row">
-    <div className="finder-row-head"><div><span className="finder-row-title">{displayTitle(tune.title)}</span><span className="finder-meta">{[detail, standing(tune)].filter(Boolean).join(", ")}</span></div><FinderActions tune={tune} context={context} /></div>
+    <div className="finder-row-head"><div><span className="finder-row-title">{displayTitle(tune.title)}</span><span className="finder-meta">{detail}</span>{standing(tune) && <span className="finder-meta finder-row-standing">{standing(tune)}</span>}</div><FinderActions tune={tune} context={context} /></div>
     {phrase && <OpeningPhrase tune={tune} className="is-small" />}
   </li>;
 }
@@ -130,7 +131,9 @@ export function FinderHeard({ context }: { context: FinderContext }) {
   const wanted = tunes.filter((t) => t.level === "wanted").length;
   const recap = tunes.length > 1 ? `You heard ${tunes.length} tunes. You can play along with ${tunes.filter(known).length}${wanted ? `, and ${wanted} ${wanted === 1 ? "is" : "are"} on your list to learn` : ""}.` : null;
   return <section className="finder-heard"><h3>Heard</h3>{recap && <p className="finder-recap">{recap}</p>}
-    <ul>{listener.heard.map((h) => <FinderRow key={`${h.tune.tuneId}-${h.at}`} tune={h.tune} detail={`${meta(h.tune)}, ${time(h.at)}`} context={context} />)}</ul>
+    {/* Each tune once, when it was last heard, and how often if more than once (a tune comes round again in a night). */}
+    <ul>{tunes.map((tune) => { const times = listener.heard.filter((h) => h.tune.tuneId === tune.tuneId), last = times[0];
+      return <FinderRow key={tune.tuneId} tune={last.tune} detail={`${meta(last.tune)}, ${time(last.at)}${times.length > 1 ? `, ${times.length} times` : ""}`} context={context} />; })}</ul>
     {signedIn && <div className="finder-heard-actions"><Button variant="outline" size="sm" disabled={making === "busy"} onClick={async () => {
       setMaking("busy");
       try { const bookId = await listener.makeBook("Tonight's tunes"); listener.clearHeard(); router.push(`/books/${bookId}`); } catch { setMaking("error"); }

@@ -84,12 +84,16 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   // Where the microphone sits in the head, and where the record button sits in the open sheet (none if it cannot record).
   const mini = useMotionValue<Spot>({ x: 0, y: 0 });
   const big = useMotionValue<Spot | null>(null);
+  // How much of the record button's slot is still below the top of the scrolling sheet: scrolled up under the header,
+  // the button fades away with it rather than floating over the title.
+  const bigShown = useMotionValue(1);
   const grow = useSpring(useTransform(() => (big.get() ? unit(open.get()) : 0)), MIC_SPRING);
   // It swings up in a curve rather than a straight line: rising first, then drifting to the middle.
   const dialX = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.x + (b.x - a.x) * p * Math.abs(p) - small / 2; });
   const dialY = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.y + (b.y - a.y) * (1 - (1 - p) * Math.abs(1 - p)) - small / 2; });
   const dialScale = useTransform(() => 1 + (large / small - 1) * grow.get());
-  const dialFade = useTransform(() => (big.get() ? 1 : unit(1 - open.get() * 1.8)));
+  const dialFade = useTransform(() => (big.get() ? mix(1, bigShown.get(), unit(grow.get())) : unit(1 - open.get() * 1.8)));
+  const dialPress = useTransform(() => (dialFade.get() < 0.4 ? "none" : "auto"));
   const headRow = useTransform(() => unit(1 - open.get() * 1.8));
   const headTitle = useTransform(() => unit((open.get() - 0.45) / 0.55));
   const recordTint = useTransform(() => unit(grow.get()));
@@ -212,6 +216,8 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     const centre = (slot: HTMLElement) => { const r = slot.getBoundingClientRect(); return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2 }; };
     if (miniSlot.current) mini.set(centre(miniSlot.current));
     big.set(bigSlot.current ? centre(bigSlot.current) : null);
+    const view = scroller.current?.getBoundingClientRect(), slot = bigSlot.current?.getBoundingClientRect();
+    bigShown.set(view && slot ? unit((slot.top + slot.height / 2 - view.top) / (slot.height / 2)) : 1);
   }
   useLayoutEffect(follow);
   useEffect(() => {
@@ -292,7 +298,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const label = full && canRecord ? (recording ? "Stop recording" : "Start recording the session") : recording ? "Live session: open it" : listening ? "Stop listening" : "Name the tune that's playing";
   const grab = { onPointerDown,
     onClickCapture: (event: React.MouseEvent) => { if (dragged.current) { dragged.current = false; event.stopPropagation(); event.preventDefault(); } } };
-  const dialStyle = { x: dialX, y: dialY, scale: dialScale, opacity: dialFade, "--level": listener.level, "--loaded": loaded, "--record": recordTint } as unknown as MotionStyle;
+  const dialStyle = { x: dialX, y: dialY, scale: dialScale, opacity: dialFade, pointerEvents: dialPress, "--level": listener.level, "--loaded": loaded, "--record": recordTint } as unknown as MotionStyle;
 
   return <>
     {!dock && <motion.div className="deck-scrim" data-open={full ? "" : undefined} style={{ opacity: scrim }} onClick={() => go(false)} aria-hidden="true" />}
