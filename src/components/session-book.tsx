@@ -6,6 +6,7 @@ import abcjs from "abcjs";
 import Link from "next/link";
 import { BookOpen, ChevronLeft, ChevronRight, Search, Star } from "lucide-react";
 import { GroupMenu } from "@/components/group-menu";
+import { GroupJump, groupAnchor } from "@/components/group-jump";
 import { abcForScore, keyName } from "@/lib/notation";
 import type { BookSection } from "@/lib/library";
 import { RepeatMark } from "@/components/repeat-mark";
@@ -134,10 +135,11 @@ export function SessionBook({ name, sections: given, searchable = false, groupab
     {searchable && <label className="finder-search-field session-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Find a tune</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a tune" enterKeyHint="search" /></label>}
     {/* Grouped, each group is headed with its name and size. Otherwise single tunes next to each other share one group,
         and each set is a group of its own under its name. */}
-    <div className="session-list">{groupable ? groups.map((group) => <section key={group.key}>
+    {groupable && <GroupJump groups={groups.map((group) => ({ key: group.key, label: group.label, count: group.tunes.length }))} />}
+    <div className="session-list">{groupable ? groups.map((group, groupIndex) => <section key={group.key}>
       {/* A tunebook's heading opens the book, with its sets in playing order. */}
-      {group.book ? <h2 className="session-group-title"><Link className="session-group-link" href={`/books/${group.book.id}`}><span aria-hidden="true">{group.book.emoji ?? <BookOpen size={14} />}</span>{group.label}<span className="session-group-count">{group.tunes.length}</span><ChevronRight size={15} aria-hidden="true" /></Link></h2>
-        : group.label && <h2 className="session-group-title">{group.label}<span className="session-group-count">{group.tunes.length}</span></h2>}
+      {group.book ? <h2 className="session-group-title" id={groupAnchor(groupIndex)}><Link className="session-group-link" href={`/books/${group.book.id}`}><span aria-hidden="true">{group.book.emoji ?? <BookOpen size={14} />}</span>{group.label}<span className="session-group-count">{group.tunes.length}</span><ChevronRight size={15} aria-hidden="true" /></Link></h2>
+        : group.label && <h2 className="session-group-title" id={groupAnchor(groupIndex)}>{group.label}<span className="session-group-count">{group.tunes.length}</span></h2>}
       <ul className="session-group">{group.tunes.map(row)}</ul>
     </section>) : runs(sections).map((run) => run.kind === "tunes"
       ? <ul className="session-group" key={run.key}>{run.tunes.map(row)}</ul>

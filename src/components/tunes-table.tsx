@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TuneAbility } from "@/components/tune-ability";
 import { TuneActions } from "@/components/tune-actions";
 import { TuneIcon } from "@/components/tune-icon";
+import { GroupJump, groupAnchor } from "@/components/group-jump";
 import { keyName } from "@/lib/notation";
 import { ABILITY_LABELS, ABILITY_LEVELS, type AbilityLevel } from "@/lib/ability";
 import type { TuneWithPractice } from "@/lib/tune-practice";
@@ -63,11 +64,12 @@ export function TunesTable({ tunes, books = [] }: { tunes: TuneWithPractice[]; b
       <label className="table-group">Group by<select className="table-filter" value={groupBy} onChange={(event) => setGroupBy(event.target.value as GroupBy)}>{GROUP_BYS.map((entry) => <option key={entry} value={entry}>{GROUP_BY_LABELS[entry]}</option>)}</select></label>
       {filtered && <span className="table-count" role="status">{shown.length} of {tunes.length}</span>}
     </div>
+    <GroupJump groups={groups.map((group) => ({ key: group.key, label: group.label, count: group.tunes.length }))} />
     <Table>
       <TableHeader><TableRow>{header("title", "Tune")}{header("kind", "Type", "table-wide")}{header("mode", "Key", "table-wide")}{header("ability", "Progress")}{header("added", "Added", "table-wide table-added")}<TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
       <TableBody>
-        {groups.map((group) => <Fragment key={group.key}>
-          {group.label && <TableRow className="table-group-row"><TableHead colSpan={6} scope="colgroup">{group.book ? <Link className="table-group-link" href={`/books/${group.book.id}`}>{group.label}</Link> : group.label}<span className="table-group-count">{group.tunes.length}</span></TableHead></TableRow>}
+        {groups.map((group, groupIndex) => <Fragment key={group.key}>
+          {group.label && <TableRow className="table-group-row"><TableHead colSpan={6} scope="colgroup" id={groupAnchor(groupIndex)}>{group.book ? <Link className="table-group-link" href={`/books/${group.book.id}`}>{group.label}</Link> : group.label}<span className="table-group-count">{group.tunes.length}</span></TableHead></TableRow>}
           {group.tunes.map((tune) => <TableRow key={tune.id}>
           <TableCell><div className="table-tune"><div><span className="table-title-line"><TuneIcon tune={tune} size="inline" /><Link href={`/tunes/${tune.id}`} className="table-title">{displayTitle(tune.title)}</Link></span><span className="table-meta">{tune.meter}<span className="table-narrow">{tune.kind && <>, <span className="table-kind">{tune.kind}</span></>}{tune.mode && `, ${keyName(tune.mode)}`}</span></span></div></div></TableCell>
           <TableCell className="table-wide table-kind">{tune.kind}</TableCell>
