@@ -15,7 +15,9 @@ const TYPES = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"];
 // A rejected entry is one the person swiped away as wrong; it uploads anyway, as a labelled mistake.
 export type SetlistEntry = { tuneId: number; settingId: number; title: string; startMs: number; endMs: number; rejected?: boolean };
 export type LocalRecording = { id: string; name: string; mime: string; recordedAt: string; durationMs: number; tunes: SetlistEntry[]; finished: boolean };
-export type UploadState = { id: string; status: "uploading" | "failed"; error?: string };
+// An upload goes through preparing, sending the audio (with how much is sent, 0 to 1), saving the setlist, then done;
+// done lingers a moment, holding the recording, so the screen can show it arrive.
+export type UploadState = { id: string; status: "preparing" | "sending" | "saving" | "done" | "failed"; progress: number; recording: LocalRecording; error?: string };
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -45,16 +47,30 @@ const forget = (id: string) => run(["recordings", "chunks"], "readwrite", (tx) =
   tx.objectStore("chunks").delete(IDBKeyRange.bound([id, 0], [id, Infinity]));
 });
 
+/** PUTs the audio straight to the bucket, reporting how much has gone. Fetch cannot report upload progress; this can. */
+function put(url: string, type: string, body: Blob, onProgress: (sent: number) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PUT", url);
+    request.setRequestHeader("Content-Type", type);
+    request.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(event.loaded / event.total); };
+    request.onload = () => (request.status >= 200 && request.status < 300 ? resolve() : reject(new Error("The upload did not finish")));
+    request.onerror = () => reject(new Error("The connection dropped during the upload"));
+    request.send(body);
+  });
+}
+
 /** Uploads a finished local recording: create the row, PUT the audio to the bucket, then store the setlist. */
-async function upload(recording: LocalRecording) {
+async function upload(recording: LocalRecording, step: (status: UploadState["status"], progress?: number) => void) {
   const chunks = await chunksOf(recording.id);
   if (!chunks.length) throw new Error("Nothing was recorded");
   const audio = new Blob(chunks.map((chunk) => chunk.data), { type: recording.mime });
   const created = await fetch("/api/recordings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: recording.name, mime: recording.mime, recordedAt: recording.recordedAt }) });
   const { id, uploadUrl, error } = await created.json();
   if (!created.ok) throw new Error(error || "Could not start the upload");
-  const put = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": recording.mime.split(";")[0] }, body: audio });
-  if (!put.ok) throw new Error("The upload did not finish");
+  step("sending", 0);
+  await put(uploadUrl, recording.mime.split(";")[0], audio, (sent) => step("sending", sent));
+  step("saving", 1);
   const finished = await fetch(`/api/recordings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ operation: "finish", durationMs: Math.round(recording.durationMs), tunes: recording.tunes.map(({ tuneId, settingId, startMs, endMs, rejected }) => ({ tuneId, settingId, startMs: Math.round(startMs), endMs: Math.round(endMs), rejected: !!rejected })) }) });
   if (!finished.ok) throw new Error((await finished.json()).error || "Could not save the setlist");
@@ -71,16 +87,22 @@ function setUploads(update: (current: Record<string, UploadState>) => Record<str
 const watchUploads = (watcher: () => void) => { watchers.add(watcher); return () => { watchers.delete(watcher); }; };
 const announce = () => window.dispatchEvent(new Event(CHANGED));
 
+// How long an uploaded recording shows its tick before taking its place among the others.
+const DONE_MS = 1600;
+const busy = (state?: UploadState) => !!state && state.status !== "failed" && state.status !== "done";
+
 async function sendRecording(recording: LocalRecording) {
-  if (uploadStates[recording.id]?.status === "uploading") return;
-  setUploads((current) => ({ ...current, [recording.id]: { id: recording.id, status: "uploading" } }));
+  if (busy(uploadStates[recording.id])) return;
+  const step = (status: UploadState["status"], progress = 0, error?: string) => setUploads((current) => ({ ...current, [recording.id]: { id: recording.id, status, progress, recording, error } }));
+  step("preparing");
   try {
-    await upload(recording);
+    await upload(recording, step);
     trackEvent("session_recording_uploaded", { outcome: "success", tune_count: recording.tunes.length });
-    setUploads((current) => { const next = { ...current }; delete next[recording.id]; return next; });
+    step("done", 1);
+    window.setTimeout(() => { setUploads((current) => { const next = { ...current }; delete next[recording.id]; return next; }); announce(); }, DONE_MS);
   } catch (cause) {
     trackEvent("session_recording_uploaded", { outcome: "error", tune_count: recording.tunes.length });
-    setUploads((current) => ({ ...current, [recording.id]: { id: recording.id, status: "failed", error: cause instanceof Error ? cause.message : "Upload failed" } }));
+    step("failed", 0, cause instanceof Error ? cause.message : "Upload failed");
   }
   announce();
 }

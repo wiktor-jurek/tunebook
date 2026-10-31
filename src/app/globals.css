@@ -287,11 +287,26 @@ body:has(.deck.is-dock){padding-bottom:80px}
 body:has(.deck.is-dock) .group-bar{bottom:92px}
 @media print{.deck-frame{display:none!important}}
 
-/* Recordings still on the device, waiting to upload, above the uploaded ones. */
-.pending-recordings{margin:0 0 24px}.pending-title{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--text-3)}
-.pending-row{cursor:default}.pending-actions{display:flex;gap:14px;flex:none}.pending-state{flex:none;font-size:13px;color:var(--text-3)}
-.finder-search-title{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--text-3)}
-.pending-row .session-row-meta{text-transform:none}
+/* Recordings still on the device, at the top of the Recordings list: a cloud while waiting, then a ring that fills as the
+   audio goes up, a bar along the foot of the row, and a tick that pops in when it has arrived. */
+.pending-row{position:relative;cursor:default;overflow:hidden}.pending-row .session-row-meta{text-transform:none;font-variant-numeric:tabular-nums}
+.pending-actions{display:flex;gap:4px;flex:none}
+.pending-row[data-status=failed] .pending-meta{color:var(--brand-dot-text)}
+.upload-mark{display:grid;place-items:center;color:var(--text-3)}
+.upload-mark.is-working svg{width:26px;height:26px;transform:rotate(-90deg)}
+.upload-track{fill:none;stroke:var(--border);stroke-width:3}
+.upload-fill{fill:none;stroke:var(--brand-dot);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .3s var(--ease)}
+.upload-mark.is-working[data-status=preparing] svg{animation:upload-spin 1s linear infinite}.upload-mark[data-status=preparing] .upload-fill{stroke-dashoffset:75}
+.upload-mark[data-status=saving] .upload-fill{stroke:var(--brand-ink);animation:upload-breathe 1s ease-in-out infinite alternate}
+.upload-mark.is-done{width:26px;height:26px;margin:0 auto;border-radius:50%;background:var(--brand-ink);color:var(--on-brand-ink);animation:upload-pop .45s cubic-bezier(.3,1.6,.5,1)}
+.pending-bar{position:absolute;left:0;right:0;bottom:0;height:2px;background:transparent}.pending-bar>span{display:block;height:100%;background:var(--brand-dot);transform-origin:left;transition:transform .3s var(--ease),background-color .3s}
+.pending-row[data-status=saving] .pending-bar>span,.pending-row[data-status=done] .pending-bar>span{background:var(--brand-ink)}
+.pending-row[data-status=done]{animation:upload-glow 1.6s ease-out}
+@keyframes upload-spin{to{transform:rotate(270deg)}}
+@keyframes upload-breathe{from{opacity:.55}to{opacity:1}}
+@keyframes upload-pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes upload-glow{from{background:var(--brand-dot-soft)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.upload-mark.is-working svg,.upload-mark.is-done,.pending-row[data-status=done],.upload-fill{animation:none;transition:none}}
 
 /* Grouping a tune list: by stage of learning, key or type. */
 .table-group{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-3)}
@@ -302,3 +317,4 @@ body:has(.deck.is-dock) .group-bar{bottom:92px}
 .session-tools .session-search{flex:1;min-width:0;margin:0}
 .session-group-by select{min-height:44px;max-width:46vw;padding:0 10px;border:1px solid var(--input);border-radius:var(--radius-row,10px);background:var(--card);color:var(--foreground);font:inherit;font-size:14px}
 .session-list>section:first-child>.session-group-title{margin-top:4px}
+.recordings-list .session-row-meta{text-transform:none}.recordings-list .session-row-meta::first-letter{text-transform:uppercase}
