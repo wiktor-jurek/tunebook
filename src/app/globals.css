@@ -262,17 +262,26 @@
 /* Practice mode's dock: the session deck as a small card floating in the window's bottom right corner. It sits over the
    page without a scrim, so the page stays in use. Folded, only its head (microphone and status) shows: the rest of the card
    slides down and is clipped away, and the frame around it casts the shadow. */
-.deck-frame{position:fixed;z-index:24;right:24px;bottom:20px;width:min(380px,calc(100vw - 32px));height:0;filter:drop-shadow(0 8px 24px #00000024) drop-shadow(0 0 .5px #0000004d)}
+.deck-frame{position:fixed;z-index:24;right:20px;bottom:16px;width:min(320px,calc(100vw - 32px));height:0;filter:drop-shadow(0 8px 24px #00000024) drop-shadow(0 0 .5px #0000004d)}
 .deck.is-dock{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;margin:0;max-height:min(calc(100dvh - 60px),680px);padding:0 12px;border-radius:16px;box-shadow:none}
 .deck.is-dock::after{display:none}
 .deck.is-dock.is-recording{max-height:min(calc(100dvh - 60px),680px);box-shadow:inset 0 3px 0 var(--brand-dot)}
 .deck.is-dock .deck-more{min-height:0}
 .deck.is-dock .deck-grip{display:none}
-.deck.is-dock .deck-head{padding:10px 2px 8px}
-.deck.is-dock .deck-status-text{font-size:15px}
+.deck.is-dock{padding:0 10px}
+.deck.is-dock .deck-head{padding:6px 0 6px}
+.deck.is-dock .deck-head-layers{min-height:48px}
+.deck.is-dock .deck-listen{gap:10px}
+.deck.is-dock .deck-mic-slot,.deck.is-dock .finder-dial.is-mini .finder-button{width:40px;height:40px}
+.deck.is-dock .deck-status-text{font-size:14px}
+.deck.is-dock .deck-status-text.is-tune{font-size:17px}
+.deck.is-dock .deck-hint{font-size:11px}
+.deck.is-dock .deck-title{font-size:20px}
+.deck.is-dock .deck-record-slot{width:68px;height:68px;margin:6px 0 10px}
+.deck.is-dock .deck-copy{font-size:13px}
 .deck.is-dock .deck-result .finder-answer h2{font-size:26px}
 .deck-open{flex:none;width:32px;height:32px;border-radius:50%;color:var(--text-3)}.deck-open:hover{background:var(--muted);color:var(--foreground)}
 .deck-listen:hover .deck-open{color:var(--foreground)}
-body:has(.deck.is-dock){padding-bottom:96px}
-body:has(.deck.is-dock) .group-bar{bottom:108px}
+body:has(.deck.is-dock){padding-bottom:80px}
+body:has(.deck.is-dock) .group-bar{bottom:92px}
 @media print{.deck-frame{display:none!important}}

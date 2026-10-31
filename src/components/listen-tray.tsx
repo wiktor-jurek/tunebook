@@ -23,8 +23,8 @@ const SPRING = { type: "spring", stiffness: 300, damping: 35 } as const;
 const MIC_SPRING = { stiffness: 300, damping: 30, mass: 0.9 };
 // The icon's change of shape (microphone, dot, square) can afford a little more play.
 const SHAPE_SPRING = { stiffness: 280, damping: 24 };
-// The microphone in the deck's head, and the record button it grows into.
-const MINI = 50, BIG = 88;
+// The microphone in the deck's head (smaller in the desktop dock), and the record button it grows into.
+const MINI = 50, DOCK_MINI = 40, BIG = 88, DOCK_BIG = 68;
 // How long the deck opens for when a live session names a new tune, before it folds back down.
 const PEEK_MS = 5000;
 // How far, or how fast, a tune in the live setlist must be swiped to go.
@@ -75,6 +75,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const shift = useMotionValue(0);
   const y = useTransform(() => (1 - open.get()) * range.get() + shift.get());
   const scrim = useTransform(() => unit(open.get()));
+  const small = dock ? DOCK_MINI : MINI, large = dock ? DOCK_BIG : BIG;
   // The dock floats above the window's edge, so the part of it slid down out of sight is clipped away instead of off screen.
   const clip = useTransform(() => `inset(0px 0px ${Math.max(0, y.get())}px 0px round 16px)`);
   // Where the microphone sits in the head, and where the record button sits in the open sheet (none if it cannot record).
@@ -82,9 +83,9 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const big = useMotionValue<Spot | null>(null);
   const grow = useSpring(useTransform(() => (big.get() ? unit(open.get()) : 0)), MIC_SPRING);
   // It swings up in a curve rather than a straight line: rising first, then drifting to the middle.
-  const dialX = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.x + (b.x - a.x) * p * Math.abs(p) - MINI / 2; });
-  const dialY = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.y + (b.y - a.y) * (1 - (1 - p) * Math.abs(1 - p)) - MINI / 2; });
-  const dialScale = useTransform(() => 1 + (BIG / MINI - 1) * grow.get());
+  const dialX = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.x + (b.x - a.x) * p * Math.abs(p) - small / 2; });
+  const dialY = useTransform(() => { const a = mini.get(), b = big.get() ?? a, p = grow.get(); return a.y + (b.y - a.y) * (1 - (1 - p) * Math.abs(1 - p)) - small / 2; });
+  const dialScale = useTransform(() => 1 + (large / small - 1) * grow.get());
   const dialFade = useTransform(() => (big.get() ? 1 : unit(1 - open.get() * 1.8)));
   const headRow = useTransform(() => unit(1 - open.get() * 1.8));
   const headTitle = useTransform(() => unit((open.get() - 0.45) / 0.55));
