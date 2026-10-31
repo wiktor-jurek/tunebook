@@ -107,7 +107,9 @@ export function ListenTray({ signedIn }: { signedIn: boolean }) {
   // Naming one tune stops at the first confident answer; a session recording keeps going.
   useEffect(() => { if (!recording && listening && status === "match" && leader) stop(); }, [recording, listening, status, leader, stop]);
 
-  const result = answer && answer.tuneId !== dismissed ? answer : null;
+  // Guesses stay out of the docked sheet while it listens: they come and go, and a card that grows and shrinks with them
+  // jumps about. It shows the tune once it is named, or the best guess once listening stops.
+  const result = answer && answer.tuneId !== dismissed && (status === "match" || !listening) ? answer : null;
   // Open while recording, the tune playing now already leads the sheet; it is not shown twice.
   const shown = result && !(recording && full) ? result : null;
   // While recording, a named tune is a passing notice: it folds away after a few seconds.

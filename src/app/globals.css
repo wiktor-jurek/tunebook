@@ -155,7 +155,6 @@
 .finder-answer .opening-phrase{margin:14px auto 0}
 .finder-phrase-note{margin:2px 0 0;font-size:12px;color:var(--text-3)}
 .finder-answer .finder-actions{margin-top:12px;flex-wrap:wrap;gap:6px}
-.finder-source{font-size:13px;color:var(--text-3);text-decoration:underline;text-underline-offset:3px;padding:6px 4px}
 .finder-kept{display:inline-flex;align-items:center;gap:5px;padding:0 8px;font-size:13px;color:var(--brand-ink)}
 .tune-finder[data-compact] .finder-button{width:64px;height:64px}.tune-finder[data-compact] .finder-icon svg{width:22px;height:22px}
 .finder-again{order:1;margin-top:-10px;font-size:12px;color:var(--text-3)}

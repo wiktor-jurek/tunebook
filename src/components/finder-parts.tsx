@@ -46,13 +46,21 @@ export function LearnLater({ tune, context }: { tune: FinderTune; context: Finde
   return <Button size="sm" variant="outline" disabled={listener.saving === tune.tuneId} onClick={() => void listener.learnLater(tune)}><Bookmark size={14} /> {listener.saving === tune.tuneId ? "Saving" : "Learn later"}</Button>;
 }
 
-/** The answer leads to music: the full score first, then keeping it for later, then its page on The Session. */
+/** The answer leads to music: the full score first, then keeping it for later. */
 export function FinderActions({ tune, context, primary = false }: { tune: FinderTune; context: FinderContext; primary?: boolean }) {
   return <div className="finder-actions">
     <Button size="sm" variant={primary ? "default" : "ghost"} onClick={() => context.onScore(tune)}><Music size={14} /> {primary ? "Open full score" : "Score"}</Button>
     <LearnLater tune={tune} context={context} />
-    {primary && <a className="finder-source" href={`https://thesession.org/tunes/${tune.tuneId}`} target="_blank" rel="noreferrer">View on The Session</a>}
   </div>;
+}
+
+const ABILITY_SENTENCES: Partial<Record<FinderTune["level"], string>> = { learning: "You're learning this one.", learned: "You can play along with this one.", mastered: "You can lead this one." };
+
+/** Where a named tune stands, said in full: "You can lead this one. It's in Madrid Session." Want to learn shows as Learn later's "On your list". */
+export function standingSentence(tune: FinderTune) {
+  const books = tune.inBooks.length === 1 ? `It's in ${tune.inBooks[0].name}.` : tune.inBooks.length ? `It's in ${tune.inBooks.length} of your tunebooks.` : null;
+  const saved = tune.savedId && !books && tune.level === "unlearned" ? "It's in your library." : null;
+  return [ABILITY_SENTENCES[tune.level], books ?? saved].filter(Boolean).join(" ");
 }
 
 export function FinderRow({ tune, detail, context, phrase = false }: { tune: FinderTune; detail: string; context: FinderContext; phrase?: boolean }) {
@@ -62,14 +70,14 @@ export function FinderRow({ tune, detail, context, phrase = false }: { tune: Fin
   </li>;
 }
 
-/** A named tune: whether it is sure, the title as people say it, where it stands for you, and how it starts. */
+/** A named tune: whether it is sure, the title as people say it, where it stands for you, and how it starts (your setting, if you have one). */
 export function FinderAnswer({ tune, sure, context }: { tune: FinderTune; sure: boolean; context: FinderContext }) {
   return <div key={tune.tuneId} className={`finder-answer ${sure ? "is-match" : ""}`}>
     {!sure && <p className="finder-state">Possible match</p>}
     <h2>{displayTitle(tune.title)}</h2><p className="finder-meta">{meta(tune)}</p>
-    {standing(tune) && <p className={`finder-standing ${known(tune) ? "is-known" : ""}`}>{standing(tune)}</p>}
+    {standingSentence(tune) && <p className={`finder-standing ${known(tune) ? "is-known" : ""}`}>{standingSentence(tune)}</p>}
     <OpeningPhrase tune={tune} />
-    <p className="finder-phrase-note">{tune.savedId ? "Opening bars of your setting" : "Opening bars of The Session's setting, not a transcription"}</p>
+    {!tune.savedId && <p className="finder-phrase-note">{"Opening bars of The Session's setting, not a transcription"}</p>}
     <FinderActions tune={tune} context={context} primary />
   </div>;
 }
