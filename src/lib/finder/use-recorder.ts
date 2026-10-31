@@ -62,39 +62,66 @@ async function upload(recording: LocalRecording) {
   return id as string;
 }
 
+// Uploads in flight, shared by the tray (which uploads a recording when it stops) and the Recordings screen (which lists
+// any still waiting), so neither starts a second upload of the same recording.
+let uploadStates: Record<string, UploadState> = {};
+const watchers = new Set<() => void>();
+const CHANGED = "tunebook-recordings-changed";
+function setUploads(update: (current: Record<string, UploadState>) => Record<string, UploadState>) { uploadStates = update(uploadStates); watchers.forEach((watcher) => watcher()); }
+const watchUploads = (watcher: () => void) => { watchers.add(watcher); return () => { watchers.delete(watcher); }; };
+const announce = () => window.dispatchEvent(new Event(CHANGED));
+
+async function sendRecording(recording: LocalRecording) {
+  if (uploadStates[recording.id]?.status === "uploading") return;
+  setUploads((current) => ({ ...current, [recording.id]: { id: recording.id, status: "uploading" } }));
+  try {
+    await upload(recording);
+    trackEvent("session_recording_uploaded", { outcome: "success", tune_count: recording.tunes.length });
+    setUploads((current) => { const next = { ...current }; delete next[recording.id]; return next; });
+  } catch (cause) {
+    trackEvent("session_recording_uploaded", { outcome: "error", tune_count: recording.tunes.length });
+    setUploads((current) => ({ ...current, [recording.id]: { id: recording.id, status: "failed", error: cause instanceof Error ? cause.message : "Upload failed" } }));
+  }
+  announce();
+}
+
+/**
+ * Recordings kept on this device that have not uploaded: one stopped with no connection, or cut off by a reload. The
+ * Recordings screen lists them, to upload or discard. It only reads them, so it never touches a recording in progress.
+ */
+export function usePendingRecordings() {
+  const [pending, setPending] = useState<LocalRecording[]>([]);
+  const uploads = useSyncExternalStore(watchUploads, () => uploadStates, () => uploadStates);
+  const capable = useSyncExternalStore(() => () => undefined, () => typeof indexedDB !== "undefined", () => false);
+  useEffect(() => {
+    if (!capable) return;
+    const refresh = () => void allMeta().then((all) => setPending(all.filter((r) => r.finished))).catch(() => undefined);
+    refresh();
+    window.addEventListener(CHANGED, refresh);
+    return () => window.removeEventListener(CHANGED, refresh);
+  }, [capable]);
+  const discard = useCallback(async (id: string) => { await forget(id); announce(); }, []);
+  return { pending, uploads, retry: sendRecording, discard };
+}
+
 /** `enabled` is false on screens that never record, so they do not touch IndexedDB. */
 export function useSessionRecorder(enabled: boolean) {
   const [active, setActive] = useState<LocalRecording | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [pending, setPending] = useState<LocalRecording[]>([]);
-  const [uploads, setUploads] = useState<Record<string, UploadState>>({});
   const recorder = useRef<{ media: MediaRecorder; meta: LocalRecording; started: number; seq: number; timer: number; writing: Promise<unknown> } | null>(null);
   // Read like an external store so the server (which cannot record) and the first browser render agree.
   const capable = useSyncExternalStore(() => () => undefined, () => typeof MediaRecorder !== "undefined" && typeof indexedDB !== "undefined", () => false);
   const supported = enabled && capable;
 
-  const refresh = useCallback(async () => { if (supported) setPending((await allMeta().catch(() => [])).filter((r) => r.finished)); }, [supported]);
-  // Recordings cut off by a reload or a crash are closed off at their last chunk and offered for upload.
+  // Recordings cut off by a reload or a crash are closed off at their last chunk, for the Recordings screen to offer.
+  // Only the tray does this, once, before it can be recording.
   useEffect(() => {
     if (!supported) return;
     void allMeta().then(async (all) => {
       for (const r of all.filter((r) => !r.finished)) await saveMeta({ ...r, finished: true, tunes: r.tunes.map((t) => ({ ...t, endMs: t.endMs || r.durationMs })) });
-      await refresh();
+      announce();
     }).catch(() => undefined);
-  }, [supported, refresh]);
-
-  const send = useCallback(async (recording: LocalRecording) => {
-    setUploads((current) => ({ ...current, [recording.id]: { id: recording.id, status: "uploading" } }));
-    try {
-      await upload(recording);
-      trackEvent("session_recording_uploaded", { outcome: "success", tune_count: recording.tunes.length });
-      setUploads((current) => { const next = { ...current }; delete next[recording.id]; return next; });
-    } catch (cause) {
-      trackEvent("session_recording_uploaded", { outcome: "error", tune_count: recording.tunes.length });
-      setUploads((current) => ({ ...current, [recording.id]: { id: recording.id, status: "failed", error: cause instanceof Error ? cause.message : "Upload failed" } }));
-    }
-    await refresh();
-  }, [refresh]);
+  }, [supported]);
 
   const start = useCallback(async (stream: MediaStream, name: string) => {
     const mime = TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
@@ -152,10 +179,8 @@ export function useSessionRecorder(enabled: boolean) {
     await state.writing;
     await saveMeta(meta);
     setActive(null);
-    await send(meta);
-  }, [send]);
+    await sendRecording(meta);
+  }, []);
 
-  const discard = useCallback(async (id: string) => { await forget(id); await refresh(); }, [refresh]);
-
-  return { supported, active, elapsed, pending, uploads, start, mark, reject, stop, retry: send, discard };
+  return { supported, active, elapsed, start, mark, reject, stop };
 }

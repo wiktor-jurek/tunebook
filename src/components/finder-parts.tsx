@@ -113,8 +113,9 @@ export function FinderSearch({ context }: { context: FinderContext }) {
       } catch { setFound([]); }
     }, 250);
   }
-  return <section className="finder-search" aria-label="Search by name">
-    <label className="finder-search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Search for a tune by name</span><input type="search" value={query} onChange={(event) => search(event.target.value)} placeholder="Know the name? Search for it" enterKeyHint="search" /></label>
+  return <section className="finder-search" aria-labelledby="finder-search-title">
+    <p className="finder-search-title" id="finder-search-title">Quick search</p>
+    <label className="finder-search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">Search the scores of every tune on The Session, by name</span><input type="search" value={query} onChange={(event) => search(event.target.value)} placeholder="Search scores by tune name" enterKeyHint="search" /></label>
     {found && (found.length ? <ul>{found.map((tune) => <FinderRow key={tune.tuneId} tune={tune} detail={meta(tune)} context={context} />)}</ul> : <p className="finder-meta">No tune by that name on The Session.</p>)}
   </section>;
 }

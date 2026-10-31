@@ -6,10 +6,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle, type MotionValue } from "motion/react";
 import { ChevronDown, ChevronUp, Disc3, MicOff, Moon, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { FinderTune } from "@/lib/library";
 import { useTuneListener, type Heard } from "@/lib/finder/use-listener";
-import { useSessionRecorder, type LocalRecording } from "@/lib/finder/use-recorder";
+import { useSessionRecorder } from "@/lib/finder/use-recorder";
 import { clock, FinderAlternatives, FinderAnswer, FinderHeard, FinderScore, FinderSearch, meta, standing, time, type FinderContext } from "@/components/finder-parts";
 import { OpeningPhrase } from "@/components/opening-phrase";
 import { displayTitle } from "@/lib/titles";
@@ -65,7 +64,6 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const [score, setScore] = useState<FinderTune | null>(null);
   const [dismissed, setDismissed] = useState<number | null>(null);
   const [dimmed, setDimmed] = useState(false);
-  const [discarding, setDiscarding] = useState<LocalRecording | null>(null);
   // While a newly named tune is shown for a moment in a live session; any touch on the deck keeps it open.
   const [peeking, setPeeking] = useState(false);
   // The hidden part of the sheet renders only once the deck can measure and tuck it away, so a page never loads with it open.
@@ -355,11 +353,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
           {recording ? <>
             {tonight.length ? <LiveSetlist tonight={tonight} pointer={dock} onScore={setScore} onReject={refuse} />
               : <p className="deck-waiting">Listening for the first tune<span className="finder-dots" aria-hidden="true"><i /><i /></span></p>}
-            {recorder.pending.map((r) => <p className="finder-upload" key={r.id} role="status">{r.name}, waiting to upload</p>)}
           </> : <>
-            {recorder.pending.map((r) => { const state = recorder.uploads[r.id]; return <div className="finder-upload" key={r.id} role="status">
-              <span>{r.name}, {clock(r.durationMs)}</span>{state?.status === "uploading" ? <span>Uploading</span> : <><button type="button" className="finder-link" onClick={() => void recorder.retry(r)}>{state?.status === "failed" ? "Retry upload" : "Upload"}</button><button type="button" className="finder-link" onClick={() => setDiscarding(r)}>Discard</button></>}
-              {state?.status === "failed" && <span className="form-error">{state.error}</span>}</div>; })}
             <FinderSearch context={context} />
             <FinderHeard context={context} />
           </>}
@@ -373,7 +367,6 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
       return <Link key={href} href={href} className="deck-tab" aria-current={current ? "page" : undefined} onClick={() => go(false)}><Icon size={22} strokeWidth={current ? 2.25 : 1.75} /><span>{label}</span></Link>;
     })}</nav>}
 
-    <ConfirmDialog open={!!discarding} onOpenChange={(value) => { if (!value) setDiscarding(null); }} title={`Discard ${discarding?.name ?? "this recording"}?`} description="It has not been uploaded, so it will be gone for good." action="Discard" onConfirm={() => { if (discarding) void recorder.discard(discarding.id); setDiscarding(null); }} />
     {dimmed && <button type="button" className="finder-pocket" onClick={() => setDimmed(false)} aria-label="Wake the screen"><span>Recording {clock(recorder.elapsed)}</span></button>}
     {score && <FinderScore tune={listener.tunes[score.tuneId] ?? score} context={context} onClose={() => setScore(null)} />}
   </>;

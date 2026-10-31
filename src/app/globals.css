@@ -286,3 +286,9 @@
 body:has(.deck.is-dock){padding-bottom:80px}
 body:has(.deck.is-dock) .group-bar{bottom:92px}
 @media print{.deck-frame{display:none!important}}
+
+/* Recordings still on the device, waiting to upload, above the uploaded ones. */
+.pending-recordings{margin:0 0 24px}.pending-title{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--text-3)}
+.pending-row{cursor:default}.pending-actions{display:flex;gap:14px;flex:none}.pending-state{flex:none;font-size:13px;color:var(--text-3)}
+.finder-search-title{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--text-3)}
+.pending-row .session-row-meta{text-transform:none}
