@@ -292,3 +292,13 @@ body:has(.deck.is-dock) .group-bar{bottom:92px}
 .pending-row{cursor:default}.pending-actions{display:flex;gap:14px;flex:none}.pending-state{flex:none;font-size:13px;color:var(--text-3)}
 .finder-search-title{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--text-3)}
 .pending-row .session-row-meta{text-transform:none}
+
+/* Grouping a tune list: by stage of learning, key or type. */
+.table-group{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-3)}
+.table-group-row>th{padding:22px 12px 8px;font-size:13px;font-weight:650;color:var(--foreground);background:transparent;text-align:left}
+.table-group-row:first-child>th{padding-top:10px}
+.table-group-count,.session-group-count{margin-left:8px;font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}
+.session-tools{display:flex;gap:8px;align-items:center;margin:0 0 12px}
+.session-tools .session-search{flex:1;min-width:0;margin:0}
+.session-group-by select{min-height:44px;max-width:46vw;padding:0 10px;border:1px solid var(--input);border-radius:var(--radius-row,10px);background:var(--card);color:var(--foreground);font:inherit;font-size:14px}
+.session-list>section:first-child>.session-group-title{margin-top:4px}

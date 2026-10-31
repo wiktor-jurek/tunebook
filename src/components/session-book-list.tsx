@@ -29,7 +29,7 @@ export async function SessionTunes({ userId, view }: { userId: string; view: "tu
   return <div className="session-screen"><h1 className="session-title">Tunes</h1>
     <nav className="appearance-picker session-switch" aria-label="Show">{tab("tunes", "/", "All tunes")}{tab("books", "/?view=books", "Tunebooks")}</nav>
     {view === "books" ? <BookRows books={books} sharedBooks={sharedBooks} />
-      : tunes.length ? <SessionBook name="Tunes" searchable sections={tunes.map((tune) => ({ kind: "tune", entryId: tune.id, tune: { ...tune, oftenPlayed: false } }))} />
+      : tunes.length ? <SessionBook name="Tunes" searchable groupable sections={tunes.map((tune) => ({ kind: "tune", entryId: tune.id, tune: { ...tune, oftenPlayed: false } }))} />
       : <p className="session-empty">Save tunes at home, or name one that&apos;s playing with the microphone below, and they appear here.</p>}
   </div>;
 }

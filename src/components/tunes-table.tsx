@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,7 @@ import { keyName } from "@/lib/notation";
 import { ABILITY_LABELS, ABILITY_LEVELS, type AbilityLevel } from "@/lib/ability";
 import type { TuneWithPractice } from "@/lib/tune-practice";
 import { displayTitle } from "@/lib/titles";
+import { GROUP_BYS, GROUP_BY_LABELS, groupTunes, setGroupBy, useGroupBy, type GroupBy } from "@/lib/tune-groups";
 
 type SortKey = "title" | "kind" | "mode" | "ability" | "added";
 type Sort = { key: SortKey; descending: boolean };
@@ -41,6 +42,9 @@ export function TunesTable({ tunes }: { tunes: TuneWithPractice[] }) {
       .sort((a, b) => (sort.descending ? -1 : 1) * (compare(a, b) || SORTS.title(a, b)));
   }, [tunes, query, kind, level, sort]);
   const filtered = Boolean(query || kind || level);
+  // Grouped, each group keeps the chosen sort inside it.
+  const groupBy = useGroupBy();
+  const groups = useMemo(() => groupTunes(shown, groupBy), [shown, groupBy]);
 
   function header(key: SortKey, label: string, className?: string) {
     const active = sort.key === key;
@@ -56,19 +60,23 @@ export function TunesTable({ tunes }: { tunes: TuneWithPractice[] }) {
       <label className="table-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search tunes</span><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, type, key or composer" />{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery("")}><X size={14} /></button>}</label>
       <select className="table-filter" value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Filter by type"><option value="">All types</option>{kinds.map((entry) => <option key={entry} value={entry}>{entry[0].toUpperCase() + entry.slice(1)}</option>)}</select>
       <select className="table-filter" value={level} onChange={(event) => setLevel(event.target.value as AbilityLevel | "")} aria-label="Filter by progress"><option value="">Any progress</option>{ABILITY_LEVELS.map((entry) => <option key={entry} value={entry}>{ABILITY_LABELS[entry]}</option>)}</select>
+      <label className="table-group">Group by<select className="table-filter" value={groupBy} onChange={(event) => setGroupBy(event.target.value as GroupBy)}>{GROUP_BYS.map((entry) => <option key={entry} value={entry}>{GROUP_BY_LABELS[entry]}</option>)}</select></label>
       {filtered && <span className="table-count" role="status">{shown.length} of {tunes.length}</span>}
     </div>
     <Table>
       <TableHeader><TableRow>{header("title", "Tune")}{header("kind", "Type", "table-wide")}{header("mode", "Key", "table-wide")}{header("ability", "Progress")}{header("added", "Added", "table-wide table-added")}<TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
       <TableBody>
-        {shown.map((tune) => <TableRow key={tune.id}>
+        {groups.map((group) => <Fragment key={group.key}>
+          {group.label && <TableRow className="table-group-row"><TableHead colSpan={6} scope="colgroup">{group.label}<span className="table-group-count">{group.tunes.length}</span></TableHead></TableRow>}
+          {group.tunes.map((tune) => <TableRow key={tune.id}>
           <TableCell><div className="table-tune"><div><span className="table-title-line"><TuneIcon tune={tune} size="inline" /><Link href={`/tunes/${tune.id}`} className="table-title">{displayTitle(tune.title)}</Link></span><span className="table-meta">{tune.meter}<span className="table-narrow">{tune.kind && <>, <span className="table-kind">{tune.kind}</span></>}{tune.mode && `, ${keyName(tune.mode)}`}</span></span></div></div></TableCell>
           <TableCell className="table-wide table-kind">{tune.kind}</TableCell>
           <TableCell className="table-wide">{keyName(tune.mode)}</TableCell>
           <TableCell><TuneAbility tune={tune} /></TableCell>
           <TableCell className="table-wide table-added table-muted">{added.format(new Date(tune.createdAt))}</TableCell>
           <TableCell className="table-actions"><TuneActions tuneId={tune.id} title={displayTitle(tune.title)} /></TableCell>
-        </TableRow>)}
+          </TableRow>)}
+        </Fragment>)}
         {!shown.length && filtered && <TableRow><TableCell colSpan={6} className="table-empty">No tunes match. <button type="button" onClick={clear}>Clear filters</button></TableCell></TableRow>}
       </TableBody>
     </Table>

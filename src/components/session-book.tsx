@@ -9,6 +9,7 @@ import type { BookSection } from "@/lib/library";
 import { RepeatMark } from "@/components/repeat-mark";
 import { AbilityMark } from "@/components/ability-mark";
 import { displayTitle, displaySetTitle } from "@/lib/titles";
+import { GROUP_BYS, GROUP_BY_LABELS, groupTunes, setGroupBy, useGroupBy, type GroupBy } from "@/lib/tune-groups";
 
 type Tune = Extract<BookSection, { kind: "tune" }>["tune"];
 type Page = { tune: Tune; set: string | null; key: string };
@@ -62,14 +63,19 @@ function useWakeLock(active: boolean) {
 
 /**
  * A tunebook in session mode (or all your tunes): tunes as large rows with your progress on each, then each score full
- * screen, swiping through in playing order. `searchable` adds a filter by title, for long lists.
+ * screen, swiping through in playing order. `searchable` adds a filter by title, for long lists; `groupable` (for a list of
+ * single tunes, not a book with its sets) groups them by stage of learning, key or type, and the scores follow that order.
  */
-export function SessionBook({ name, sections: all, searchable = false }: { name: string; sections: BookSection[]; searchable?: boolean }) {
+export function SessionBook({ name, sections: given, searchable = false, groupable = false }: { name: string; sections: BookSection[]; searchable?: boolean; groupable?: boolean }) {
   const [query, setQuery] = useState("");
   const words = query.trim().toLowerCase();
   const matches = (tune: Tune) => !words || displayTitle(tune.title).toLowerCase().includes(words) || tune.title.toLowerCase().includes(words);
-  const sections = words ? all.flatMap((section): BookSection[] => section.kind === "tune" ? (matches(section.tune) ? [section] : [])
-    : section.tunes.some(matches) ? [{ ...section, tunes: section.tunes.filter(matches) }] : []) : all;
+  const groupBy = useGroupBy();
+  const matching = words ? given.flatMap((section): BookSection[] => section.kind === "tune" ? (matches(section.tune) ? [section] : [])
+    : section.tunes.some(matches) ? [{ ...section, tunes: section.tunes.filter(matches) }] : []) : given;
+  const singles = new Map(matching.flatMap((section) => section.kind === "tune" ? [[section.tune.id, section] as const] : []));
+  const groups = groupable ? groupTunes(matching.flatMap((section) => section.kind === "tune" ? [section.tune] : []), groupBy) : [];
+  const sections = groupable ? groups.flatMap((group) => group.tunes.map((tune) => singles.get(tune.id)!)) : matching;
   const pages = sections.flatMap((section): Page[] => section.kind === "tune" ? [{ tune: section.tune, set: null, key: `${section.entryId}-${section.tune.id}` }]
     : section.tunes.map((tune) => ({ tune, set: section.name, key: `${section.entryId}-${tune.id}` })));
   const [open, setOpen] = useState<number | null>(null);
@@ -117,9 +123,16 @@ export function SessionBook({ name, sections: all, searchable = false }: { name:
   };
 
   return <>
-    {searchable && <label className="finder-search-field session-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Find a tune</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a tune" enterKeyHint="search" /></label>}
-    {/* Single tunes next to each other share one group; each set is a group of its own under its name. */}
-    <div className="session-list">{runs(sections).map((run) => run.kind === "tunes"
+    {(searchable || groupable) && <div className="session-tools">
+      {searchable && <label className="finder-search-field session-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Find a tune</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a tune" enterKeyHint="search" /></label>}
+      {groupable && <label className="session-group-by"><span className="sr-only">Group by</span><select value={groupBy} onChange={(event) => setGroupBy(event.target.value as GroupBy)} aria-label="Group by">{GROUP_BYS.map((entry) => <option key={entry} value={entry}>{entry === "none" ? "No groups" : `By ${GROUP_BY_LABELS[entry].toLowerCase()}`}</option>)}</select></label>}
+    </div>}
+    {/* Grouped, each group is headed with its name and size. Otherwise single tunes next to each other share one group,
+        and each set is a group of its own under its name. */}
+    <div className="session-list">{groupable ? groups.map((group) => <section key={group.key}>
+      {group.label && <h2 className="session-group-title">{group.label}<span className="session-group-count">{group.tunes.length}</span></h2>}
+      <ul className="session-group">{group.tunes.map(row)}</ul>
+    </section>) : runs(sections).map((run) => run.kind === "tunes"
       ? <ul className="session-group" key={run.key}>{run.tunes.map(row)}</ul>
       : <section key={run.section.entryId}><h2 className="session-group-title"><RepeatMark />{displaySetTitle(run.section.name)}</h2><ul className="session-group">{run.section.tunes.map(row)}</ul></section>)}
     </div>
