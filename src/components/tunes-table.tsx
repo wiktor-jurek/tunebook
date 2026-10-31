@@ -59,14 +59,14 @@ export function TunesTable({ tunes }: { tunes: TuneWithPractice[] }) {
       {filtered && <span className="table-count" role="status">{shown.length} of {tunes.length}</span>}
     </div>
     <Table>
-      <TableHeader><TableRow>{header("title", "Tune")}{header("kind", "Type", "table-wide")}{header("mode", "Key", "table-wide")}{header("ability", "Progress")}{header("added", "Added", "table-wide")}<TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow>{header("title", "Tune")}{header("kind", "Type", "table-wide")}{header("mode", "Key", "table-wide")}{header("ability", "Progress")}{header("added", "Added", "table-wide table-added")}<TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
       <TableBody>
         {shown.map((tune) => <TableRow key={tune.id}>
-          <TableCell><div className="table-tune"><TuneIcon tune={tune} /><div><Link href={`/tunes/${tune.id}`} className="table-title">{displayTitle(tune.title)}</Link><span className="table-meta">{tune.meter}<span className="table-narrow">{tune.kind && <>, <span className="table-kind">{tune.kind}</span></>}{tune.mode && `, ${keyName(tune.mode)}`}</span></span></div></div></TableCell>
+          <TableCell><div className="table-tune"><div><span className="table-title-line"><TuneIcon tune={tune} size="inline" /><Link href={`/tunes/${tune.id}`} className="table-title">{displayTitle(tune.title)}</Link></span><span className="table-meta">{tune.meter}<span className="table-narrow">{tune.kind && <>, <span className="table-kind">{tune.kind}</span></>}{tune.mode && `, ${keyName(tune.mode)}`}</span></span></div></div></TableCell>
           <TableCell className="table-wide table-kind">{tune.kind}</TableCell>
           <TableCell className="table-wide">{keyName(tune.mode)}</TableCell>
           <TableCell><TuneAbility tune={tune} /></TableCell>
-          <TableCell className="table-wide table-muted">{added.format(new Date(tune.createdAt))}</TableCell>
+          <TableCell className="table-wide table-added table-muted">{added.format(new Date(tune.createdAt))}</TableCell>
           <TableCell className="table-actions"><TuneActions tuneId={tune.id} title={displayTitle(tune.title)} /></TableCell>
         </TableRow>)}
         {!shown.length && filtered && <TableRow><TableCell colSpan={6} className="table-empty">No tunes match. <button type="button" onClick={clear}>Clear filters</button></TableCell></TableRow>}

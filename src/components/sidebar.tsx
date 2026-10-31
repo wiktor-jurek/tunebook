@@ -30,6 +30,7 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
   const booksByFolder = (folder: string | null) => library.books.filter((b) => b.folderId === folder);
   const launch = (next: Task) => setTask(next);
   const closeMobile = () => setMobileOpen(false);
+  const main = (href: string, icon: React.ReactNode, label: string, active: boolean, count?: number) => <Link onClick={closeMobile} href={href} className={`nav-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined}>{icon} {label}{count !== undefined && <span className="nav-count">{count}</span>}</Link>;
   const managementMenu = (name: string, target: { bookId: string; folderId: string | null } | { folderId: string; parentId: string | null }) => {
     const kind = "bookId" in target ? "Book" : "Folder";
     return <DropdownMenu><DropdownMenuTrigger asChild><button className="icon-button subtle" aria-label={`Actions for ${name}`} title={`Actions for ${name}`} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger><DropdownMenuContent className="nav-action-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{name}</DropdownMenuLabel>
@@ -63,8 +64,13 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><BrandMark /><span>Tune Companion</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
       <nav aria-label="Main navigation">
-        <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <Link onClick={closeMobile} href="/" className={`nav-link ${path === "/" ? "active" : ""}`}><Music2 size={16} /> Tunes <span className="nav-count">{library.tunes.length}</span></Link>}{!guest && <Link onClick={closeMobile} href="/tunes/finder" className={`nav-link nav-sub ${path === "/tunes/finder" ? "active" : ""}`} aria-current={path === "/tunes/finder" ? "page" : undefined}><AudioLines size={15} /> Tune finder</Link>}</div>
-        {!guest && <Link onClick={closeMobile} href="/recordings" className={`nav-link nav-my-sets ${path.startsWith("/recordings") ? "active" : ""}`} aria-current={path === "/recordings" ? "page" : undefined}><Disc3 size={16} /> Recordings</Link>}{!guest && <Link onClick={closeMobile} href="/sets" className={`nav-link nav-my-sets ${path === "/sets" ? "active" : ""}`} aria-current={path === "/sets" ? "page" : undefined}><ListMusic size={16} /> Sets <span className="nav-count">{library.sets.length}</span></Link>}
+        {/* One list, each of equal weight: what you have (tunes, sets), then listening (naming a tune, recorded sessions). */}
+        <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <>
+          {main("/", <Music2 size={16} />, "Tunes", path === "/", library.tunes.length)}
+          {main("/sets", <ListMusic size={16} />, "Sets", path === "/sets", library.sets.length)}
+          {main("/tunes/finder", <AudioLines size={16} />, "Tune finder", path === "/tunes/finder")}
+          {main("/recordings", <Disc3 size={16} />, "Recordings", path.startsWith("/recordings"))}
+        </>}</div>
         <div className="nav-label-row"><span>TUNEBOOKS</span>{!guest && creationMenu()}</div>
         {guest ? <Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunebooks</Link> : <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map(renderFolder)}</div>}
         <div className="nav-label-row nav-shared-label"><span>SHARED WITH ME</span></div>

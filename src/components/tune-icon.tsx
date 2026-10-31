@@ -10,7 +10,7 @@ import { trackEvent } from "@/lib/analytics";
 const EmojiPicker = dynamic(() => import("@/components/emoji-picker"), { ssr: false, loading: () => <p className="emoji-loading">Loading emojis</p> });
 type Tune = { id: string; title: string; emoji: string; suggestedEmoji: string; emojiOverride: string | null };
 
-export function TuneIcon({ tune, readOnly = false, size = "list" }: { tune: Tune; readOnly?: boolean; size?: "list" | "page" | "book" }) {
+export function TuneIcon({ tune, readOnly = false, size = "list" }: { tune: Tune; readOnly?: boolean; size?: "list" | "page" | "book" | "inline" }) {
   const router = useRouter();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const className = `tune-icon tune-icon-${size}`;
