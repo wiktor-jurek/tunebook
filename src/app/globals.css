@@ -272,7 +272,8 @@
 .deck.is-dock .deck-head{padding:6px 0 6px}
 .deck.is-dock .deck-head-layers{min-height:48px}
 .deck.is-dock .deck-listen{gap:10px}
-.deck.is-dock .deck-mic-slot,.deck.is-dock .finder-dial.is-mini .finder-button{width:40px;height:40px}
+.deck.is-dock .deck-mic-slot,.deck.is-dock .finder-dial.is-deck,.deck.is-dock .finder-dial.is-mini .finder-button{width:40px;height:40px}
+.deck.is-dock .finder-dial.is-mini .finder-arc{inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px)}
 .deck.is-dock .deck-status-text{font-size:14px}
 .deck.is-dock .deck-status-text.is-tune{font-size:17px}
 .deck.is-dock .deck-hint{font-size:11px}

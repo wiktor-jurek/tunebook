@@ -17,6 +17,11 @@ import { displayTitle } from "@/lib/titles";
 const DRAG_START = 8, DRAG_DONE = 44;
 // A flick counts as much as a long drag: px per ms.
 const FLICK = 0.3;
+// The fastest a flick is taken to be (px per ms), and the shortest stretch of movement it is measured over. A release a
+// moment after one last move otherwise reads as a huge speed, and the sheet overshoots and snaps back.
+const MAX_FLICK = 3, FLICK_WINDOW = 32;
+// The most speed the sheet's spring starts with, in sheet heights per second: about what it can absorb without overshooting.
+const MAX_SLIDE = 14;
 // Critically damped, as iOS sheets are: quick, and it comes to rest without bouncing.
 const SPRING = { type: "spring", stiffness: 300, damping: 35 } as const;
 // The microphone follows the sheet on a spring of its own, so it trails the finger a touch and settles with the faintest give.
@@ -104,7 +109,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const last = useRef<{ top: number; range: number } | null>(null);
   const springs = useRef<AnimationPlaybackControls[]>([]);
   const reduced = useReducedMotion();
-  const pointer = useRef<{ y: number; from: number; dragging: boolean; samples: { t: number; y: number }[] } | null>(null);
+  const pointer = useRef<{ y: number; last: number; from: number; dragging: boolean; samples: { t: number; y: number }[] } | null>(null);
   // A drag ends with the finger lifting over a button; that release must not also count as a tap.
   const dragged = useRef(false);
 
@@ -143,7 +148,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     springs.current.forEach((s) => s.stop());
     if (reduced) { open.set(target ? 1 : 0); shift.set(0); springs.current = []; return; }
     springs.current = [
-      animate(open, target ? 1 : 0, { ...SPRING, velocity: -speed / Math.max(range.get(), 1) }),
+      animate(open, target ? 1 : 0, { ...SPRING, velocity: Math.max(-MAX_SLIDE, Math.min(MAX_SLIDE, -speed / Math.max(range.get(), 1))) }),
       animate(shift, 0, SPRING),
     ];
   }, [reduced, open, shift, range]);
@@ -223,14 +228,28 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     return () => { observer.disconnect(); window.removeEventListener("resize", reset); };
   });
 
-  const onPointerDown = (event: React.PointerEvent) => { pointer.current = { y: event.clientY, from: open.get(), dragging: false, samples: [] }; dragged.current = false; };
-  const onPointerMove = (event: React.PointerEvent) => {
+  // The gesture is followed on the window, not the head: a fast flick (and any mouse) leaves the head before its first move
+  // is seen, and a release elsewhere would otherwise leave the sheet stuck partway.
+  const onPointerDown = (event: React.PointerEvent) => {
+    if (event.button !== 0) return;
+    const head = event.currentTarget as HTMLElement, id = event.pointerId;
+    pointer.current = { y: event.clientY, last: event.clientY, from: open.get(), dragging: false, samples: [] }; dragged.current = false;
+    const move = (e: PointerEvent) => { if (e.pointerId === id) onPointerMove(e, head); };
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== id) return;
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end);
+      onPointerEnd(e);
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+  };
+  const onPointerMove = (event: PointerEvent, head: HTMLElement) => {
     const p = pointer.current;
     if (!p) return;
+    p.last = event.clientY;
     const dy = event.clientY - p.y;
     // Claim the pointer only once it is a drag, so taps still reach the buttons but the release of a drag that left the deck comes back here.
     if (!p.dragging && Math.abs(dy) > DRAG_START) {
-      p.dragging = true; event.currentTarget.setPointerCapture(event.pointerId);
+      p.dragging = true; if (head.isConnected) head.setPointerCapture(event.pointerId);
       // Caught mid-spring, the sheet stays under the finger.
       springs.current.forEach((s) => s.stop()); p.from = open.get();
     }
@@ -241,14 +260,17 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     // The sheet follows the finger between closed and open; beyond, it resists. A named tune can be pulled down and away.
     open.set(raw > 1 ? 1 + rubber((raw - 1) * travel, 60) / travel : raw < 0 && !shown ? rubber(raw * travel, 60) / travel : raw);
   };
-  const onPointerEnd = (event: React.PointerEvent) => {
+  const onPointerEnd = (event: PointerEvent) => {
     const p = pointer.current;
     pointer.current = null;
     if (!p?.dragging) return;
     dragged.current = true;
-    const dy = event.clientY - p.y;
+    // A cancelled gesture (the browser took the touch over) may report no position at all: it ends where the finger last was.
+    const cancelled = event.type === "pointercancel", at = cancelled ? p.last : event.clientY;
+    const dy = at - p.y;
     const first = p.samples[0];
-    const speed = first && event.timeStamp > first.t ? (event.clientY - first.y) / (event.timeStamp - first.t) : 0;
+    const raw = first && !cancelled ? (at - first.y) / Math.max(event.timeStamp - first.t, FLICK_WINDOW) : 0;
+    const speed = Math.max(-MAX_FLICK, Math.min(MAX_FLICK, raw));
     if (!full && shown && (dy > DRAG_DONE || (speed > FLICK && dy > DRAG_START))) { setDismissed(shown.tuneId); go(false, speed * 1000); return; }
     // Where a flick would carry the sheet decides whether it opens.
     const landing = open.get() - (speed * 160) / Math.max(range.get(), 1);
@@ -270,7 +292,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     : canRecord ? (dock ? "Click here to record a session" : "Drag up to record the whole session")
     : count > 0 ? `${count} heard tonight` : null;
   const label = full && canRecord ? (recording ? "Stop recording" : "Start recording the session") : recording ? "Live session: open it" : listening ? "Stop listening" : "Name the tune that's playing";
-  const grab = { onPointerDown, onPointerMove, onPointerUp: onPointerEnd, onPointerCancel: onPointerEnd,
+  const grab = { onPointerDown,
     onClickCapture: (event: React.MouseEvent) => { if (dragged.current) { dragged.current = false; event.stopPropagation(); event.preventDefault(); } } };
   const dialStyle = { x: dialX, y: dialY, scale: dialScale, opacity: dialFade, "--level": listener.level, "--loaded": loaded, "--record": recordTint } as unknown as MotionStyle;
 
