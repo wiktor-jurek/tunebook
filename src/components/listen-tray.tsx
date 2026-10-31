@@ -287,9 +287,9 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     : phase === "denied" ? "Allow the microphone to listen"
     : phase === "error" ? "The tune finder stopped"
     : listening ? (status === "quiet" ? "Too quiet, move closer" : "Listening")
-    : answer ? "Tap to name another tune" : "Name a tune";
+    : answer ? "Tap to name another tune" : "What's playing?";
   const hint = recording ? (listener.awake || dock ? live : `${live}. Keep the screen on.`)
-    : canRecord ? (dock ? "Click here to record a session" : "Drag up to record the whole session")
+    : canRecord ? "Expand to record a full session"
     : count > 0 ? `${count} heard tonight` : null;
   const label = full && canRecord ? (recording ? "Stop recording" : "Start recording the session") : recording ? "Live session: open it" : listening ? "Stop listening" : "Name the tune that's playing";
   const grab = { onPointerDown,
