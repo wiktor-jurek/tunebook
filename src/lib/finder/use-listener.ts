@@ -2,6 +2,7 @@
 
 import { trackEvent } from "@/lib/analytics";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useMotionValue } from "motion/react";
 import type { FinderTune } from "@/lib/library";
 import type { FinderCandidate, FinderRequest, FinderResponse } from "@/lib/finder/protocol";
 import { makeTunebook } from "@/lib/finder/make-book";
@@ -56,7 +57,8 @@ export function useTuneListener() {
   const [tunes, setTunes] = useState<Record<number, FinderTune>>({});
   const heardRaw = useSyncExternalStore(heardStore.subscribe, heardStore.snapshot, () => "[]");
   const heard = useMemo(() => JSON.parse(heardRaw) as Heard[], [heardRaw]);
-  const [level, setLevel] = useState(0);
+  // The input level changes with every block of audio; as a motion value it moves the halo without re-rendering anything.
+  const level = useMotionValue(0);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<number | null>(null);
   // Whether the phone agreed to keep the screen on while listening; if not, the screen says so.
@@ -109,8 +111,8 @@ export function useTuneListener() {
     void audio.current.context.close();
     void audio.current.wakeLock?.release().catch(() => undefined);
     audio.current = null;
-    setPhase("idle"); setLevel(0); setAwake(false);
-  }, []);
+    setPhase("idle"); level.set(0); setAwake(false);
+  }, [level]);
 
   const start = useCallback(async () => {
     setError(""); setPhase("starting");
@@ -144,7 +146,7 @@ export function useTuneListener() {
       written += block.length;
       let energy = 0;
       for (const s of block) energy += s * s;
-      setLevel(Math.min(1, Math.sqrt(energy / block.length) * 8));
+      level.set(Math.min(1, Math.sqrt(energy / block.length) * 8));
     };
     source.connect(tap);
     send({ type: "reset" });
@@ -162,7 +164,7 @@ export function useTuneListener() {
     setAwake(!!wakeLock);
     trackEvent("tune_finder_started", { outcome: "success" });
     setPhase("listening");
-  }, [loadModel]);
+  }, [level, loadModel]);
 
   /** Forgets the current answer and listens for a new tune. */
   const restart = useCallback(() => { send({ type: "reset" }); setCandidates([]); setMargin(0); setStatus("listening"); started.current = Date.now(); }, []);

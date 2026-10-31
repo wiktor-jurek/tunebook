@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Check, Mic, MicOff, Square } from "lucide-react";
+import { motion } from "motion/react";
 import type { FinderTune } from "@/lib/library";
 import { useTuneListener } from "@/lib/finder/use-listener";
-import { FinderAlternatives, FinderAnswer, FinderHeard, FinderScore, type FinderContext } from "@/components/finder-parts";
+import { dialStyle, FinderAlternatives, FinderAnswer, FinderHeard, FinderScore, type FinderContext } from "@/components/finder-parts";
 
 /** The listening prompt for any phase without an answer yet. */
 export function finderPrompt(listener: FinderContext["listener"], idle: string) {
@@ -23,7 +24,7 @@ export function finderPrompt(listener: FinderContext["listener"], idle: string) 
  */
 export function TuneFinder({ signedIn, layout = "page" }: { signedIn: boolean; layout?: "page" | "hero" }) {
   const listener = useTuneListener();
-  const { phase, status, certainty, leader, level, progress } = listener;
+  const { phase, status, certainty, leader, progress } = listener;
   const [sheet, setSheet] = useState<FinderTune | null>(null);
   const listening = phase === "listening";
   const busy = phase === "starting" || phase === "loading";
@@ -44,7 +45,7 @@ export function TuneFinder({ signedIn, layout = "page" }: { signedIn: boolean; l
 
   // The answer and its controls form one column: below the button on a phone held upright, beside it on its side.
   return <div className={`tune-finder finder-${layout}`} data-mode="name" data-compact={compact ? "" : undefined}>
-    <div className="finder-dial" data-phase={phase} data-matched={matched ? "" : undefined} style={{ "--level": level, "--loaded": loaded } as React.CSSProperties}>
+    <motion.div className="finder-dial" data-phase={phase} data-matched={matched ? "" : undefined} style={dialStyle(listener, loaded)}>
       {listening && <><span className="finder-ripple" aria-hidden="true" /><span className="finder-ripple" aria-hidden="true" /></>}
       <svg className="finder-arc" viewBox="0 0 100 100" aria-hidden="true"><circle className="finder-arc-track" cx="50" cy="50" r="48" /><circle className="finder-arc-fill" data-empty={arc <= 0 ? "" : undefined} cx="50" cy="50" r="48" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - 100 * arc} /></svg>
       <button type="button" className="finder-button" data-phase={phase} disabled={busy} onClick={() => { if (listening) listener.stop(); else void listener.start(); }} aria-label={listening ? "Stop listening" : answer ? "Listen again" : "Name the tune that's playing"}>
@@ -52,7 +53,7 @@ export function TuneFinder({ signedIn, layout = "page" }: { signedIn: boolean; l
         {/* A confident answer ends like the mark does, in a tick; it plays once per tune named. */}
         {matched && <span className="finder-tick" key={`tick-${matched}`} aria-hidden="true"><Check size={34} strokeWidth={3} /></span>}
       </button>
-    </div>
+    </motion.div>
     {compact && <span className="finder-again" aria-hidden="true">Listen again</span>}
     <div className="finder-main">
       <div className="finder-stage" aria-live="polite">

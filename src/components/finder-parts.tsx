@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Bookmark, BookPlus, Check, Music, Search } from "lucide-react";
+import type { MotionStyle } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { OpeningPhrase } from "@/components/opening-phrase";
 import { ScoreSheet } from "@/components/score-sheet";
@@ -20,6 +21,8 @@ export type Listener = ReturnType<typeof useTuneListener>;
 /** What every piece needs: the listener, whether someone is signed in, where sign-up returns to, and how to open a score. */
 export type FinderContext = { listener: Listener; signedIn: boolean; next: string; onScore: (tune: FinderTune) => void };
 
+/** The dial's custom properties: the live input level (a motion value, so it never re-renders) and how much of the model has loaded. */
+export const dialStyle = (listener: Listener, loaded: number) => ({ "--level": listener.level, "--loaded": loaded }) as unknown as MotionStyle;
 export const meta = (tune: FinderTune) => [tune.kind, keyName(tune.mode)].filter(Boolean).join(", ");
 export const known = (tune: FinderTune) => tune.level === "learned" || tune.level === "mastered";
 export const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
