@@ -335,3 +335,15 @@ body:has(.deck.is-dock) .group-bar{bottom:92px}
 .session-group-title[id],.table-group-row>th[id]{scroll-margin-top:64px}
 .tunes-table .group-jump{margin:0 0 4px;padding:8px 0}.tunes-table .group-jump-chips{padding:0}
 @media print{.group-jump{display:none!important}}
+/* Chips running past an end of the strip fade out there; with a mouse, a button at that end slides them along. */
+.group-jump{--fade:28px}
+.group-jump[data-before] .group-jump-chips{-webkit-mask-image:linear-gradient(to right,transparent,#000 var(--fade));mask-image:linear-gradient(to right,transparent,#000 var(--fade))}
+.group-jump[data-after] .group-jump-chips{-webkit-mask-image:linear-gradient(to left,transparent,#000 var(--fade));mask-image:linear-gradient(to left,transparent,#000 var(--fade))}
+.group-jump[data-before][data-after] .group-jump-chips{-webkit-mask-image:linear-gradient(to right,transparent,#000 var(--fade),#000 calc(100% - var(--fade)),transparent);mask-image:linear-gradient(to right,transparent,#000 var(--fade),#000 calc(100% - var(--fade)),transparent)}
+.group-jump-more{display:none}
+@media (hover:hover){.group-jump{--fade:56px}
+.group-jump-more{position:absolute;top:50%;z-index:1;display:grid;place-items:center;width:30px;height:30px;margin-top:-15px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--card);color:var(--foreground);box-shadow:0 2px 8px #0000001a;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .15s}
+.group-jump-more.is-before{left:6px}.group-jump-more.is-after{right:6px}
+.group-jump[data-before] .group-jump-more.is-before,.group-jump[data-after] .group-jump-more.is-after{opacity:1;pointer-events:auto}
+.group-jump-more:hover{background:var(--muted)}}
+.tunes-table .group-jump-more.is-before{left:0}.tunes-table .group-jump-more.is-after{right:0}
