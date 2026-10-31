@@ -9,6 +9,7 @@ import { BookOpen, ChevronDown, ChevronRight, Database, Folder, Music2, LogOut, 
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
 import { ModeSwitch } from "@/components/mode-switch";
+import { LinkPending } from "@/components/navigation-progress";
 import { BookIcon } from "@/components/book-icon";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LibraryDialog, type LibraryTask as Task } from "@/components/library-dialog";
@@ -30,7 +31,7 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
   const booksByFolder = (folder: string | null) => library.books.filter((b) => b.folderId === folder);
   const launch = (next: Task) => setTask(next);
   const closeMobile = () => setMobileOpen(false);
-  const main = (href: string, icon: React.ReactNode, label: string, active: boolean, count?: number) => <Link onClick={closeMobile} href={href} className={`nav-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined}>{icon} {label}{count !== undefined && <span className="nav-count">{count}</span>}</Link>;
+  const main = (href: string, icon: React.ReactNode, label: string, active: boolean, count?: number) => <Link onClick={closeMobile} href={href} className={`nav-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined}>{icon} {label}{count !== undefined && <span className="nav-count">{count}</span>}<LinkPending /></Link>;
   const managementMenu = (name: string, target: { bookId: string; folderId: string | null } | { folderId: string; parentId: string | null }) => {
     const kind = "bookId" in target ? "Book" : "Folder";
     return <DropdownMenu><DropdownMenuTrigger asChild><button className="icon-button subtle" aria-label={`Actions for ${name}`} title={`Actions for ${name}`} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger><DropdownMenuContent className="nav-action-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{name}</DropdownMenuLabel>
@@ -48,7 +49,7 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
     }
     setOpen((current) => ({ ...current, ...Object.fromEntries(parents.map((id) => [id, true])) }));
   }
-  const bookLink = (book: BookRow) => <div key={book.id} className={`nav-row nav-book-row ${path === `/books/${book.id}` ? "active" : ""}`}><BookIcon bookId={book.id} emoji={book.emoji} label={`Change icon for ${book.name}`} /><Link onClick={closeMobile} className="nav-link nav-book" aria-current={path === `/books/${book.id}` ? "page" : undefined} href={`/books/${book.id}`}><span>{book.name}</span></Link>{managementMenu(book.name, { bookId: book.id, folderId: book.folderId })}</div>;
+  const bookLink = (book: BookRow) => <div key={book.id} className={`nav-row nav-book-row ${path === `/books/${book.id}` ? "active" : ""}`}><BookIcon bookId={book.id} emoji={book.emoji} label={`Change icon for ${book.name}`} /><Link onClick={closeMobile} className="nav-link nav-book" aria-current={path === `/books/${book.id}` ? "page" : undefined} href={`/books/${book.id}`}><span>{book.name}</span><LinkPending /></Link>{managementMenu(book.name, { bookId: book.id, folderId: book.folderId })}</div>;
   const createInside = (next: Task, folder?: FolderRow) => {
     if (folder) setOpen((current) => ({ ...current, [folder.id]: true }));
     launch(next);

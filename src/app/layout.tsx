@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Analytics } from "@/components/analytics";
@@ -5,6 +6,7 @@ import { parseTheme, THEME_COLORS, THEME_COOKIE } from "@/lib/theme";
 import { currentUser } from "@/lib/session";
 import { getMode } from "@/lib/mode";
 import { ListenTray } from "@/components/listen-tray";
+import { NavigationProgress } from "@/components/navigation-progress";
 import "./globals.css";
 
 const description = "Learn the tunes, then join the session. Practice, tunebooks and a tune finder for Irish and folk music from The Session.";
@@ -27,5 +29,5 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const theme = parseTheme(cookieStore.get(THEME_COOKIE)?.value);
   // The listen tray lives here, above every page, so listening and recording carry on while moving between screens: the
   // deck at the foot of a phone, or a dock in the corner of a desktop.
-  return <html lang="en" data-theme={theme === "system" ? undefined : theme}><body>{children}{user && <ListenTray signedIn dock={mode !== "session"} />}<Analytics /></body></html>;
+  return <html lang="en" data-theme={theme === "system" ? undefined : theme}><body><Suspense><NavigationProgress /></Suspense>{children}{user && <ListenTray signedIn dock={mode !== "session"} />}<Analytics /></body></html>;
 }

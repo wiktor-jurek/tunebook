@@ -368,3 +368,19 @@ body:has(.deck.is-dock) .group-bar{bottom:92px}
 .select-scroll{display:flex;align-items:center;justify-content:center;height:22px;color:var(--text-3);cursor:default}
 @keyframes select-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.select-content{animation:none}}
+
+/* Moving between pages: a thin bar across the top creeps along until the page arrives, then runs out and fades; the page
+   being left dims a little; the link that was clicked shows a small spinner. */
+.nav-progress{position:fixed;z-index:100;top:0;left:0;right:0;height:2px;pointer-events:none;opacity:0;transition:opacity .25s .15s}
+.nav-progress>span{display:block;height:100%;background:var(--brand-dot);box-shadow:0 0 8px var(--brand-dot);transform-origin:left;transform:scaleX(0)}
+.nav-progress[data-phase=loading]{opacity:1;transition:none}
+.nav-progress[data-phase=loading]>span{animation:nav-creep 8s cubic-bezier(.1,.7,.3,1) forwards}
+.nav-progress[data-phase=done]{opacity:0}.nav-progress[data-phase=done]>span{transform:scaleX(1);transition:transform .2s ease-out}
+@keyframes nav-creep{from{transform:scaleX(.05)}to{transform:scaleX(.85)}}
+.main-content,.session-main,.landing{transition:opacity .2s}
+body[data-navigating] :is(.main-content,.session-main,.landing>:not(header)){opacity:.55;transition:opacity .25s .15s}
+.link-pending{flex:none;width:12px;height:12px;margin-left:auto;border:2px solid var(--line-strong);border-top-color:var(--brand-dot);border-radius:50%;opacity:0;transition:opacity .15s}
+.link-pending[data-pending]{opacity:1;animation:link-spin .7s linear infinite}
+.nav-count+.link-pending{margin-left:6px}
+@keyframes link-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.nav-progress>span,.link-pending[data-pending]{animation:none}.nav-progress[data-phase=loading]>span{transform:scaleX(.6)}}
