@@ -7,12 +7,13 @@ import { BenchmarkTiming } from "@/components/benchmark-timing";
 import { BANDS, ENGINES, SETS, bandRange, scoreboard, type Benchmark, type BenchmarkClip, type EngineKey, type Scoreboard } from "@/lib/finder/benchmark";
 import data from "@/lib/finder/benchmark.json";
 
-export const metadata = { title: "Tune finder benchmark", description: "Tune Companion, FolkFriend and JigRipper on the same real recordings: which names the tune, and where." };
+export const metadata = { title: "Tune finder benchmark", description: "Tune Companion, FolkFriend, JigRipper and Tunepal on the same real recordings: which names the tune, and where." };
 
 const benchmark = data as unknown as Benchmark; // written by ml/eval/benchmark.py
 const engines = ENGINES.filter((engine) => benchmark.engines[engine.key]);
 const keys = engines.map((engine) => engine.key);
 const name = (key: EngineKey | null) => engines.find((engine) => engine.key === key)?.name ?? "";
+const COUNTS: Record<number, string> = { 2: "Two", 3: "Three", 4: "Four", 5: "Five" };
 const pct = (x: number) => `${Math.round(100 * x)}%`;
 const pValue = (p: number) => (p < 0.001 ? "p < 0.001" : `p = ${p.toFixed(p < 0.01 ? 3 : 2)}`);
 
@@ -91,7 +92,7 @@ export default async function BenchmarkPage() {
     .filter((id): id is number => id != null).map((id) => [id, benchmark.tunes[id]]));
 
   const page = <div className="page-wrap benchmark-page">
-    <nav className="page-bar"><Link className="back-link" href="/"><ArrowLeft size={15} /> Tune Companion</Link></nav><header className="page-head"><div><h1>Benchmark</h1><p className="page-subtitle">Three tune recognisers on the same {clips.length} real recordings: which one names the tune, and where.</p></div></header>
+    <nav className="page-bar"><Link className="back-link" href="/"><ArrowLeft size={15} /> Tune Companion</Link></nav><header className="page-head"><div><h1>Benchmark</h1><p className="page-subtitle">{COUNTS[engines.length] ?? engines.length} tune recognisers on the same {clips.length} real recordings: which one names the tune, and where.</p></div></header>
 
     <div className="bench-legend">{engines.map((engine) => <span key={engine.key}><span className="bench-dot" style={{ background: engine.colour }} />{engine.name}</span>)}</div>
 

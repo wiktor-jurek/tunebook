@@ -31,6 +31,9 @@ describe("analytics delivery and identity", () => {
     expect(analytics.analyticsPath("/tunes/private-id/")).toBe("/tunes/:id");
     expect(analytics.analyticsPath("/reset-password?token=secret")).toBe("/reset-password");
     expect(analytics.analyticsPath("/unknown/private-token")).toBe("/other");
+    expect(analytics.analyticsPath("/guides/first-session-tunes/")).toBe("/guides/first-session-tunes");
+    expect(analytics.analyticsPath("/tunes/finder/benchmark?x=1")).toBe("/tunes/finder/benchmark");
+    expect(analytics.analyticsPath("/guides/Private_Token/x")).toBe("/other");
   });
 
   it("overrides sensitive tracker defaults for pageviews and events", () => {

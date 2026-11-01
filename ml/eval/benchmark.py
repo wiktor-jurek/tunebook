@@ -54,6 +54,7 @@ def clips(path: Path, reference: Path) -> list[dict]:
     if sessions.exists():
         with sessions.open() as handle:
             instruments.update({f"{r['youtube_id']}.{r['start_s']}-{r['duration_s']}": r for r in csv.DictReader(handle)})
+    starts = {key.rsplit("-", 1)[0]: row for key, row in instruments.items()}
     chosen = {row["path"] for row in torch.load(reference)["youtube"]}
     data = torch.load(path)
     out = []
@@ -61,7 +62,8 @@ def clips(path: Path, reference: Path) -> list[dict]:
         for row in data.get(name, []):
             audio = c.ML / Path(row["path"]).relative_to("/workspace/ml") if row["path"].startswith("/workspace/") else Path(row["path"])
             if name in ("youtube", "sessions"):
-                meta = instruments[audio.stem]
+                # A clip trimmed in the labeller after its features were cached keeps its old duration in the file name.
+                meta = instruments.get(audio.stem) or starts[audio.stem.rsplit("-", 1)[0]]
                 video, start = meta["youtube_id"], float(meta["start_s"])
                 group = name if name == "sessions" else "youtube" if row["path"] in chosen else "holdout"
                 instrument = meta.get("instrument") or meta.get("instruments") or "unknown"

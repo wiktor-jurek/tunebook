@@ -21,14 +21,17 @@ import { SessionShell } from "@/components/session-shell";
 import { SessionBook } from "@/components/session-book";
 import { BookOpenText } from "lucide-react";
 import { PublicHeader } from "@/components/public-header";
+import { isGuideBook } from "@/lib/guides";
 import { SiteFooter } from "@/components/site-footer";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const preview = await getBookPreview((await params).id);
+  const { id } = await params;
+  const preview = await getBookPreview(id);
   if (!preview) return { title: { absolute: "Tune Companion" }, robots: { index: false } };
   const counts = [`${preview.tunes} ${preview.tunes === 1 ? "tune" : "tunes"}`, ...(preview.sets ? [`${preview.sets} ${preview.sets === 1 ? "set" : "sets"}`] : [])].join(", ");
   const description = `${counts} from ${preview.owner}. Read the scores, play along, and see which ones you can play.`;
-  return { title: preview.name, description, robots: { index: false }, openGraph: { title: preview.name, description, type: "website", siteName: "Tune Companion" }, twitter: { card: "summary_large_image", title: preview.name, description } };
+  // Only the guides' official tunebooks are for search engines; everyone else's shared links stay out of results.
+  return { title: preview.name, description, robots: { index: isGuideBook(id) }, alternates: isGuideBook(id) ? { canonical: `/books/${id}` } : undefined, openGraph: { title: preview.name, description, type: "website", siteName: "Tune Companion" }, twitter: { card: "summary_large_image", title: preview.name, description } };
 }
 
 export default async function BookPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string; view?: string }> }) {

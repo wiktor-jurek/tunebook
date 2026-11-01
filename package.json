@@ -20,7 +20,9 @@
     "test:emojis": "node --env-file=.env scripts/test-emojis.mjs",
     "test:practice": "node --env-file=.env scripts/test-practice.mjs",
     "test:popularity": "node --env-file=.env scripts/test-popularity.mjs",
-    "test:mcp": "node --env-file=.env scripts/test-mcp.mjs"
+    "test:mcp": "node --env-file=.env scripts/test-mcp.mjs",
+    "guides:build": "tsx scripts/build-guides.ts",
+    "guides:seed": "tsx scripts/seed-guide-books.ts"
   },
   "dependencies": {
     "@better-auth/core": "1.7.6",

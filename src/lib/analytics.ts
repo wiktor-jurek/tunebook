@@ -51,6 +51,7 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   player_island_toggled: { open: boolean };
   playback_seeked: Record<string, never>;
   notation_opened: Record<string, never>;
+  guide_score_opened: Record<string, never>;
   tune_source_opened: Record<string, never>;
   scores_toggled: { action: "expand" | "collapse"; scope: "tune" | "all" };
   contents_navigated: { kind: "tune" | "set" };
@@ -75,6 +76,8 @@ export function analyticsPath(value: string): string {
   const path = value.split(/[?#]/)[0];
   if (/^\/books\/[^/]+\/?$/.test(path)) return "/books/:id";
   if (/^\/tunes\/[^/]+\/?$/.test(path)) return "/tunes/:id";
+  // Public pages with fixed addresses (the guides and the benchmark) keep theirs, to see which ones search brings people to.
+  if (/^\/(guides(\/[a-z0-9-]+)?|tunes\/finder\/benchmark)\/?$/.test(path)) return path.replace(/\/$/, "");
   return ["/", "/sets", "/sign-in", "/sign-up", "/forgot-password", "/reset-password"].includes(path) ? path : "/other";
 }
 
