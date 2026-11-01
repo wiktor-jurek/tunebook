@@ -10,10 +10,11 @@ import { NavigationProgress } from "@/components/navigation-progress";
 import "./globals.css";
 import { LayoutGuard } from "@/components/layout-guard";
 
-const description = "Shazam for Irish traditional music, plus a personal tunebook and session recorder. Name any of 23,305 tunes from The Session by ear, record an hour-long pub session on 5–10% battery, and take the session report straight into your learning plan.";
+const title = "Tune Companion: name that tune at any Irish session";
+const description = "Hold up your phone at an Irish session and Tune Companion tells you what's playing. Then it helps you learn it: record the whole night, see what you can play, and share tunebooks.";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.BETTER_AUTH_URL || "https://tunecompanion.com"),
-  title: { default: "Tune Companion — Shazam for Irish Music, Session Recorder & Tunebook", template: "%s | Tune Companion" },
+  title: { default: title, template: "%s | Tune Companion" },
   description,
   keywords: [
     "Shazam for Irish music",
@@ -30,14 +31,14 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   openGraph: {
     siteName: "Tune Companion",
-    title: "Tune Companion — Shazam for Irish Music, Session Recorder & Tunebook",
+    title: title,
     description,
     type: "website",
     locale: "en_IE",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Tune Companion — Shazam for Irish Music, Session Recorder & Tunebook",
+    title: title,
     description,
   },
   appleWebApp: { title: "Tune Companion", statusBarStyle: "default" },
