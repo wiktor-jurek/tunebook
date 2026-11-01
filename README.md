@@ -17,14 +17,14 @@ Requires Node.js 24 and access to a PostgreSQL server.
 
 Google’s authorized redirect URI is `http://localhost:3000/api/auth/callback/google` locally. `BETTER_AUTH_URL` must match the public application URL in production. The SMTP account must be permitted to send from `SMTP_FROM`. Email/password signup requires verification; password reset uses the same SMTP settings.
 
-The SMTP defaults in `.env.example` use Purelymail at `smtp.purelymail.com:465` with TLS, authenticating and sending as `hello@libresession.com`. Fill in `SMTP_PASSWORD` with that mailbox’s password in your private `.env` or deployment environment, then restart the app.
+The SMTP defaults in `.env.example` use Purelymail at `smtp.purelymail.com:465` with TLS, authenticating and sending as `hello@tunecompanion.com`. Fill in `SMTP_PASSWORD` with that mailbox’s password in your private `.env` or deployment environment, then restart the app.
 
 The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com/adactio/TheSession-data). Set `THESESSION_CSV_URL` to another compatible CSV URL if needed. It expects the dump’s `tune_id`, `setting_id`, `name`, `type`, `meter`, `mode`, `abc`, `username`, and `composer` fields. The app itself does not send tune content to an LLM; AI assistants you connect over MCP read what their tools return.
 
 ## Coolify
 
 1. Create an application from this repository with Dockerfile deployment. Use port `3000` and `/api/health` as the health URL.
-2. Set runtime environment variables from `.env.example`. Set `DATABASE_URL` to a PostgreSQL database reachable from Coolify. Set `BETTER_AUTH_URL` to the exact public HTTPS URL (`https://tunecompanion.com`; once it is, `src/proxy.ts` redirects `libresession.com` and `www` there), and register `https://YOUR_DOMAIN/api/auth/callback/google` in Google Cloud Console if using Google sign-in.
+2. Set runtime environment variables from `.env.example`. Set `DATABASE_URL` to a PostgreSQL database reachable from Coolify. Set `BETTER_AUTH_URL` to the exact public HTTPS URL (`https://tunecompanion.com`), and register `https://YOUR_DOMAIN/api/auth/callback/google` in Google Cloud Console if using Google sign-in.
 3. Ensure the Coolify host can reach the PostgreSQL server on its configured port.
 4. Deploy. The container applies committed Drizzle migrations before starting Next.js.
 5. Run `npm run catalog:sync` with the production `DATABASE_URL` from a trusted machine or task container. Repeat to refresh the search catalog.
@@ -89,7 +89,7 @@ abcjs generates audio using General MIDI soundfonts. The whistle-like preset use
 
 Tune Companion uses self-hosted [Umami](https://umami.is) at `https://analytics.jurek.dev` (website `48e712da-7618-450e-8c2f-88ba9f613eb7`) for identified product analytics. **Signed-in people are tracked by name and email**, along with search text and the names of tunes, tunebooks and sets they work with. There is no consent banner; make sure the site's privacy notice says this.
 
-**Browser.** Production pages load the Umami tracker for `tunecompanion.com` (and `libresession.com`, which redirects there). It stays off during development and honours Do Not Track and Umami's `umami.disabled` local-storage opt-out. Signed-in pages call `umami.identify(accountId, { name, email })` before any event, so a person's sessions join up across devices. Pageviews and events use grouped URLs: book and tune IDs become `:id`, and query strings, fragments and external referrer paths are dropped, so tokens never reach the tracker. The event schema is in `src/lib/analytics.ts`, and events queued before the tracker loads (up to 50) are sent after identification.
+**Browser.** Production pages load the Umami tracker for `tunecompanion.com` and `www.tunecompanion.com`. It stays off during development and honours Do Not Track and Umami's `umami.disabled` local-storage opt-out. Signed-in pages call `umami.identify(accountId, { name, email })` before any event, so a person's sessions join up across devices. Pageviews and events use grouped URLs: book and tune IDs become `:id`, and query strings, fragments and external referrer paths are dropped, so tokens never reach the tracker. The event schema is in `src/lib/analytics.ts`, and events queued before the tracker loads (up to 50) are sent after identification.
 
 **Server.** `src/lib/server-analytics.ts` posts events to Umami's `/api/send` with the account ID as the distinct ID, so they join the same person in Umami. It runs only when `NODE_ENV=production`; set `UMAMI_DISABLED=true` to switch it off, or `UMAMI_HOST`/`UMAMI_WEBSITE_ID` to point elsewhere. Delivery is fire-and-forget with a 3-second timeout and never affects a request. Umami discards events whose user agent looks automated, which covers every MCP client, so MCP and OAuth events are sent with `TuneCompanion/1.0 (Linux x86_64)` and record the agent's own user agent as `user_agent`. Browser-originated server events forward the visitor's agent and IP.
 
@@ -113,19 +113,19 @@ To verify production, sign in with tracking allowed and check the identify reque
 
 ## AI agents (MCP)
 
-Tune Companion has a [Model Context Protocol](https://modelcontextprotocol.io) server, so AI assistants can search The Session and build tunebooks for you from prompts such as "a tunebook of 20 popular reels in D, in sets of three". Connect `https://libresession.com/api/mcp` (or `http://localhost:3000/api/mcp` locally):
+Tune Companion has a [Model Context Protocol](https://modelcontextprotocol.io) server, so AI assistants can search The Session and build tunebooks for you from prompts such as "a tunebook of 20 popular reels in D, in sets of three". Connect `https://tunecompanion.com/api/mcp` (or `http://localhost:3000/api/mcp` locally):
 
 - **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector, and paste the URL.
-- **Claude Code:** `claude mcp add --transport http libresession https://libresession.com/api/mcp`, then run `/mcp` to sign in.
+- **Claude Code:** `claude mcp add --transport http tunecompanion https://tunecompanion.com/api/mcp`, then run `/mcp` to sign in.
 - **Other clients:** any MCP client that supports streamable HTTP with OAuth.
 
 The client opens Tune Companion's sign-in page and then a consent screen. Agents act as you with two scopes: `tunebooks:read` searches the catalog and reads your library, tunebooks, sets and sharing; `tunebooks:write` saves tunes, creates and edits tunebooks, folders and sets, deletes them, and shares tunebooks by email or link. Destructive tools are annotated as such and their descriptions tell agents to confirm first; invitations send real emails. Agents cannot read other people's private tunebooks, change practice progress, or touch account settings. Access tokens last an hour and refresh tokens 30 days; to revoke an app, remove the connector in your client.
 
-The main workflow is `libresession_search_catalog` (filter by title, type, key, mode, meter and popularity) followed by `libresession_build_tunebook`, which creates a book, saves the settings and groups sets in one call. Other tools read and edit the library: `get_library`, `list_saved_tunes`, `get_tune`, `get_tunebook`, `add_to_tunebook`, `reorder_tunebook`, `create_set`/`update_set`, `set_often_played`, folders, deletion and sharing, all prefixed `libresession_`. Read tools return Markdown by default or JSON with `response_format: "json"`, and list tools page with `limit`/`offset`.
+The main workflow is `tunecompanion_search_catalog` (filter by title, type, key, mode, meter and popularity) followed by `tunecompanion_build_tunebook`, which creates a book, saves the settings and groups sets in one call. Other tools read and edit the library: `get_library`, `list_saved_tunes`, `get_tune`, `get_tunebook`, `add_to_tunebook`, `reorder_tunebook`, `create_set`/`update_set`, `set_often_played`, folders, deletion and sharing, all prefixed `tunecompanion_`. Read tools return Markdown by default or JSON with `response_format: "json"`, and list tools page with `limit`/`offset`.
 
 The server lives in `src/mcp` and is served statelessly from `src/app/api/mcp/route.ts` with the official TypeScript SDK. OAuth 2.1 comes from Better Auth's `@better-auth/oauth-provider` and `jwt` plugins: dynamic client registration, PKCE, consent at `/oauth/consent`, and JWT access tokens bound to the `/api/mcp` resource. Discovery is published at `/.well-known/oauth-protected-resource/api/mcp` and `/.well-known/oauth-authorization-server/api/auth`. `BETTER_AUTH_URL` must be the exact public URL, because it sets the token issuer and audience. Clients registering `http://localhost` callbacks are treated as native apps. The OAuth tables arrive in a migration that production applies at startup; run `npm run db:migrate` locally.
 
-Popularity is the number of The Session members' tunebooks containing a tune. `npm run catalog:sync` imports it from TheSession-data's `tune_popularity.csv` into `catalog_tunes` (override with `THESESSION_POPULARITY_CSV_URL`). Run `npm run test:mcp` for PostgreSQL checks of tool listing by scope, search and paging, building, editing, sharing, ownership and deletion. `evaluations/libresession.xml` holds ten read-only questions, in the [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder) format, for testing how well a model uses the server.
+Popularity is the number of The Session members' tunebooks containing a tune. `npm run catalog:sync` imports it from TheSession-data's `tune_popularity.csv` into `catalog_tunes` (override with `THESESSION_POPULARITY_CSV_URL`). Run `npm run test:mcp` for PostgreSQL checks of tool listing by scope, search and paging, building, editing, sharing, ownership and deletion. `evaluations/tunecompanion.xml` holds ten read-only questions, in the [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder) format, for testing how well a model uses the server.
 
 ## Checks
 

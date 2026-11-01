@@ -28,7 +28,7 @@ async function savedTuneId(userId: string, ref: { saved_tune_id?: string; settin
 export function registerTunebookTools(server: McpServer, context: Context) {
   const { userId } = context;
 
-  server.registerTool("libresession_get_tunebook", {
+  server.registerTool("tunecompanion_get_tunebook", {
     title: "Get a tunebook",
     description: "Get a tunebook's contents in playing order: individual tunes and sets, each with the entry_id used to reorder or remove it, saved_tune_ids, keys, often-played stars (★) and optionally ABC notation. Works for your own tunebooks and ones shared with you.",
     inputSchema: {
@@ -43,7 +43,7 @@ export function registerTunebookTools(server: McpServer, context: Context) {
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ book_id, include_abc, response_format }) => guard(async () => {
     const result = await getBook(userId, book_id);
-    if (!result) return fail("Tunebook not found. Call libresession_get_library to list tunebook IDs.");
+    if (!result) return fail("Tunebook not found. Call tunecompanion_get_library to list tunebook IDs.");
     const { book, sections, tunes } = result;
     const data = {
       id: book.id, name: book.name, emoji: book.emoji, url: bookUrl(book.id), owned: book.userId === userId, link_visible: book.linkVisible,
@@ -61,9 +61,9 @@ export function registerTunebookTools(server: McpServer, context: Context) {
 
   if (!context.canWrite) return;
 
-  server.registerTool("libresession_build_tunebook", {
+  server.registerTool("tunecompanion_build_tunebook", {
     title: "Build a tunebook",
-    description: `Create a complete tunebook in one call: makes the tunebook, saves each catalog setting to the library, adds the tunes in order and groups sections with 2+ tunes into named sets. Use libresession_search_catalog first to pick setting_ids.
+    description: `Create a complete tunebook in one call: makes the tunebook, saves each catalog setting to the library, adds the tunes in order and groups sections with 2+ tunes into named sets. Use tunecompanion_search_catalog first to pick setting_ids.
 
 Each section is either one tune or a set (2-10 tunes played together, in order). Example: sections=[{setting_ids:[1,2,3], set_name:"Morning reels"}, {setting_ids:[4]}].`,
     inputSchema: {
@@ -92,15 +92,15 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     } catch (error) {
       // Report the partial book so the agent can fix or delete it rather than create a duplicate.
       const reason = (toolError(error).content[0] as { text: string }).text.replace(/^Error: /, "");
-      return fail(`Tunebook ${bookId} was created but stopped partway: ${reason} Inspect it with libresession_get_tunebook, then continue with libresession_add_to_tunebook or remove it with libresession_delete_tunebook.`);
+      return fail(`Tunebook ${bookId} was created but stopped partway: ${reason} Inspect it with tunecompanion_get_tunebook, then continue with tunecompanion_add_to_tunebook or remove it with tunecompanion_delete_tunebook.`);
     }
     return ok({ book_id: bookId, url: bookUrl(bookId), tune_count: all.length, set_count: sets },
       `Created **${name}** with ${all.length} tunes in ${sections.length} sections (${sets} sets).\nID \`${bookId}\` · ${bookUrl(bookId)}`);
   }));
 
-  server.registerTool("libresession_create_tunebook", {
+  server.registerTool("tunecompanion_create_tunebook", {
     title: "Create an empty tunebook",
-    description: "Create an empty tunebook. To create one with contents in a single step, use libresession_build_tunebook instead.",
+    description: "Create an empty tunebook. To create one with contents in a single step, use tunecompanion_build_tunebook instead.",
     inputSchema: {
       name: z.string().min(1).max(80).describe("Tunebook name, 1-80 characters"),
       emoji: z.string().max(32).optional().describe("One emoji for the icon"),
@@ -113,7 +113,7 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     return ok({ book_id: bookId, url: bookUrl(bookId) }, `Created **${name}** — \`${bookId}\` · ${bookUrl(bookId)}`);
   }));
 
-  server.registerTool("libresession_update_tunebook", {
+  server.registerTool("tunecompanion_update_tunebook", {
     title: "Rename, re-icon or move a tunebook",
     description: "Change a tunebook's name, emoji icon (null clears it) and/or folder (null moves it to the top level). Omitted fields stay the same.",
     inputSchema: {
@@ -132,13 +132,13 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     return ok({ book_id }, "Tunebook updated.");
   }));
 
-  server.registerTool("libresession_add_to_tunebook", {
+  server.registerTool("tunecompanion_add_to_tunebook", {
     title: "Add tunes or sets to a tunebook",
     description: "Append tunes and/or existing sets to the end of a tunebook, in the order given. Tunes can be saved tunes or catalog setting IDs (saved automatically). A tune already in the book as an individual entry is not duplicated. Adding a set absorbs individual entries of its tunes.",
     inputSchema: {
       book_id: uuid("Tunebook to add to"),
       tunes: z.array(tuneRef).max(100).default([]).describe("Tunes to append, each {saved_tune_id} or {setting_id}"),
-      set_ids: z.array(z.uuid()).max(50).default([]).describe("Set IDs from other tunebooks (from libresession_get_library) to copy in; each copy is a new set of its own"),
+      set_ids: z.array(z.uuid()).max(50).default([]).describe("Set IDs from other tunebooks (from tunecompanion_get_library) to copy in; each copy is a new set of its own"),
     },
     outputSchema: { added_tunes: z.array(z.string()), added_sets: z.array(z.string()) },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -152,12 +152,12 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     }
     const copies = [];
     for (const setId of set_ids) copies.push(await copySet(userId, book_id, setId));
-    return ok({ added_tunes: added, added_sets: copies }, `Added ${added.length} tunes and ${set_ids.length} sets. Call libresession_get_tunebook to see the new order.`);
+    return ok({ added_tunes: added, added_sets: copies }, `Added ${added.length} tunes and ${set_ids.length} sets. Call tunecompanion_get_tunebook to see the new order.`);
   }));
 
-  server.registerTool("libresession_reorder_tunebook", {
+  server.registerTool("tunecompanion_reorder_tunebook", {
     title: "Reorder a tunebook",
-    description: "Set the full playing order of a tunebook's entries. Pass every entry_id from libresession_get_tunebook exactly once, in the new order. Sets move as one entry; reorder tunes inside a set with libresession_update_set.",
+    description: "Set the full playing order of a tunebook's entries. Pass every entry_id from tunecompanion_get_tunebook exactly once, in the new order. Sets move as one entry; reorder tunes inside a set with tunecompanion_update_set.",
     inputSchema: { book_id: uuid("Tunebook to reorder"), entry_ids: z.array(z.uuid()).min(1).max(500).describe("All entry IDs in the new order") },
     outputSchema: { book_id: z.string() },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -166,10 +166,10 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     return ok({ book_id }, "Tunebook reordered.");
   }));
 
-  server.registerTool("libresession_remove_from_tunebook", {
+  server.registerTool("tunecompanion_remove_from_tunebook", {
     title: "Remove an entry from a tunebook",
-    description: "Remove one entry (a tune or a whole set) from a tunebook. The tune or set stays in the library and in other tunebooks. To split a set back into individual tunes instead, use libresession_ungroup_set.",
-    inputSchema: { book_id: uuid("Tunebook"), entry_id: uuid("Entry to remove, from libresession_get_tunebook") },
+    description: "Remove one entry (a tune or a whole set) from a tunebook. The tune or set stays in the library and in other tunebooks. To split a set back into individual tunes instead, use tunecompanion_ungroup_set.",
+    inputSchema: { book_id: uuid("Tunebook"), entry_id: uuid("Entry to remove, from tunecompanion_get_tunebook") },
     outputSchema: { removed: z.boolean() },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   }, async ({ book_id, entry_id }) => guard(async () => {
@@ -177,10 +177,10 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     return ok({ removed: true }, "Entry removed from the tunebook.");
   }));
 
-  server.registerTool("libresession_ungroup_set", {
+  server.registerTool("tunecompanion_ungroup_set", {
     title: "Ungroup a set in a tunebook",
     description: "Replace a set entry in one tunebook with its tunes as individual entries, in the same place. The set itself stays available in the library and in other tunebooks.",
-    inputSchema: { book_id: uuid("Tunebook"), entry_id: uuid("The set's entry ID, from libresession_get_tunebook") },
+    inputSchema: { book_id: uuid("Tunebook"), entry_id: uuid("The set's entry ID, from tunecompanion_get_tunebook") },
     outputSchema: { book_id: z.string() },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async ({ book_id, entry_id }) => guard(async () => {
@@ -188,7 +188,7 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     return ok({ book_id }, "Set ungrouped in this tunebook.");
   }));
 
-  server.registerTool("libresession_set_often_played", {
+  server.registerTool("tunecompanion_set_often_played", {
     title: "Star a tune as often played",
     description: "Mark or unmark a tune in a tunebook as often played in the session (★). The star belongs to that tunebook and covers every setting of the tune.",
     inputSchema: {
@@ -203,7 +203,7 @@ Each section is either one tune or a set (2-10 tunes played together, in order).
     return ok({ tune_id: result.tuneId, often_played: result.oftenPlayed }, often_played ? "Starred as often played." : "Star removed.");
   }));
 
-  server.registerTool("libresession_delete_tunebook", {
+  server.registerTool("tunecompanion_delete_tunebook", {
     title: "Delete a tunebook",
     description: "Permanently delete a tunebook, its often-played stars and its sharing settings. Saved tunes and sets stay in the library. This cannot be undone; confirm with the user first.",
     inputSchema: { book_id: uuid("Tunebook to delete") },

@@ -8,7 +8,7 @@ const structuredData = {
   "@context": "https://schema.org",
   "@type": ["WebApplication", "SoftwareApplication"],
   name: "Tune Companion",
-  alternateName: ["Shazam for Irish Music", "LibreSession Tune Companion"],
+  alternateName: ["Shazam for Irish Music"],
   url: "https://tunecompanion.com",
   applicationCategory: "MusicApplication",
   operatingSystem: "iOS, Android, macOS, Windows, Linux, Web",

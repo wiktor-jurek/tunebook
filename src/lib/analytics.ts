@@ -78,8 +78,8 @@ export function analyticsPath(value: string): string {
   return ["/", "/sets", "/sign-in", "/sign-up", "/forgot-password", "/reset-password"].includes(path) ? path : "/other";
 }
 
-// The production hosts: Tune Companion's own domain, and the old one while it still redirects there.
-export const SITE_HOSTS = ["tunecompanion.com", "www.tunecompanion.com", "libresession.com", "www.libresession.com"];
+// The production hosts.
+export const SITE_HOSTS = ["tunecompanion.com", "www.tunecompanion.com"];
 
 function enabled() {
   return typeof window !== "undefined" && SITE_HOSTS.includes(window.location.hostname)

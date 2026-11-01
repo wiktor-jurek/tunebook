@@ -11,8 +11,8 @@ import { registerTunebookTools } from "@/mcp/tools/tunebooks";
 const instructions = `Tune Companion organises Irish and folk tunes from The Session (thesession.org) into personal tunebooks and sets.
 
 Typical flow for "make me a tunebook of ...":
-1. libresession_search_catalog with kind, tonic, mode and sort="popularity" to choose tunes. Each result has a setting_id.
-2. libresession_build_tunebook with the setting_ids, grouped into sets of 2-3 tunes of the same kind where it suits a session.
+1. tunecompanion_search_catalog with kind, tonic, mode and sort="popularity" to choose tunes. Each result has a setting_id.
+2. tunecompanion_build_tunebook with the setting_ids, grouped into sets of 2-3 tunes of the same kind where it suits a session.
 3. Share the returned tunebook URL with the user.
 
 IDs: catalog tune_id and setting_id are integers. Everything in the user's library (tunebooks, folders, sets, saved tunes, entries) uses UUIDs. Read tools return the IDs that write tools need.
@@ -57,10 +57,10 @@ function instrument(server: McpServer, context: Context) {
         return result;
       } finally {
         trackServer("mcp_tool_called", {
-          tool: name.replace(/^libresession_/, ""), outcome: !result || result.isError ? "error" : "success",
+          tool: name.replace(/^tunecompanion_/, ""), outcome: !result || result.isError ? "error" : "success",
           duration_ms: Date.now() - started, client: context.client, user_agent: context.request?.headers.get("user-agent"),
           ...argumentData(input), ...(result ? resultData(result) : {}),
-        }, { userId: context.userId, request: context.request, url: `/mcp/${name.replace(/^libresession_/, "")}`, serverAgent: true });
+        }, { userId: context.userId, request: context.request, url: `/mcp/${name.replace(/^tunecompanion_/, "")}`, serverAgent: true });
       }
     });
 }

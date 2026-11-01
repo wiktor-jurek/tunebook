@@ -10,7 +10,7 @@ import { fail, guard, ok, responseFormat, uuid, type Context } from "@/mcp/forma
 export function registerSharingTools(server: McpServer, context: Context) {
   const { userId } = context;
 
-  server.registerTool("libresession_get_sharing", {
+  server.registerTool("tunecompanion_get_sharing", {
     title: "Get a tunebook's sharing",
     description: "Show who a tunebook you own is shared with by email, and whether anyone with the link can view it.",
     inputSchema: { book_id: uuid("Tunebook you own"), response_format: responseFormat },
@@ -26,7 +26,7 @@ export function registerSharingTools(server: McpServer, context: Context) {
 
   if (!context.canWrite) return;
 
-  server.registerTool("libresession_share_tunebook", {
+  server.registerTool("tunecompanion_share_tunebook", {
     title: "Share a tunebook by email",
     description: "Give someone view-only access to a tunebook you own, or remove it. Inviting SENDS A REAL EMAIL from Tune Companion to that address, so confirm the address with the user first. The person sees the book under Shared with me once they sign in with that verified email.",
     inputSchema: {
@@ -48,7 +48,7 @@ export function registerSharingTools(server: McpServer, context: Context) {
     return ok({ email, action, ...(result.warning ? { warning: result.warning } : {}) }, `${text}\nLink: ${bookUrl(book_id)}`);
   }));
 
-  server.registerTool("libresession_set_link_visibility", {
+  server.registerTool("tunecompanion_set_link_visibility", {
     title: "Set a tunebook's link access",
     description: "Make a tunebook you own viewable by anyone with its link (no sign-in needed), or restrict it to you and people invited by email.",
     inputSchema: { book_id: uuid("Tunebook you own"), public: z.boolean().describe("true: anyone with the link can view; false: restricted") },

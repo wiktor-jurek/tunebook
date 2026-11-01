@@ -11,7 +11,7 @@ beforeEach(async () => {
   vi.resetModules();
   payloads = [];
   calls = [];
-  location = { hostname: "libresession.com", origin: "https://libresession.com", pathname: "/books/private-book" };
+  location = { hostname: "tunecompanion.com", origin: "https://tunecompanion.com", pathname: "/books/private-book" };
   track = vi.fn((build: (defaults: Record<string, unknown>) => Record<string, unknown>) => {
     calls.push("track");
     payloads.push(build({ website: "website-id", url: "/reset-password?token=secret", title: "Private book title", referrer: "https://example.com/?email=private" }));
@@ -19,7 +19,7 @@ beforeEach(async () => {
   });
   identify = vi.fn(() => { calls.push("identify"); return Promise.resolve(); });
   vi.stubGlobal("window", { location, umami: { track, identify } });
-  vi.stubGlobal("document", { referrer: "https://libresession.com/reset-password?token=secret" });
+  vi.stubGlobal("document", { referrer: "https://tunecompanion.com/reset-password?token=secret" });
   vi.stubGlobal("navigator", { doNotTrack: "0" });
   analytics = await import("./analytics");
 });
@@ -55,7 +55,7 @@ describe("analytics delivery and identity", () => {
     expect(payloads[0].referrer).toBe("");
   });
 
-  it.each(["localhost", "127.0.0.1", "preview.libresession.com", "libresession.com.example.com"])("does not track on %s", (hostname) => {
+  it.each(["localhost", "127.0.0.1", "preview.tunecompanion.com", "tunecompanion.com.example.com"])("does not track on %s", (hostname) => {
     location.hostname = hostname;
     analytics.trackPageView("/");
     analytics.trackEvent("print_requested", {});
@@ -63,7 +63,7 @@ describe("analytics delivery and identity", () => {
   });
 
   it("allows the www production domain", () => {
-    location.hostname = "www.libresession.com";
+    location.hostname = "www.tunecompanion.com";
     analytics.trackEvent("print_requested", {});
     expect(track).toHaveBeenCalledTimes(1);
   });

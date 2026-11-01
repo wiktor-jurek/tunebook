@@ -1,5 +1,5 @@
 <!--
-  Read-only evaluation for the Libresession MCP server, in the mcp-builder format.
+  Read-only evaluation for the Tune Companion MCP server, in the mcp-builder format.
   Answers were verified against TheSession-data tunes.csv and tune_popularity.csv (October 2026),
   choosing questions whose leader is well ahead so popularity drift does not change the answer.
   Requires a synced catalog (npm run catalog:sync).

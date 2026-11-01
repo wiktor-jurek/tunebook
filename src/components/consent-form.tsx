@@ -16,7 +16,7 @@ export function ConsentForm({ clientName, clientUri, userName, permissions }: { 
     if (result.error) { setError(result.error.message || "Could not complete the request. Start again from the app."); setBusy(false); }
   }
   return <main className="auth-screen"><div className="auth-card"><Link href="/" className="brand auth-brand"><BrandMark /><span>Tune Companion</span></Link><h1>Allow access?</h1>
-    <p className="page-subtitle"><strong>{clientName}</strong>{clientUri && URL.canParse(clientUri) && <> ({new URL(clientUri).host})</>} wants to use your Libresession account, {userName}. It will be able to:</p>
+    <p className="page-subtitle"><strong>{clientName}</strong>{clientUri && URL.canParse(clientUri) && <> ({new URL(clientUri).host})</>} wants to use your Tune Companion account, {userName}. It will be able to:</p>
     <ul className="consent-list">{permissions.map((permission) => <li key={permission}>{permission}</li>)}</ul>
     <p className="muted">Only allow apps you trust. AI assistants act on your behalf with these permissions.</p>
     {error && <p className="form-error" role="alert">{error}</p>}

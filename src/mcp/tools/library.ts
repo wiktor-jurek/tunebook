@@ -9,7 +9,7 @@ import { fail, guard, ok, page, pageShape, pagination, responseFormat, tuneLine,
 export function registerLibraryTools(server: McpServer, context: Context) {
   const { userId } = context;
 
-  server.registerTool("libresession_get_library", {
+  server.registerTool("tunecompanion_get_library", {
     title: "Get my library",
     description: "Overview of the signed-in user's Tune Companion library: folders (with paths), tunebooks (with IDs and links), sets (each in the tunebook it is played in), tunebooks shared with them, and how many tunes are saved. Start here to find IDs before editing.",
     inputSchema: { response_format: responseFormat },
@@ -40,7 +40,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
     return ok(data, markdown, response_format);
   }));
 
-  server.registerTool("libresession_list_saved_tunes", {
+  server.registerTool("tunecompanion_list_saved_tunes", {
     title: "List my saved tunes",
     description: "List tunes saved in the user's library, optionally filtered by title, kind or key. Each has a saved_tune_id for adding to tunebooks and sets, plus the user's ability level (unlearned, learning, learned, mastered).",
     inputSchema: {
@@ -63,16 +63,16 @@ export function registerLibraryTools(server: McpServer, context: Context) {
     const meta = page(matches.length, tunes.length, offset);
     const markdown = tunes.length
       ? [`${matches.length} saved tunes match.`, "", ...tunes.map((tune) => `- ${tuneLine(tune)}`), ...(meta.has_more ? ["", `More: call again with offset=${meta.next_offset}.`] : [])].join("\n")
-      : "No saved tunes match. Save tunes from the catalog with libresession_save_tunes.";
+      : "No saved tunes match. Save tunes from the catalog with tunecompanion_save_tunes.";
     return ok({ tunes, ...meta }, markdown, response_format);
   }));
 
   if (!context.canWrite) return;
 
-  server.registerTool("libresession_save_tunes", {
+  server.registerTool("tunecompanion_save_tunes", {
     title: "Save catalog tunes",
-    description: "Save The Session catalog settings into the user's library, returning a saved_tune_id for each. Saving a setting that is already saved returns its existing saved_tune_id. Most agents can skip this: libresession_build_tunebook and libresession_add_to_tunebook save settings automatically.",
-    inputSchema: { setting_ids: z.array(z.number().int().positive()).min(1).max(50).describe("Catalog setting IDs from libresession_search_catalog or libresession_get_tune") },
+    description: "Save The Session catalog settings into the user's library, returning a saved_tune_id for each. Saving a setting that is already saved returns its existing saved_tune_id. Most agents can skip this: tunecompanion_build_tunebook and tunecompanion_add_to_tunebook save settings automatically.",
+    inputSchema: { setting_ids: z.array(z.number().int().positive()).min(1).max(50).describe("Catalog setting IDs from tunecompanion_search_catalog or tunecompanion_get_tune") },
     outputSchema: { saved: z.array(z.object({ setting_id: z.number(), saved_tune_id: z.string() })) },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async ({ setting_ids }) => guard(async () => {
@@ -81,7 +81,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
     return ok({ saved }, `Saved ${saved.length} settings:\n${saved.map((row) => `- setting ${row.setting_id} → \`${row.saved_tune_id}\``).join("\n")}`);
   }));
 
-  server.registerTool("libresession_create_folder", {
+  server.registerTool("tunecompanion_create_folder", {
     title: "Create a folder",
     description: "Create a folder for organising tunebooks, optionally inside another folder.",
     inputSchema: {
@@ -95,7 +95,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
     return ok({ folder_id: folderId }, `Created folder **${name}** — \`${folderId}\``);
   }));
 
-  server.registerTool("libresession_update_folder", {
+  server.registerTool("tunecompanion_update_folder", {
     title: "Rename or move a folder",
     description: "Rename a folder and/or move it under another folder. Pass parent_id null to move it to the top level.",
     inputSchema: {
@@ -112,7 +112,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
     return ok({ folder_id }, "Folder updated.");
   }));
 
-  server.registerTool("libresession_delete_folder", {
+  server.registerTool("tunecompanion_delete_folder", {
     title: "Delete a folder",
     description: "Permanently delete a folder, its subfolders AND every tunebook inside them. Saved tunes and sets stay in the library. This cannot be undone; confirm with the user first.",
     inputSchema: { folder_id: uuid("Folder to delete") },
@@ -123,7 +123,7 @@ export function registerLibraryTools(server: McpServer, context: Context) {
     return ok({ deleted: true }, "Folder and its tunebooks deleted.");
   }));
 
-  server.registerTool("libresession_delete_saved_tune", {
+  server.registerTool("tunecompanion_delete_saved_tune", {
     title: "Delete a saved tune",
     description: "Remove a saved tune from the library and from every tunebook that contains it. Fails if the tune belongs to a set; edit the set first. Practice progress is kept. Confirm with the user first.",
     inputSchema: { saved_tune_id: uuid("Saved tune to delete") },

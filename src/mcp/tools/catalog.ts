@@ -14,9 +14,9 @@ const catalogTune = z.object({
 });
 
 export function registerCatalogTools(server: McpServer, context: Context) {
-  server.registerTool("libresession_search_catalog", {
+  server.registerTool("tunecompanion_search_catalog", {
     title: "Search The Session catalog",
-    description: `Search The Session's tune catalog (about 20,000 tunes). Returns one row per tune with a representative setting_id, which you can pass to libresession_build_tunebook, libresession_save_tunes or libresession_add_to_tunebook.
+    description: `Search The Session's tune catalog (about 20,000 tunes). Returns one row per tune with a representative setting_id, which you can pass to tunecompanion_build_tunebook, tunecompanion_save_tunes or tunecompanion_add_to_tunebook.
 
 Filters combine with AND. Sort by popularity (the number of The Session members' tunebooks containing the tune) to find well-known session tunes, or popular ones for beginners. With no query, the tool browses by filters alone, for example kind="reel", tonic="D", sort="popularity".`,
     inputSchema: {
@@ -49,7 +49,7 @@ Filters combine with AND. Sort by popularity (the number of The Session members'
     return ok({ tunes: rows, ...meta }, markdown, response_format);
   }));
 
-  server.registerTool("libresession_get_tune", {
+  server.registerTool("tunecompanion_get_tune", {
     title: "Get a tune's settings",
     description: "Get every setting (version) of a The Session tune, with its key, contributor and optionally its ABC notation. Also lists the tunes you most often play it with in your own sets. Use it to choose a setting_id in a particular key, or to read the music.",
     inputSchema: {
@@ -67,7 +67,7 @@ Filters combine with AND. Sort by popularity (the number of The Session members'
     const tuneId = typeof tune === "number" ? tune : /^\d+$/.test(tune.trim()) ? Number(tune) : parseSessionUrl(tune.trim())?.tuneId;
     if (!tuneId) return fail("Give a numeric tune ID or a https://thesession.org/tunes/<id> URL.");
     const [{ settings, tunebooks }, pairs] = await Promise.all([getCatalogTune(tuneId), getOftenPlayedWith(context.userId, tuneId)]);
-    if (!settings.length) return fail(`Tune ${tuneId} is not in the catalog. Call libresession_search_catalog to find tune IDs.`);
+    if (!settings.length) return fail(`Tune ${tuneId} is not in the catalog. Call tunecompanion_search_catalog to find tune IDs.`);
     const first = settings[0];
     const data = {
       tune_id: tuneId, title: first.title, kind: first.kind, tunebooks,

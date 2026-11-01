@@ -32,11 +32,11 @@ export function fail(message: string): CallToolResult {
 }
 
 const hints: [RegExp, string][] = [
-  [/Tunebook not found|Tunebook item not found/, "Call libresession_get_library to list your tunebook IDs, or libresession_get_tunebook for entry IDs."],
-  [/Tune not found|not in your library/, "Use saved tune IDs from libresession_list_saved_tunes or libresession_get_tunebook, or save catalog settings with libresession_save_tunes."],
-  [/Set not found/, "Call libresession_get_library to list your set IDs."],
-  [/Folder not found/, "Call libresession_get_library to list your folder IDs."],
-  [/Setting not found in the catalog/, "Call libresession_search_catalog or libresession_get_tune to find a valid setting_id."],
+  [/Tunebook not found|Tunebook item not found/, "Call tunecompanion_get_library to list your tunebook IDs, or tunecompanion_get_tunebook for entry IDs."],
+  [/Tune not found|not in your library/, "Use saved tune IDs from tunecompanion_list_saved_tunes or tunecompanion_get_tunebook, or save catalog settings with tunecompanion_save_tunes."],
+  [/Set not found/, "Call tunecompanion_get_library to list your set IDs."],
+  [/Folder not found/, "Call tunecompanion_get_library to list your folder IDs."],
+  [/Setting not found in the catalog/, "Call tunecompanion_search_catalog or tunecompanion_get_tune to find a valid setting_id."],
 ];
 
 // Known domain errors carry user-safe messages; anything else stays generic.

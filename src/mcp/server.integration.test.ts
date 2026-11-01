@@ -71,38 +71,38 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Tune Companion MCP server (Post
   it("lists only read tools without the write scope, all tools with it", async () => {
     const reader = await connect("owner", false);
     const readNames = (await reader.client.listTools()).tools.map((tool) => tool.name);
-    expect(readNames).toEqual(expect.arrayContaining(["libresession_search_catalog", "libresession_get_tunebook", "libresession_get_sharing"]));
-    expect(readNames).not.toContain("libresession_build_tunebook");
+    expect(readNames).toEqual(expect.arrayContaining(["tunecompanion_search_catalog", "tunecompanion_get_tunebook", "tunecompanion_get_sharing"]));
+    expect(readNames).not.toContain("tunecompanion_build_tunebook");
     const tools = (await owner.client.listTools()).tools;
     expect(tools.length).toBeGreaterThan(20);
     for (const tool of tools) {
-      expect(tool.name).toMatch(/^libresession_[a-z_]+$/);
+      expect(tool.name).toMatch(/^tunecompanion_[a-z_]+$/);
       expect(tool.annotations).toBeDefined();
       expect(tool.outputSchema).toBeDefined();
     }
-    expect(tools.find((tool) => tool.name === "libresession_delete_tunebook")!.annotations!.destructiveHint).toBe(true);
+    expect(tools.find((tool) => tool.name === "tunecompanion_delete_tunebook")!.annotations!.destructiveHint).toBe(true);
   });
 
   it("searches the catalog by key, type and popularity, one row per tune", async () => {
-    const reels = await owner.ok<{ tunes: { title: string; setting_id: number; mode: string }[]; total: number }>("libresession_search_catalog", { kind: "reel", tonic: "D", mode: "major" });
+    const reels = await owner.ok<{ tunes: { title: string; setting_id: number; mode: string }[]; total: number }>("tunecompanion_search_catalog", { kind: "reel", tonic: "D", mode: "major" });
     expect(reels.data.tunes.map((tune) => tune.title)).toEqual(["Drowsy Maggie", "Merry Blacksmith, The", "Silver Spear, The"]);
     // The representative setting is the one in the requested key.
     expect(reels.data.tunes[0]).toMatchObject({ setting_id: 102, mode: "Dmajor" });
-    const kesh = await owner.call<{ tunes: { tune_id: number }[] }>("libresession_search_catalog", { query: "The Kesh" });
+    const kesh = await owner.call<{ tunes: { tune_id: number }[] }>("tunecompanion_search_catalog", { query: "The Kesh" });
     expect(kesh.data.tunes.map((tune) => tune.tune_id)).toEqual([2]);
-    const firstPage = await owner.call("libresession_search_catalog", { limit: 2 });
+    const firstPage = await owner.call("tunecompanion_search_catalog", { limit: 2 });
     expect(firstPage.data).toMatchObject({ total: 5, count: 2, has_more: true, next_offset: 2 });
-    const pastEnd = await owner.call("libresession_search_catalog", { offset: 10 });
+    const pastEnd = await owner.call("tunecompanion_search_catalog", { offset: 10 });
     expect(pastEnd.data).toMatchObject({ total: 5, count: 0, has_more: false, next_offset: null });
-    const tune = await owner.call<{ settings: unknown[]; tunebooks: number }>("libresession_get_tune", { tune: "https://thesession.org/tunes/1" });
+    const tune = await owner.call<{ settings: unknown[]; tunebooks: number }>("tunecompanion_get_tune", { tune: "https://thesession.org/tunes/1" });
     expect(tune.data.settings).toHaveLength(2);
     expect(tune.data.tunebooks).toBe(8000);
   });
 
   it("tracks every tool call and search for product analytics", async () => {
     vi.mocked(trackServer).mockClear();
-    await owner.ok("libresession_search_catalog", { query: "The Kesh", kind: "jig" });
-    await owner.call("libresession_get_tunebook", { book_id: randomUUID() });
+    await owner.ok("tunecompanion_search_catalog", { query: "The Kesh", kind: "jig" });
+    await owner.call("tunecompanion_get_tunebook", { book_id: randomUUID() });
     const events = vi.mocked(trackServer).mock.calls.map(([name, data, context]) => ({ name, data, userId: context?.userId }));
     expect(events).toEqual([
       { name: "catalog_searched", userId: "owner", data: expect.objectContaining({ source: "mcp", client: "Test Agent", query: "The Kesh", kind: "jig", result_count: 1, top_titles: "Kesh, The" }) },
@@ -113,7 +113,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Tune Companion MCP server (Post
   });
 
   it("builds a tunebook with sets in one call", async () => {
-    const built = await owner.ok<{ book_id: string; url: string; set_count: number }>("libresession_build_tunebook", {
+    const built = await owner.ok<{ book_id: string; url: string; set_count: number }>("tunecompanion_build_tunebook", {
       name: "Session reels", emoji: "🎻",
       sections: [{ setting_ids: [102, 301] }, { setting_ids: [401] }, { setting_ids: [201, 501], set_name: "Jigs" }],
     });
@@ -121,7 +121,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Tune Companion MCP server (Post
     expect(built.data).toMatchObject({ set_count: 2 });
     expect(built.data.url).toMatch(new RegExp(`/books/${built.data.book_id}$`));
     bookId = built.data.book_id;
-    const book = await owner.call<{ sections: { kind: string; name?: string; tunes: { title: string }[] }[]; tune_count: number }>("libresession_get_tunebook", { book_id: bookId });
+    const book = await owner.call<{ sections: { kind: string; name?: string; tunes: { title: string }[] }[]; tune_count: number }>("tunecompanion_get_tunebook", { book_id: bookId });
     expect(book.data.tune_count).toBe(5);
     expect(book.data.sections.map((section) => [section.kind, section.name ?? section.tunes[0].title])).toEqual([
       ["set", "Drowsy Maggie / Silver Spear, The"], ["tune", "Merry Blacksmith, The"], ["set", "Jigs"],
@@ -131,75 +131,75 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Tune Companion MCP server (Post
 
   it("edits, reorders, stars and ungroups entries", async () => {
     type Book = { sections: { entry_id: string; kind: string; set_id?: string; name?: string; tunes: { saved_tune_id: string; title: string; often_played?: boolean }[] }[] };
-    const read = async () => (await owner.call<Book>("libresession_get_tunebook", { book_id: bookId })).data.sections;
+    const read = async () => (await owner.call<Book>("tunecompanion_get_tunebook", { book_id: bookId })).data.sections;
     let sections = await read();
     const reordered = [...sections].reverse().map((section) => section.entry_id);
-    expect((await owner.call("libresession_reorder_tunebook", { book_id: bookId, entry_ids: reordered })).isError).toBeFalsy();
+    expect((await owner.call("tunecompanion_reorder_tunebook", { book_id: bookId, entry_ids: reordered })).isError).toBeFalsy();
     expect((await read()).map((section) => section.entry_id)).toEqual(reordered);
-    const partial = await owner.call("libresession_reorder_tunebook", { book_id: bookId, entry_ids: reordered.slice(1) });
+    const partial = await owner.call("tunecompanion_reorder_tunebook", { book_id: bookId, entry_ids: reordered.slice(1) });
     expect(partial.isError).toBe(true);
     expect(partial.text).toContain("exactly once");
 
     sections = await read();
     const jigs = sections.find((section) => section.name === "Jigs")!;
-    const renamed = await owner.call<{ name: string }>("libresession_update_set", { set_id: jigs.set_id, use_tune_names: true });
+    const renamed = await owner.call<{ name: string }>("tunecompanion_update_set", { set_id: jigs.set_id, use_tune_names: true });
     expect(renamed.data.name).toBe("Kesh, The / Banish Misfortune");
-    const swapped = await owner.call<{ name: string }>("libresession_update_set", { set_id: jigs.set_id, saved_tune_ids: [...jigs.tunes].reverse().map((tune) => tune.saved_tune_id) });
+    const swapped = await owner.call<{ name: string }>("tunecompanion_update_set", { set_id: jigs.set_id, saved_tune_ids: [...jigs.tunes].reverse().map((tune) => tune.saved_tune_id) });
     expect(swapped.data.name).toBe("Banish Misfortune / Kesh, The");
 
     const star = jigs.tunes[0];
-    expect((await owner.call("libresession_set_often_played", { book_id: bookId, saved_tune_id: star.saved_tune_id, often_played: true })).isError).toBeFalsy();
+    expect((await owner.call("tunecompanion_set_often_played", { book_id: bookId, saved_tune_id: star.saved_tune_id, often_played: true })).isError).toBeFalsy();
     expect((await read()).flatMap((section) => section.tunes).find((tune) => tune.saved_tune_id === star.saved_tune_id)!.often_played).toBe(true);
 
-    expect((await owner.call("libresession_ungroup_set", { book_id: bookId, entry_id: jigs.entry_id })).isError).toBeFalsy();
+    expect((await owner.call("tunecompanion_ungroup_set", { book_id: bookId, entry_id: jigs.entry_id })).isError).toBeFalsy();
     sections = await read();
     expect(sections.filter((section) => section.kind === "tune").map((section) => section.tunes[0].title)).toEqual(expect.arrayContaining(["Banish Misfortune", "Kesh, The"]));
     const single = sections.find((section) => section.kind === "tune")!;
-    expect((await owner.call("libresession_remove_from_tunebook", { book_id: bookId, entry_id: single.entry_id })).isError).toBeFalsy();
+    expect((await owner.call("tunecompanion_remove_from_tunebook", { book_id: bookId, entry_id: single.entry_id })).isError).toBeFalsy();
     expect(await read()).toHaveLength(sections.length - 1);
 
-    const added = await owner.call<{ added_tunes: string[] }>("libresession_add_to_tunebook", { book_id: bookId, tunes: [{ setting_id: 101 }] });
+    const added = await owner.call<{ added_tunes: string[] }>("tunecompanion_add_to_tunebook", { book_id: bookId, tunes: [{ setting_id: 101 }] });
     expect(added.data.added_tunes).toHaveLength(1);
-    const library = await owner.call<{ tunebooks: { id: string }[]; saved_tune_count: number }>("libresession_get_library");
+    const library = await owner.call<{ tunebooks: { id: string }[]; saved_tune_count: number }>("tunecompanion_get_library");
     expect(library.data.tunebooks.map((book) => book.id)).toContain(bookId);
     expect(library.data.saved_tune_count).toBe(6);
   }, 30000);
 
   it("keeps other users' tunebooks private and errors actionable", async () => {
-    const read = await stranger.call("libresession_get_tunebook", { book_id: bookId });
+    const read = await stranger.call("tunecompanion_get_tunebook", { book_id: bookId });
     expect(read.isError).toBe(true);
-    expect(read.text).toContain("libresession_get_library");
+    expect(read.text).toContain("tunecompanion_get_library");
     for (const [name, args] of [
-      ["libresession_delete_tunebook", { book_id: bookId }],
-      ["libresession_update_tunebook", { book_id: bookId, name: "Mine now" }],
-      ["libresession_add_to_tunebook", { book_id: bookId, tunes: [{ setting_id: 201 }] }],
-      ["libresession_set_link_visibility", { book_id: bookId, public: true }],
-      ["libresession_share_tunebook", { book_id: bookId, email: "friend@example.test" }],
+      ["tunecompanion_delete_tunebook", { book_id: bookId }],
+      ["tunecompanion_update_tunebook", { book_id: bookId, name: "Mine now" }],
+      ["tunecompanion_add_to_tunebook", { book_id: bookId, tunes: [{ setting_id: 201 }] }],
+      ["tunecompanion_set_link_visibility", { book_id: bookId, public: true }],
+      ["tunecompanion_share_tunebook", { book_id: bookId, email: "friend@example.test" }],
     ] as const) {
       const result = await stranger.call(name, args);
       expect(result.isError, name).toBe(true);
       expect(result.text, name).toContain("Tunebook not found");
     }
-    expect((await owner.call<{ name: string }>("libresession_get_tunebook", { book_id: bookId })).data.name).toBe("Session reels");
+    expect((await owner.call<{ name: string }>("tunecompanion_get_tunebook", { book_id: bookId })).data.name).toBe("Session reels");
 
-    const missing = await owner.call("libresession_build_tunebook", { name: "Broken", sections: [{ setting_ids: [102] }, { setting_ids: [999999] }] });
+    const missing = await owner.call("tunecompanion_build_tunebook", { name: "Broken", sections: [{ setting_ids: [102] }, { setting_ids: [999999] }] });
     expect(missing.isError).toBe(true);
-    expect(missing.text).toMatch(/was created but stopped partway: Setting not found in the catalog\. .*libresession_search_catalog/);
+    expect(missing.text).toMatch(/was created but stopped partway: Setting not found in the catalog\. .*tunecompanion_search_catalog/);
   }, 30000);
 
   it("shares by email and link", async () => {
-    const invite = await owner.call("libresession_share_tunebook", { book_id: bookId, email: "Friend@Example.test" });
+    const invite = await owner.call("tunecompanion_share_tunebook", { book_id: bookId, email: "Friend@Example.test" });
     expect(invite.isError).toBeFalsy();
     expect(sendEmail).toHaveBeenCalledWith("friend@example.test", "Owner shared a tunebook with you", expect.stringContaining(`/books/${bookId}`));
-    await owner.call("libresession_set_link_visibility", { book_id: bookId, public: true });
-    const sharing = await owner.call("libresession_get_sharing", { book_id: bookId });
+    await owner.call("tunecompanion_set_link_visibility", { book_id: bookId, public: true });
+    const sharing = await owner.call("tunecompanion_get_sharing", { book_id: bookId });
     expect(sharing.data).toMatchObject({ link_visible: true, emails: ["friend@example.test"] });
-    await owner.call("libresession_share_tunebook", { book_id: bookId, email: "friend@example.test", action: "remove" });
-    expect((await owner.call("libresession_get_sharing", { book_id: bookId })).data).toMatchObject({ emails: [] });
+    await owner.call("tunecompanion_share_tunebook", { book_id: bookId, email: "friend@example.test", action: "remove" });
+    expect((await owner.call("tunecompanion_get_sharing", { book_id: bookId })).data).toMatchObject({ emails: [] });
   });
 
   it("deletes tunebooks", async () => {
-    expect((await owner.call("libresession_delete_tunebook", { book_id: bookId })).isError).toBeFalsy();
-    expect((await owner.call("libresession_get_tunebook", { book_id: bookId })).isError).toBe(true);
+    expect((await owner.call("tunecompanion_delete_tunebook", { book_id: bookId })).isError).toBeFalsy();
+    expect((await owner.call("tunecompanion_get_tunebook", { book_id: bookId })).isError).toBe(true);
   });
 });
