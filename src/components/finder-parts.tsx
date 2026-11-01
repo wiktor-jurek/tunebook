@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Bookmark, BookPlus, Check, Music, Search } from "lucide-react";
 import type { MotionStyle } from "motion/react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { OpeningPhrase } from "@/components/opening-phrase";
 import { ScoreSheet } from "@/components/score-sheet";
 import type { FinderTune } from "@/lib/library";
@@ -15,11 +15,23 @@ import { ABILITY_LABELS } from "@/lib/ability";
 import { displayTitle } from "@/lib/titles";
 import type { useTuneListener } from "@/lib/finder/use-listener";
 
-// The pieces of the tune finder that the standalone finder (desktop, landing page) and the phone's listen tray share.
+// The pieces of the tune finder that the landing page and the listen tray (a phone's deck, a desktop's dock) share.
 
 export type Listener = ReturnType<typeof useTuneListener>;
 /** What every piece needs: the listener, whether someone is signed in, where sign-up returns to, and how to open a score. */
 export type FinderContext = { listener: Listener; signedIn: boolean; next: string; onScore: (tune: FinderTune) => void };
+
+/** The listening prompt for any phase without an answer yet. */
+export function finderPrompt(listener: FinderContext["listener"], idle: string) {
+  const { phase, progress, status } = listener;
+  return phase === "denied" ? "Allow the microphone for this site in your browser settings, then try again."
+    : phase === "error" ? listener.error
+    : phase === "loading" ? `Loading the tune model${progress?.total ? `, ${Math.round(progress.loaded / 1e6)} of ${Math.round(progress.total / 1e6)} MB` : ""}. Only the first time.`
+    : phase === "starting" ? "Asking for the microphone"
+    : phase === "listening" ? (status === "quiet" ? "Too quiet. Move closer to the music." : "Listening")
+    : idle;
+}
+
 
 /** The dial's custom properties: the live input level (a motion value, so it never re-renders) and how much of the model has loaded. */
 export const dialStyle = (listener: Listener, loaded: number) => ({ "--level": listener.level, "--loaded": loaded }) as unknown as MotionStyle;
@@ -43,7 +55,7 @@ export function LearnLater({ tune, context, quiet = false }: { tune: FinderTune;
   const { listener, signedIn, next } = context;
   if (known(tune)) return null;
   if (tune.level === "wanted") return <span className="finder-kept"><Check size={14} /> On your list</span>;
-  if (!signedIn) return <Link onClick={() => trackEvent("guest_sign_in_clicked", { source: "finder_save" })} href={`/sign-up?next=${encodeURIComponent(next)}`} className={`button ${quiet ? "button-ghost" : "button-outline"} button-sm`}><Bookmark size={14} /> Learn later</Link>;
+  if (!signedIn) return <Link onClick={() => trackEvent("guest_sign_in_clicked", { source: "finder_save" })} href={`/sign-up?next=${encodeURIComponent(next)}`} className={buttonVariants({ variant: quiet ? "ghost" : "outline", size: "sm" })}><Bookmark size={14} /> Learn later</Link>;
   return <Button size="sm" variant={quiet ? "ghost" : "outline"} disabled={listener.saving === tune.tuneId} onClick={() => void listener.learnLater(tune)}><Bookmark size={14} /> {listener.saving === tune.tuneId ? "Saving" : "Learn later"}</Button>;
 }
 
@@ -89,11 +101,11 @@ export function FinderAlternatives({ sure, context }: { sure: boolean; context: 
   const [open, setOpen] = useState(false);
   if (!listener.alternatives.length) return null;
   return <>
-    {sure && <button type="button" className="finder-link" aria-expanded={open} onClick={() => setOpen(!open)}>Not it?</button>}
+    {sure && <Button variant="link" aria-expanded={open} onClick={() => setOpen(!open)}>Not it?</Button>}
     {(open || !sure) && <div className="finder-others">
       <p className="finder-others-title">{sure ? "Other close matches" : "Or it could be"}</p>
       <ul>{listener.alternatives.slice(0, sure ? 4 : 2).map((tune) => <FinderRow key={tune.tuneId} tune={tune} detail={meta(tune)} context={context} phrase />)}</ul>
-      {listener.phase === "listening" && <button type="button" className="finder-link" onClick={() => { listener.restart(); setOpen(false); }}>Listen again from here</button>}
+      {listener.phase === "listening" && <Button variant="link" onClick={() => { listener.restart(); setOpen(false); }}>Listen again from here</Button>}
     </div>}
   </>;
 }
@@ -138,12 +150,12 @@ export function FinderHeard({ context }: { context: FinderContext }) {
       setMaking("busy");
       try { const bookId = await listener.makeBook("Tonight's tunes"); listener.clearHeard(); router.push(`/books/${bookId}`); } catch { setMaking("error"); }
     }}><BookPlus size={15} /> {making === "busy" ? "Making the tunebook" : "Make a tunebook of these"}</Button>
-    <button type="button" className="finder-link" onClick={listener.clearHeard}>Clear</button>{making === "error" && <p role="alert" className="form-error">Could not make the tunebook. Try again.</p>}</div>}
+    <Button variant="link" onClick={listener.clearHeard}>Clear</Button>{making === "error" && <p role="alert" className="form-error">Could not make the tunebook. Try again.</p>}</div>}
   </section>;
 }
 
 /** A heard or searched tune's whole score, full screen. */
 export function FinderScore({ tune, context, onClose }: { tune: FinderTune; context: FinderContext; onClose: () => void }) {
   return <ScoreSheet tune={tune} title={displayTitle(tune.title)} meta={[meta(tune), standing(tune)].filter(Boolean).join(", ")} note={tune.savedId ? "Your setting of this tune." : "The Session's first setting of this tune. Other settings are on The Session."}
-    actions={<><LearnLater tune={tune} context={context} />{tune.savedId && <Link className="button button-ghost button-sm" href={`/tunes/${tune.savedId}`}>Open in your library</Link>}</>} onClose={onClose} />;
+    actions={<><LearnLater tune={tune} context={context} />{tune.savedId && <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/tunes/${tune.savedId}`}>Open in your library</Link>}</>} onClose={onClose} />;
 }

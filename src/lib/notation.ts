@@ -9,8 +9,10 @@ export function abcForTune(tune: Tune) {
   return `X:1\nT:${line(tune.title, "Untitled")}\nR:${line(tune.kind, "tune")}\nM:${line(tune.meter, "4/4")}\nL:1/8\nQ:1/4=100\nK:${line(tune.mode, "D")}\n${tune.abc}`;
 }
 
+// The score leaves out the title and the rhythm (R:, the tune's type): the page already says both, and abcjs would
+// print the type again above the clef.
 export function abcForScore(tune: Tune) {
-  return abcForTune(tune).replace(/^T\s*:[^\r\n]*(?:\r?\n|$)/gm, "");
+  return abcForTune(tune).replace(/^[TR]\s*:[^\r\n]*(?:\r?\n|$)/gm, "");
 }
 
 /** The Session writes keys as "Dmajor" or "Adorian"; people read "D major". */

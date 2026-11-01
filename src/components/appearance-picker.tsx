@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Moon, SunMedium, SunMoon } from "lucide-react";
 import { applyTheme, parseTheme, type Theme } from "@/lib/theme";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 const OPTIONS: { theme: Theme; label: string; icon: typeof Moon }[] = [
   { theme: "system", label: "Automatic", icon: SunMoon },
@@ -24,9 +25,6 @@ export function AppearancePicker() {
     // Refreshing re-renders the browser chrome colour for the new theme.
     router.refresh();
   }
-  return <div className="appearance-picker" role="radiogroup" aria-label="Appearance">
-    {OPTIONS.map(({ theme: option, label, icon: Icon }) => <button key={option} type="button" role="radio" aria-checked={theme === option} className="appearance-option" onClick={() => choose(option)}>
-      <Icon size={18} aria-hidden="true" /><span>{label}</span>
-    </button>)}
-  </div>;
+  return <SegmentedControl label="Appearance" value={theme} onChange={choose} block size="lg"
+    options={OPTIONS.map(({ theme: option, label, icon: Icon }) => ({ value: option, label, icon: <Icon size={18} aria-hidden="true" /> }))} />;
 }

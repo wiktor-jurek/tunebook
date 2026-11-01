@@ -30,7 +30,7 @@ export type Benchmark = {
 // Fixed identity colours, as tokens in globals.css (validated for colour-blind separation in light and dark;
 // every bar is also labelled by name).
 export const ENGINES: { key: EngineKey; name: string; colour: string; url: string }[] = [
-  { key: "tunebook", name: "Tune Companion", colour: "var(--series-tunebook)", url: "/tunes/finder" },
+  { key: "tunebook", name: "Tune Companion", colour: "var(--series-tunebook)", url: "/" },
   { key: "folkfriend", name: "FolkFriend", colour: "var(--series-folkfriend)", url: "https://folkfriend.app" },
   { key: "jigripper", name: "JigRipper", colour: "var(--series-jigripper)", url: "https://www.jigripper.com" },
 ];

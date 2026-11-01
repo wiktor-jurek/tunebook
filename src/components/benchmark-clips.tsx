@@ -5,6 +5,8 @@ import { Check, ExternalLink, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SETS, right, type Answer, type BenchmarkClip, type EngineKey } from "@/lib/finder/benchmark";
+import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 
 const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const titleOf = (tunes: Record<string, { title: string }>, id: number | null | undefined) => (id == null ? "No answer" : tunes[id]?.title ?? `Tune ${id}`);
@@ -44,7 +46,7 @@ export function BenchmarkClips({ clips, tunes, engines, bands }: { clips: Benchm
 
   return <div>
     <div className="table-toolbar">
-      <label className="table-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search clips</span><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by tune or instrument" />{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery("")}><X size={14} /></button>}</label>
+      <label className="table-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search clips</span><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by tune or instrument" />{query && <Button variant="ghost" size="icon-sm" aria-label="Clear search" onClick={() => setQuery("")}><X size={14} /></Button>}</label>
       <select className="table-filter" value={set} onChange={(event) => setSet(event.target.value)} aria-label="Filter by recordings"><option value="">All recordings</option>{SETS.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}</select>
       {bands.length > 0 && <select className="table-filter" value={band} onChange={(event) => setBand(event.target.value)} aria-label="Filter by popularity"><option value="">Any popularity</option>{bands.map((label, i) => <option key={label} value={i + 1}>{label}</option>)}</select>}
       <select className="table-filter" value={result} onChange={(event) => setResult(event.target.value)} aria-label="Filter by result"><option value="">Any result</option>{outcomes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
@@ -56,7 +58,7 @@ export function BenchmarkClips({ clips, tunes, engines, bands }: { clips: Benchm
         {shown.map((clip) => <TableRow key={`${clip.video}-${clip.start}-${clip.tuneId}`}>
           <TableCell><span className="table-title">{titleOf(tunes, clip.tuneId)}</span><span className="table-meta"><span className="table-kind">{tunes[clip.tuneId]?.kind}</span>, {SETS.find((entry) => entry.key === clip.set)?.label}{clip.instrument !== "band" && `, ${clip.instrument}`}{clip.popularity && bands[clip.popularity - 1] && `, ${bands[clip.popularity - 1].toLowerCase()}`}</span></TableCell>
           {engines.map((e) => <TableCell key={e.key}>{answer(clip.results[e.key])}</TableCell>)}
-          <TableCell className="table-actions"><a className="button button-ghost button-sm" href={`https://www.youtube.com/watch?v=${clip.video}&t=${clip.start}s`} target="_blank" rel="noreferrer" aria-label={`Listen to ${titleOf(tunes, clip.tuneId)} on YouTube`}><ExternalLink size={14} /></a></TableCell>
+          <TableCell className="table-actions"><a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`https://www.youtube.com/watch?v=${clip.video}&t=${clip.start}s`} target="_blank" rel="noreferrer" aria-label={`Listen to ${titleOf(tunes, clip.tuneId)} on YouTube`}><ExternalLink size={14} /></a></TableCell>
         </TableRow>)}
         {!shown.length && <TableRow><TableCell colSpan={engines.length + 2} className="table-empty">No clips match.</TableCell></TableRow>}
       </TableBody>

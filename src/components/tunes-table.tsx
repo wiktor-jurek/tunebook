@@ -15,6 +15,7 @@ import { ABILITY_LABELS, ABILITY_LEVELS, type AbilityLevel } from "@/lib/ability
 import type { TuneWithPractice } from "@/lib/tune-practice";
 import { displayTitle } from "@/lib/titles";
 import { GROUP_BYS, GROUP_BY_LABELS, groupTunes, setGroupBy, useGroupBy, type GroupBook, type GroupBy } from "@/lib/tune-groups";
+import { Button } from "@/components/ui/button";
 
 type SortKey = "title" | "kind" | "mode" | "ability" | "added";
 type Sort = { key: SortKey; descending: boolean };
@@ -59,7 +60,7 @@ export function TunesTable({ tunes, books = [] }: { tunes: TuneWithPractice[]; b
 
   return <div className="tunes-table">
     <div className="table-toolbar">
-      <label className="table-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search tunes</span><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, type, key or composer" />{query && <button type="button" className="icon-button" aria-label="Clear search" onClick={() => setQuery("")}><X size={14} /></button>}</label>
+      <label className="table-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search tunes</span><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, type, key or composer" />{query && <Button variant="ghost" size="icon-sm" aria-label="Clear search" onClick={() => setQuery("")}><X size={14} /></Button>}</label>
       <Select className="table-filter" value={kind || "all"} onValueChange={(value) => setKind(value === "all" ? "" : value)} aria-label="Filter by type" options={[{ value: "all", label: "All types" }, ...kinds.map((entry) => ({ value: entry, label: entry[0].toUpperCase() + entry.slice(1) }))]} />
       <Select className="table-filter" value={level || "all"} onValueChange={(value) => setLevel(value === "all" ? "" : value as AbilityLevel)} aria-label="Filter by progress" options={[{ value: "all", label: "Any progress" }, ...ABILITY_LEVELS.map((entry) => ({ value: entry, label: ABILITY_LABELS[entry] }))]} />
       <span className="table-group">Group by<Select className="table-filter" value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)} aria-label="Group by" options={GROUP_BYS.map((entry) => ({ value: entry, label: GROUP_BY_LABELS[entry] }))} /></span>

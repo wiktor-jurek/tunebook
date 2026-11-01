@@ -41,6 +41,9 @@ const TABS = [
 const rubber = (distance: number, limit: number) => (distance * limit) / (limit + Math.abs(distance));
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 const noop = () => () => undefined;
+// A phone on its side: the score needs every line of the screen, so the deck tucks away behind one floating microphone.
+const SIDEWAYS = "(orientation: landscape) and (max-height: 500px)";
+const watchSideways = (onChange: () => void) => { const query = window.matchMedia(SIDEWAYS); query.addEventListener("change", onChange); return () => query.removeEventListener("change", onChange); };
 const mix = (from: number, to: number, amount: number) => from + (to - from) * amount;
 type Spot = { x: number; y: number };
 
@@ -68,6 +71,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const [peeking, setPeeking] = useState(false);
   // The hidden part of the sheet renders only once the deck can measure and tuck it away, so a page never loads with it open.
   const hydrated = useSyncExternalStore(noop, () => true, () => false);
+  const sideways = useSyncExternalStore(watchSideways, () => !dock && window.matchMedia(SIDEWAYS).matches, () => false);
   const context: FinderContext = { listener, signedIn, next: "/", onScore: setScore };
 
   // How open the sheet is, from 0 (only the head shows) to 1 (all of it). Dragging moves it directly and springs settle it,
@@ -132,6 +136,8 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const shown = answer && !recording && answer.tuneId !== dismissed && (status === "match" || !listening) ? answer : null;
 
   const canRecord = signedIn && recorder.supported;
+  // Sideways, the folded deck hides unless it has a named tune to show; the floating microphone stands in for it.
+  const tucked = sideways && !full && !shown;
 
   // In a live session: the tune playing now (the last one named), and the ones before it since the recording began.
   const startedAt = recording ? Date.parse(recording.recordedAt) : 0;
@@ -142,7 +148,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   const [seenKey, setSeenKey] = useState(newestKey);
   if (newestKey !== seenKey) {
     setSeenKey(newestKey);
-    if (newestKey && recording && !full && !dimmed) { setFull(true); setPeeking(true); }
+    if (newestKey && recording && !full && !dimmed && !sideways) { setFull(true); setPeeking(true); }
   }
   const { reject } = recorder, { forgetHeard } = listener;
   /** A tune swiped away was named wrongly: it leaves the list, and the recording keeps it, marked, for training the finder. */
@@ -307,7 +313,7 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
   return <>
     {!dock && <motion.div className="deck-scrim" data-open={full ? "" : undefined} style={{ opacity: scrim }} onClick={() => go(false)} aria-hidden="true" />}
     {/* The dock's frame casts its shadow around whatever part of the clipped dock shows. */}
-    <Frame dock={dock}><motion.section ref={deck} className={`deck ${recording ? "is-recording" : ""} ${dock ? "is-dock" : ""}`} data-open={full ? "" : undefined} aria-label={recording ? "Live session" : dock ? "Tune finder" : "Listening and navigation"} style={dock ? { y, clipPath: clip } : { y }} onPointerDownCapture={() => setPeeking(false)}>
+    <Frame dock={dock}><motion.section ref={deck} className={`deck ${recording ? "is-recording" : ""} ${dock ? "is-dock" : ""}`} data-open={full ? "" : undefined} data-tucked={tucked ? "" : undefined} inert={tucked} aria-label={recording ? "Live session" : dock ? "Tune finder" : "Listening and navigation"} style={dock ? { y, clipPath: clip } : { y }} onPointerDownCapture={() => setPeeking(false)}>
       <div className="deck-head" {...grab}>
         <span className="deck-grip" aria-hidden="true" />
         <div className="deck-head-layers">
@@ -317,16 +323,17 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
               <span className={`deck-status-text ${now ? "is-tune" : ""}`}>{recording && <span className="finder-rec-dot" aria-hidden="true" />}<span className="deck-status-label">{statusText}</span>{listening && !now && status !== "quiet" && <span className="finder-dots" aria-hidden="true"><i /><i /></span>}</span>
               {hint && <span className="deck-hint">{hint}</span>}
             </button>
-            {shown && !full ? <button type="button" className="icon-button deck-close" aria-label="Close this tune" onClick={() => setDismissed(shown.tuneId)}><X size={18} /></button>
-              : <button type="button" className="icon-button deck-open" aria-label={recording ? "Open the live session" : "Open the session recorder"} tabIndex={-1} onClick={() => go(true)}><ChevronUp size={18} /></button>}
+            {shown && !full ? <Button variant="ghost" size="icon-sm" className="deck-close" aria-label="Close this tune" onClick={() => setDismissed(shown.tuneId)}><X size={18} /></Button>
+              : <Button variant="ghost" size="icon-sm" className="deck-open" aria-label={recording ? "Open the live session" : "Open the session recorder"} tabIndex={-1} onClick={() => go(true)}><ChevronUp size={18} /></Button>}
           </motion.div>
-          <motion.div className="deck-full-head" style={{ opacity: headTitle }} inert={!full}>
+          {/* The open sheet's header folds it at a tap anywhere along it, not only on its button (a drag that ends here is caught above). */}
+          <motion.div className="deck-full-head" style={{ opacity: headTitle }} inert={!full} onClick={() => go(false)}>
             <h2 className="deck-title">{recording ? "Live session" : "Record a session"}</h2>
-            <button type="button" className="icon-button deck-close" aria-label={peeking ? "Fold the deck down now (it folds by itself in a moment)" : "Fold the deck down"} onClick={() => go(false)}>
+            <Button variant="ghost" size="icon-sm" className="deck-close" aria-label={peeking ? "Fold the deck down now (it folds by itself in a moment)" : "Fold the deck down"} onClick={() => go(false)}>
               {/* Opened by a new tune, the ring runs down to when it folds by itself. */}
               {peeking && <svg className="deck-countdown" viewBox="0 0 40 40" aria-hidden="true" style={{ animationDuration: `${PEEK_MS}ms` }}><circle cx="20" cy="20" r="18.5" pathLength={100} /></svg>}
               <ChevronDown size={18} />
-            </button>
+            </Button>
           </motion.div>
         </div>
 
@@ -372,6 +379,17 @@ export function ListenTray({ signedIn, dock = false }: { signedIn: boolean; dock
     </motion.section></Frame>
 
     {/* The tabs stay put beneath the deck while it moves. A live session hides them: nothing else matters in the room. */}
+    {/* Sideways, one microphone floats in the corner in place of the deck: it names a tune, or opens the live session. */}
+    {tucked && <div className={`deck-float ${recording ? "is-recording" : ""}`}>
+      <div className="finder-dial is-mini" data-phase={phase} data-matched={status === "match" && answer ? "" : undefined} style={{ "--level": listener.level, "--loaded": loaded } as React.CSSProperties}>
+        {listening && <span className="finder-ripple" aria-hidden="true" />}
+        <svg className="finder-arc" viewBox="0 0 100 100" aria-hidden="true"><circle className="finder-arc-track" cx="50" cy="50" r="48" /><circle className="finder-arc-fill" data-empty={arc <= 0 ? "" : undefined} cx="50" cy="50" r="48" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - 100 * arc} /></svg>
+        <button type="button" className="finder-button" data-phase={phase} disabled={busy} onClick={press} aria-label={recording ? "Live session: open it" : listening ? "Stop listening" : "Name the tune that's playing"}>
+          <span className="finder-icon">{phase === "denied" ? <MicOff size={20} /> : <MicShape dot={recordTint} square={squareness} />}</span>
+        </button>
+      </div>
+    </div>}
+
     {!recording && !dock && <nav className="deck-tabs" aria-label="Session">{TABS.map(({ href, label, icon: Icon, active }) => {
       const current = active(path);
       return <Link key={href} href={href} className="deck-tab" aria-current={current ? "page" : undefined} onClick={() => go(false)}><Icon size={22} strokeWidth={current ? 2.25 : 1.75} /><span>{label}</span></Link>;
@@ -440,7 +458,7 @@ function SetlistItem({ heard, pointer, now, open, onOpen, onScore, onReject }: {
  * The deck's microphone, drawn so it can change shape: as the deck opens its stand undraws and the capsule swells and fills
  * into the record dot (`dot`, 0 to 1); listening or recording, it squares off into Stop (`square`, 0 to 1).
  */
-function MicShape({ dot, square }: { dot: MotionValue<number>; square: MotionValue<number> }) {
+export function MicShape({ dot, square, size = 20 }: { dot: MotionValue<number>; square: MotionValue<number>; size?: number }) {
   // Lucide's microphone capsule, the record dot and the stop square, in its 24-unit box.
   const round = useTransform(() => unit(Math.max(dot.get(), square.get())));
   const between = (capsule: number, disc: number, box: number) => mix(mix(capsule, disc, round.get()), box, square.get());
@@ -448,7 +466,7 @@ function MicShape({ dot, square }: { dot: MotionValue<number>; square: MotionVal
   const x = useTransform(() => 12 - width.get() / 2);
   const y = useTransform(() => between(2, 4, 6));
   const stand = useTransform(() => 1 - round.get());
-  return <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <motion.rect width={width} height={height} rx={corner} fill="currentColor" fillOpacity={round} style={{ x, y }} />
     <motion.path d="M19 10v2a7 7 0 0 1-14 0v-2" style={{ pathLength: stand, opacity: stand }} />
     <motion.path d="M12 19v3" style={{ pathLength: stand, opacity: stand }} />

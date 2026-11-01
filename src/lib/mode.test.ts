@@ -7,17 +7,13 @@ const IPAD = "Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15";
 
 describe("modeFor", () => {
-  it("puts phones in session mode whatever the cookie says", () => {
-    expect(modeFor(IPHONE, undefined)).toBe("session");
-    expect(modeFor(ANDROID, "practice")).toBe("session");
+  it("gives phones the session layout", () => {
+    expect(modeFor(IPHONE)).toBe("session");
+    expect(modeFor(ANDROID)).toBe("session");
   });
-  it("keeps desktops and tablets in practice mode by default", () => {
-    expect(modeFor(MAC, undefined)).toBe("practice");
-    expect(modeFor(IPAD, undefined)).toBe("practice");
-    expect(modeFor(undefined, undefined)).toBe("practice");
-  });
-  it("lets desktops and tablets switch to session mode", () => {
-    expect(modeFor(MAC, "session")).toBe("session");
-    expect(modeFor(IPAD, "session")).toBe("session");
+  it("gives desktops and tablets the full app", () => {
+    expect(modeFor(MAC)).toBe("practice");
+    expect(modeFor(IPAD)).toBe("practice");
+    expect(modeFor(undefined)).toBe("practice");
   });
 });

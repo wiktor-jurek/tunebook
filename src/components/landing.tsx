@@ -1,32 +1,45 @@
-import Link from "next/link";
-import { BookOpen, Mic, Music2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PublicHeader } from "@/components/public-header";
-import { TuneFinder } from "@/components/tune-finder";
-import type { Benchmark } from "@/lib/finder/benchmark";
-import benchmarkData from "@/lib/finder/benchmark.json";
+import { LandingInteractive } from "@/components/landing-tour";
+import { SiteCredits } from "@/components/site-footer";
+import type { DemoTrack } from "@/components/landing-sections";
+import { getPlayalongsBySetting } from "@/lib/playalongs";
 
-const points = [
-  { icon: Music2, title: "Your repertoire, counted.", body: "Mark what you can play, and watch every tunebook's count go up." },
-  { icon: BookOpen, title: "One link for the session.", body: "Sets in playing order, scores and play-alongs for everyone." },
-  { icon: Mic, title: "Name that tune.", body: "Hold up your phone. It hears the tune out of 23,000." },
-];
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": ["WebApplication", "SoftwareApplication"],
+  name: "Tune Companion",
+  alternateName: ["Shazam for Irish Music", "LibreSession Tune Companion"],
+  url: "https://tunecompanion.com",
+  applicationCategory: "MusicApplication",
+  operatingSystem: "iOS, Android, macOS, Windows, Linux, Web",
+  description:
+    "Name Irish traditional tunes by ear at a session, record the whole night as a setlist, see which tunes you can play, and share tunebooks.",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+};
 
-// The finder's share of right answers on recordings it was never tuned on, from the benchmark page's data.
-const holdout = (benchmarkData as Benchmark).clips.filter((clip) => clip.set === "holdout");
-const named = holdout.filter((clip) => clip.results.tunebook?.top === clip.tuneId).length;
+// The tunebook demo's one set: The Kesh, Morrison's and Out on the Ocean, by setting.
+const BOOK_SETTINGS = [55, 71, 108];
 
-export function Landing() {
-  return <div className="landing"><PublicHeader />
-    <section className="landing-hero">
-      <div className="landing-copy">
-        <h1>Learn the tunes. Join the session.</h1>
-        <p className="landing-lede">Practise the tunes your session plays, and name the ones you don&apos;t know the moment they start. Free, for every tune on The Session.</p>
-        <div className="landing-actions"><Button asChild><Link href="/sign-up">Start practising</Link></Button><Button asChild variant="outline"><Link href="/tunes/finder">Identify a tune</Link></Button></div>
-      </div>
-      <div className="landing-demo"><TuneFinder signedIn={false} layout="hero" /><p className="landing-demo-note">Named {Math.round((100 * named) / holdout.length)}% of {holdout.length} real recordings it had never heard. <Link href="/tunes/finder/benchmark">See the benchmark</Link></p></div>
-    </section>
-    <section className="landing-points">{points.map(({ icon: Icon, title, body }) => <article key={title}><Icon size={18} aria-hidden="true" /><h2>{title}</h2><p>{body}</p></article>)}</section>
-    <footer className="landing-footer"><p>Tunes come from <a href="https://thesession.org" target="_blank" rel="noreferrer">The Session</a> and its contributors, and every setting links back to its source.</p></footer>
-  </div>;
+// The tunebook demo plays real play-along tracks. Without them (no database or bucket), it plays the score instead.
+async function demoTracks(): Promise<Record<number, DemoTrack[]>> {
+  try {
+    const found = await getPlayalongsBySetting(BOOK_SETTINGS);
+    return Object.fromEntries(Object.entries(found).map(([id, list]) => [id, list.filter((t) => !t.otherSetting).slice(0, 3).map(({ label, url, timing }) => ({ label, url, timing }))]));
+  } catch {
+    return {};
+  }
+}
+
+export async function Landing() {
+  const tracks = await demoTracks();
+  return (
+    <div className="landing">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+      <PublicHeader />
+      <main>
+        <LandingInteractive tracks={tracks} />
+      </main>
+      <footer className="landing-footer"><SiteCredits /></footer>
+    </div>
+  );
 }

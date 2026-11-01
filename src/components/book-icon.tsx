@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
 import { BookOpen, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const EmojiPicker = dynamic(() => import("@/components/emoji-picker"), {
   ssr: false,
@@ -50,9 +51,9 @@ export function BookIcon({ emoji, label, size = "nav", bookId, onChange, readOnl
       </button>
     </Popover.Trigger>
     <Popover.Portal><Popover.Content className="emoji-popover" align="start" sideOffset={6} collisionPadding={12} aria-label="Choose a tunebook icon">
-      <div className="emoji-popover-head"><span>Choose an icon</span><Popover.Close asChild><button type="button" className="icon-button" aria-label="Close emoji picker"><X size={15} /></button></Popover.Close></div>
+      <div className="emoji-popover-head"><span>Choose an icon</span><Popover.Close asChild><Button variant="ghost" size="icon-sm" aria-label="Close emoji picker"><X size={15} /></Button></Popover.Close></div>
       <div className="emoji-popover-picker" aria-busy={busy} inert={busy || undefined}><EmojiPicker onSelect={(next) => void choose(next)} /></div>
-      <div className="emoji-popover-footer"><button type="button" className="emoji-reset" disabled={busy || !emoji} onClick={() => void choose(null)}><BookOpen size={14} /> Use default icon</button>{busy && <span role="status">Saving</span>}</div>
+      <div className="emoji-popover-footer"><Button variant="ghost" size="sm" disabled={busy || !emoji} onClick={() => void choose(null)}><BookOpen size={14} /> Use default icon</Button>{busy && <span role="status">Saving</span>}</div>
       {error && <p role="alert" className="form-error">{error}</p>}
     </Popover.Content></Popover.Portal>
   </Popover.Root>;

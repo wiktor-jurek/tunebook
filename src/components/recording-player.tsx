@@ -3,7 +3,7 @@
 import { trackEvent } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BookPlus, Music, Pause, Play, Repeat, Trash2, X } from "lucide-react";
+import { BookPlus, Music, Pause, Play, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { makeTunebook } from "@/lib/finder/make-book";
@@ -34,7 +34,7 @@ const standingLabel = (entry: Entry) => entry.savedId || entry.practice.level !=
 
 /**
  * A recorded session, as it relates to you: how much of the music you could have joined in on, when each tune was played,
- * and which ones you can play. Each tune can be played from, looped and slowed down, with its opening bars and full score.
+ * and which ones you can play. Each tune can be played from and slowed down, with its opening bars and full score.
  */
 export function RecordingPlayer({ recording, title, length, titleClass }: { recording: Recording; title: string; length: string; titleClass: string }) {
   const router = useRouter();
@@ -44,13 +44,11 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(100);
   const [selected, setSelected] = useState<string | null>(null);
-  const [loop, setLoop] = useState(false);
   const [busy, setBusy] = useState<"book" | "delete" | null>(null);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [score, setScore] = useState<Entry | null>(null);
   const tunes = recording.tunes;
-  const tune = tunes.find((t) => t.id === selected) ?? null;
   const at = (ms: number) => tunes.find((t) => ms >= t.startMs && ms < t.endMs) ?? null;
   const current = at(now);
   const percent = (ms: number) => `${Math.min(100, (100 * ms) / Math.max(duration, 1))}%`;
@@ -62,29 +60,24 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
   const learning = tunes.filter((t) => standingOf(t) === "learning").length;
   const unique = new Set(tunes.map((t) => t.tuneId)).size, uniqueJoin = new Set(joinable.map((t) => t.tuneId)).size;
 
-  // Looping keeps playback inside the selected tune's stretch of the recording.
   useEffect(() => {
     const element = audio.current;
     if (!element) return;
-    const onTime = () => {
-      const ms = element.currentTime * 1000;
-      if (loop && tune && ms >= tune.endMs) element.currentTime = tune.startMs / 1000;
-      setNow(element.currentTime * 1000);
-    };
+    const onTime = () => setNow(element.currentTime * 1000);
     element.addEventListener("timeupdate", onTime);
     return () => element.removeEventListener("timeupdate", onTime);
-  }, [loop, tune]);
+  }, []);
   useEffect(() => { if (audio.current) { audio.current.playbackRate = speed / 100; audio.current.preservesPitch = true; } }, [speed]);
 
   function seek(ms: number) {
     if (audio.current) audio.current.currentTime = ms / 1000;
     setNow(ms);
   }
-  // Tapping the timeline opens the tune played there in the setlist below, and stops looping the one before.
+  // Tapping the timeline opens the tune played there in the setlist below.
   function scrub(ms: number) {
     seek(ms);
     const there = at(ms);
-    if (there && there.id !== selected) { setSelected(there.id); setLoop(false); }
+    if (there && there.id !== selected) setSelected(there.id);
   }
   async function play() { await audio.current?.play().catch(() => setError("Could not play the recording")); }
   async function toggle() { if (audio.current?.paused) await play(); else audio.current?.pause(); }
@@ -149,8 +142,8 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
       {rows.map((row) => row.kind === "gap"
         ? <li key={`gap-${row.from}`} className="recording-gap"><span className="recording-at">{clock(row.from)}</span><span>{minutes(row.to - row.from)}, no tune named</span></li>
         : row.kind === "set" ? <li key={`set-${row.from}`} className="recording-set-head"><RepeatMark /><span>A set of {row.count}, played back to back</span></li>
-        : <SetlistRow key={row.entry.id} entry={row.entry} inSet={row.inSet} open={row.entry.id === selected} playing={playing && current?.id === row.entry.id} looping={loop && row.entry.id === selected}
-          onToggle={() => setSelected(row.entry.id === selected ? null : row.entry.id)} onPlay={() => playFrom(row.entry)} onLoop={() => { setSelected(row.entry.id); setLoop(!(loop && row.entry.id === selected)); }}
+        : <SetlistRow key={row.entry.id} entry={row.entry} inSet={row.inSet} open={row.entry.id === selected} playing={playing && current?.id === row.entry.id}
+          onToggle={() => setSelected(row.entry.id === selected ? null : row.entry.id)} onPlay={() => playFrom(row.entry)}
           onScore={() => setScore(row.entry)} books={<RecordingTuneBooks title={displayTitle(row.entry.title)} settingId={row.entry.settingId} savedId={row.entry.savedId} inBooks={row.entry.inBooks} books={recording.books} />}
           onReject={() => void change({ method: "PATCH", body: JSON.stringify({ operation: "removeTune", entryId: row.entry.id }) }, () => { setSelected(null); router.refresh(); })} />)}
       {!tunes.length && <li className="recording-gap">The finder did not name any tunes in this recording.</li>}
@@ -167,12 +160,12 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
 }
 
 /** One tune in the setlist: when it started, what it is, and whether you can play it. Open, it shows how it goes and what to do with it. */
-function SetlistRow({ entry, inSet, open, playing, looping, onToggle, onPlay, onLoop, onScore, onReject, books }: {
-  entry: Entry; inSet: boolean; open: boolean; playing: boolean; looping: boolean; books: React.ReactNode;
-  onToggle: () => void; onPlay: () => void; onLoop: () => void; onScore: () => void; onReject: () => void;
+function SetlistRow({ entry, inSet, open, playing, onToggle, onPlay, onScore, onReject, books }: {
+  entry: Entry; inSet: boolean; open: boolean; playing: boolean; books: React.ReactNode;
+  onToggle: () => void; onPlay: () => void; onScore: () => void; onReject: () => void;
 }) {
   const title = displayTitle(entry.title);
-  return <li className="recording-entry" data-in-set={inSet ? "" : undefined} data-standing={standingOf(entry)} data-open={open ? "" : undefined} data-playing={playing ? "" : undefined}>
+  return <li className="recording-entry" data-in-set={inSet ? "" : undefined} data-standing={standingOf(entry)} data-open={open ? "" : undefined} data-saved={entry.savedId ? "" : undefined} data-playing={playing ? "" : undefined}>
     <button type="button" className="recording-tune" aria-expanded={open} onClick={onToggle}>
       <span className="recording-at">{clock(entry.startMs)}</span>
       <span className="recording-dot" aria-hidden="true" />
@@ -181,15 +174,15 @@ function SetlistRow({ entry, inSet, open, playing, looping, onToggle, onPlay, on
     </button>
     {open && <div className="recording-detail">
       <OpeningPhrase tune={entry} />
+      {/* Playing it, then what it is to you. Open, the row's standing label gives way to the control that changes it. */}
       <div className="recording-detail-actions">
         <Button size="sm" onClick={onPlay}><Play size={14} fill="currentColor" /> Play from here</Button>
-        <Button size="sm" variant="outline" aria-pressed={looping} onClick={onLoop}><Repeat size={14} /> {looping ? "Looping" : "Loop"}</Button>
         <Button size="sm" variant="ghost" onClick={onScore}><Music size={14} /> Full score</Button>
+        <Button size="sm" variant="ghost" className="recording-reject" onClick={onReject} aria-label={`Not ${title}: take it off the setlist`}><X size={14} /> Not this tune</Button>
       </div>
       <div className="recording-detail-actions">
         {entry.savedId && <TuneAbility tune={{ id: entry.savedId, title: entry.title, practice: entry.practice }} />}
         {books}
-        <button type="button" className="finder-link recording-reject" onClick={onReject} aria-label={`Not ${title}: take it off the setlist`}><X size={13} /> Not this tune</button>
       </div>
     </div>}
   </li>;

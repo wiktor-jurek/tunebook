@@ -5,15 +5,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { BrandMark } from "@/components/brand-mark";
-import { BookOpen, ChevronDown, ChevronRight, Database, Folder, Music2, LogOut, Plus, Smartphone, Disc3, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
+import { BookOpen, Menu, ChevronDown, ChevronRight, Database, Folder, Music2, LogOut, Plus, Disc3, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
-import { ModeSwitch } from "@/components/mode-switch";
 import { LinkPending } from "@/components/navigation-progress";
 import { BookIcon } from "@/components/book-icon";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LibraryDialog, type LibraryTask as Task } from "@/components/library-dialog";
 import type { getLibrary } from "@/lib/library";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 type Library = Awaited<ReturnType<typeof getLibrary>>;
 type FolderRow = Library["folders"][number];
@@ -34,7 +34,7 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
   const main = (href: string, icon: React.ReactNode, label: string, active: boolean, count?: number) => <Link onClick={closeMobile} href={href} className={`nav-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined}>{icon} {label}{count !== undefined && <span className="nav-count">{count}</span>}<LinkPending /></Link>;
   const managementMenu = (name: string, target: { bookId: string; folderId: string | null } | { folderId: string; parentId: string | null }) => {
     const kind = "bookId" in target ? "Book" : "Folder";
-    return <DropdownMenu><DropdownMenuTrigger asChild><button className="icon-button subtle" aria-label={`Actions for ${name}`} title={`Actions for ${name}`} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger><DropdownMenuContent className="nav-action-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{name}</DropdownMenuLabel>
+    return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="subtle" aria-label={`Actions for ${name}`} title={`Actions for ${name}`} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }}><MoreHorizontal size={16} /></Button></DropdownMenuTrigger><DropdownMenuContent className="nav-action-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{name}</DropdownMenuLabel>
       <DropdownMenuItem onSelect={() => launch({ ...target, operation: `rename${kind}`, title: "Rename", name })}><Pencil size={15} /><span>Rename</span></DropdownMenuItem>
       <DropdownMenuItem onSelect={() => launch({ ...target, operation: `move${kind}`, title: "Move", name })}><FolderInput size={16} /><span>Move to</span></DropdownMenuItem>
       <DropdownMenuSeparator />
@@ -54,16 +54,16 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
     if (folder) setOpen((current) => ({ ...current, [folder.id]: true }));
     launch(next);
   };
-  const creationMenu = (folder?: FolderRow) => <DropdownMenu><DropdownMenuTrigger asChild><button ref={folder ? undefined : newButton} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }} className={folder ? "icon-button subtle" : "nav-new-button"} aria-label={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"} title={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"}><Plus size={14} />{!folder && <span>New</span>}</button></DropdownMenuTrigger><DropdownMenuContent className="nav-create-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{folder ? `Inside ${folder.name}` : "Create"}</DropdownMenuLabel><DropdownMenuItem onSelect={() => createInside({ operation: "createBook", title: "New tunebook", folderId: folder?.id ?? null }, folder)}><BookOpen size={16} /><span>New tunebook</span></DropdownMenuItem><DropdownMenuItem onSelect={() => createInside({ operation: "createFolder", title: "New folder", parentId: folder?.id ?? null }, folder)}><Folder size={16} /><span>{folder ? "New subfolder" : "New folder"}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
+  const creationMenu = (folder?: FolderRow) => <DropdownMenu><DropdownMenuTrigger asChild><button ref={folder ? undefined : newButton} onPointerDown={(event) => { returnFocus.current = event.currentTarget; }} onFocus={(event) => { returnFocus.current = event.currentTarget; }} className={folder ? buttonVariants({ variant: "ghost", size: "icon-sm", className: "subtle" }) : "nav-new-button"} aria-label={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"} title={folder ? `Add inside ${folder.name}` : "Create a tunebook or folder"}><Plus size={14} />{!folder && <span>New</span>}</button></DropdownMenuTrigger><DropdownMenuContent className="nav-create-menu" align="end" onCloseAutoFocus={(event) => { if (task) event.preventDefault(); }}><DropdownMenuLabel>{folder ? `Inside ${folder.name}` : "Create"}</DropdownMenuLabel><DropdownMenuItem onSelect={() => createInside({ operation: "createBook", title: "New tunebook", folderId: folder?.id ?? null }, folder)}><BookOpen size={16} /><span>New tunebook</span></DropdownMenuItem><DropdownMenuItem onSelect={() => createInside({ operation: "createFolder", title: "New folder", parentId: folder?.id ?? null }, folder)}><Folder size={16} /><span>{folder ? "New subfolder" : "New folder"}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>;
   const renderFolder = (folder: FolderRow): React.ReactNode => <div key={folder.id}>
     <div className="nav-row"><button className="nav-link nav-folder" aria-expanded={open[folder.id] ?? true} onClick={() => setOpen({ ...open, [folder.id]: !(open[folder.id] ?? true) })}>{open[folder.id] ?? true ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<Folder size={15} /><span>{folder.name}</span></button>{creationMenu(folder)}{managementMenu(folder.name, { folderId: folder.id, parentId: folder.parentId })}</div>
     {(open[folder.id] ?? true) && <div className="nav-children">{foldersByParent(folder.id).map(renderFolder)}{booksByFolder(folder.id).map(bookLink)}</div>}
   </div>;
   return <>
-    <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><BookOpen size={18} /> Tune Companion</button>
+    <button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Open the menu" aria-expanded={mobileOpen}><span className="mobile-menu-icon" aria-hidden="true"><Menu size={20} /></span><BrandMark /><span>Tune Companion</span></button>
     {mobileOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={closeMobile} />}
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
-      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><BrandMark /><span>Tune Companion</span></Link><button className="icon-button mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></button></div>
+      <div className="sidebar-head"><Link href="/" className="brand" onClick={closeMobile}><BrandMark /><span>Tune Companion</span></Link><Button variant="ghost" size="icon-sm" className="mobile-close" onClick={closeMobile} aria-label="Close navigation"><X size={18} /></Button></div>
       <nav aria-label="Main navigation">
         {/* One list, each of equal weight: your tunes, and recorded sessions. Naming a tune is the dock in the corner. */}
         <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <>
@@ -75,7 +75,7 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
         <div className="nav-label-row nav-shared-label"><span>SHARED WITH ME</span></div>
         <div>{library.sharedBooks.map((book) => <Link key={book.id} onClick={closeMobile} href={`/books/${book.id}`} className={`nav-link nav-shared-book ${path === `/books/${book.id}` ? "active" : ""}`} aria-current={path === `/books/${book.id}` ? "page" : undefined}><BookIcon bookId={book.id} emoji={book.emoji} label="Tunebook icon" readOnly /><span>{book.name}</span></Link>)}{!library.sharedBooks.length && <p className="nav-empty">Tunebooks shared with you appear here.</p>}</div>
       </nav>
-      <div className="sidebar-bottom">{guest ? <Link onClick={closeMobile} href={signIn} className="nav-link">Log in to Tune Companion</Link> : <><ProfilePreferences userName={userName} defaultSound={defaultSound} />{admin && <Link onClick={closeMobile} href="/admin/data" className="icon-button" aria-label="Training data" title="Training data"><Database size={16} aria-hidden="true" /></Link>}<ModeSwitch to="session" className="icon-button" title="Session mode: listen and read scores in the pub"><span className="sr-only">Session mode</span><Smartphone size={16} aria-hidden="true" /></ModeSwitch><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { const result = await authClient.signOut(); trackEvent("signed_out", { outcome: result.error ? "error" : "success" }); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></button></>}</div>
+      <div className="sidebar-bottom">{guest ? <Link onClick={closeMobile} href={signIn} className="nav-link">Log in to Tune Companion</Link> : <><ProfilePreferences userName={userName} defaultSound={defaultSound} />{admin && <Link onClick={closeMobile} href="/admin/data" className={buttonVariants({ variant: "ghost", size: "icon-sm" })} aria-label="Training data" title="Training data"><Database size={16} aria-hidden="true" /></Link>}<Button variant="ghost" size="icon-sm" aria-label="Sign out" title="Sign out" onClick={async () => { const result = await authClient.signOut(); trackEvent("signed_out", { outcome: result.error ? "error" : "success" }); router.push("/sign-in"); router.refresh(); }}><LogOut size={16} /></Button></>}</div>
     </aside>
     {task && <LibraryDialog key={`${task.operation}-${task.bookId ?? task.folderId ?? "root"}`} task={task} library={library} onClose={() => setTask(null)} onMove={revealDestination} onReturnFocus={() => { requestAnimationFrame(() => { if (returnFocus.current?.isConnected) returnFocus.current.focus(); else newButton.current?.focus(); }); }} />}
   </>;

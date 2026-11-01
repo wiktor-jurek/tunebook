@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
 import { RotateCcw, X } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
+import { Button } from "@/components/ui/button";
 
 const EmojiPicker = dynamic(() => import("@/components/emoji-picker"), { ssr: false, loading: () => <p className="emoji-loading">Loading emojis</p> });
 type Tune = { id: string; title: string; emoji: string; suggestedEmoji: string; emojiOverride: string | null };
@@ -30,10 +31,10 @@ export function TuneIcon({ tune, readOnly = false, size = "list" }: { tune: Tune
   return <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); setError(""); }}>
     <Popover.Trigger asChild><button type="button" className={className} aria-label={`Change icon for ${tune.title}`} title={`Change icon for ${tune.title}`}><span aria-hidden="true">{tune.emoji}</span></button></Popover.Trigger>
     <Popover.Portal><Popover.Content className="emoji-popover tune-emoji-popover" align="start" sideOffset={6} collisionPadding={12} aria-label="Choose a tune icon">
-      <div className="emoji-popover-head"><span>Choose a tune icon</span><Popover.Close asChild><button type="button" className="icon-button" aria-label="Close emoji picker"><X size={15} /></button></Popover.Close></div>
+      <div className="emoji-popover-head"><span>Choose a tune icon</span><Popover.Close asChild><Button variant="ghost" size="icon-sm" aria-label="Close emoji picker"><X size={15} /></Button></Popover.Close></div>
       <p className="tune-emoji-hint">Changes only your saved copy.</p>
       <div className="emoji-popover-picker" aria-busy={busy} inert={busy || undefined}><EmojiPicker onSelect={(emoji) => void choose(emoji)} /></div>
-      <div className="emoji-popover-footer"><button type="button" className="emoji-reset" disabled={busy || tune.emojiOverride === null} onClick={() => void choose(null)}><RotateCcw size={14} />Use suggested icon <span aria-hidden="true">{tune.suggestedEmoji}</span></button>{busy && <span role="status">Saving</span>}</div>
+      <div className="emoji-popover-footer"><Button variant="ghost" size="sm" disabled={busy || tune.emojiOverride === null} onClick={() => void choose(null)}><RotateCcw size={14} />Use suggested icon <span aria-hidden="true">{tune.suggestedEmoji}</span></Button>{busy && <span role="status">Saving</span>}</div>
       {error && <p role="alert" className="form-error">{error}</p>}
     </Popover.Content></Popover.Portal>
   </Popover.Root>;

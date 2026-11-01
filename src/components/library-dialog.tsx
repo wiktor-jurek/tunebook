@@ -79,7 +79,7 @@ export function LibraryDialog({ task, library, onClose, onReturnFocus, onMove }:
       onPointerDownOutside={(event) => { if (busy || isDelete) event.preventDefault(); }}
       onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
       <form onSubmit={submit}>
-        <header className="library-dialog-head"><div><Dialog.Title className="dialog-title">{isCreate ? task.title : `${isRename ? "Rename" : isMove ? "Move" : "Delete"} ${noun}${isDelete ? "?" : ""}`}</Dialog.Title><Dialog.Description className="library-dialog-description">{description}</Dialog.Description></div><Dialog.Close asChild><button type="button" className="icon-button" disabled={busy} aria-label="Close dialog"><X size={18} /></button></Dialog.Close></header>
+        <header className="library-dialog-head"><div><Dialog.Title className="dialog-title">{isCreate ? task.title : `${isRename ? "Rename" : isMove ? "Move" : "Delete"} ${noun}${isDelete ? "?" : ""}`}</Dialog.Title><Dialog.Description className="library-dialog-description">{description}</Dialog.Description></div><Dialog.Close asChild><Button variant="ghost" size="icon-sm" disabled={busy} aria-label="Close dialog"><X size={18} /></Button></Dialog.Close></header>
         <div className="library-dialog-body">
           {(isCreate || isRename) && <label className="field-label">{isBook ? "Tunebook name" : "Folder name"}<Input ref={nameRef} value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} disabled={busy} /></label>}
           {task.operation === "createBook" && <div className="library-create-icon" inert={busy || undefined}><BookIcon size="draft" emoji={emoji} label="Change tunebook icon" onChange={setEmoji} /><span>Choose an icon</span></div>}

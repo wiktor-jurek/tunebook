@@ -1,19 +1,16 @@
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { userAgentFromString } from "next/server";
 
-// Practice mode is the full app for planning and learning at home; session mode is the phone in the pub.
+// The layout follows the device: a phone gets the session layout (tabs, the listen deck, the swipe-through reader, no
+// editing); anything else gets the full app (sidebar, editing, the inline player, the listen dock).
 export type Mode = "practice" | "session";
-export const MODE_COOKIE = "mode";
 
-/** Phones are always in session mode; elsewhere the mode cookie can switch to it. */
-export function modeFor(userAgent: string | undefined, cookie: string | undefined): Mode {
-  if (userAgentFromString(userAgent).device.type === "mobile") return "session";
-  return cookie === "session" ? "session" : "practice";
+/** Phones get the session layout; desktops and tablets the full app. */
+export function modeFor(userAgent: string | undefined): Mode {
+  return userAgentFromString(userAgent).device.type === "mobile" ? "session" : "practice";
 }
 
-/** The current mode, and whether the person can switch (phones cannot leave session mode). */
-export async function getMode(): Promise<{ mode: Mode; switchable: boolean }> {
-  const [headerList, cookieStore] = await Promise.all([headers(), cookies()]);
-  const userAgent = headerList.get("user-agent") ?? undefined;
-  return { mode: modeFor(userAgent, cookieStore.get(MODE_COOKIE)?.value), switchable: userAgentFromString(userAgent).device.type !== "mobile" };
+/** The layout for this request's device. */
+export async function getMode(): Promise<{ mode: Mode }> {
+  return { mode: modeFor((await headers()).get("user-agent") ?? undefined) };
 }

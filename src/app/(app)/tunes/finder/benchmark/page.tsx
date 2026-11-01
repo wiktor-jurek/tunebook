@@ -91,7 +91,7 @@ export default async function BenchmarkPage() {
     .filter((id): id is number => id != null).map((id) => [id, benchmark.tunes[id]]));
 
   const page = <div className="page-wrap benchmark-page">
-    <nav className="page-bar"><Link className="back-link" href="/tunes/finder"><ArrowLeft size={15} /> Tune finder</Link></nav><header className="page-head"><div><h1>Benchmark</h1><p className="page-subtitle">Three tune recognisers on the same {clips.length} real recordings: which one names the tune, and where.</p></div></header>
+    <nav className="page-bar"><Link className="back-link" href="/"><ArrowLeft size={15} /> Tune Companion</Link></nav><header className="page-head"><div><h1>Benchmark</h1><p className="page-subtitle">Three tune recognisers on the same {clips.length} real recordings: which one names the tune, and where.</p></div></header>
 
     <div className="bench-legend">{engines.map((engine) => <span key={engine.key}><span className="bench-dot" style={{ background: engine.colour }} />{engine.name}</span>)}</div>
 

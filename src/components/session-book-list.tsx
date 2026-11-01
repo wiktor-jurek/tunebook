@@ -2,6 +2,9 @@ import Link from "next/link";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { getLibrary, getTuneBooks } from "@/lib/library";
 import { SessionBook } from "@/components/session-book";
+import { AccountButton } from "@/components/session-shell";
+import { getPlayalongsBySetting } from "@/lib/playalongs";
+import { getDefaultSound } from "@/lib/preferences";
 
 type BookRow = { id: string; name: string; emoji: string | null };
 
@@ -19,7 +22,7 @@ function BookRows({ books, sharedBooks }: { books: BookRow[]; sharedBooks: BookR
 /** The session's tunebooks, yours and those shared with you. */
 export async function SessionBookList({ userId }: { userId: string }) {
   const { books, sharedBooks } = await getLibrary(userId);
-  return <div className="session-screen"><h1 className="session-title">Tunebooks</h1><BookRows books={books} sharedBooks={sharedBooks} /></div>;
+  return <div className="session-screen"><div className="session-title-row"><h1 className="session-title">Tunebooks</h1><AccountButton /></div><BookRows books={books} sharedBooks={sharedBooks} /></div>;
 }
 
 /**
@@ -27,11 +30,12 @@ export async function SessionBookList({ userId }: { userId: string }) {
  * book's heading opens it, and books shared with you follow.
  */
 export async function SessionTunes({ userId }: { userId: string }) {
-  const [{ tunes, sharedBooks }, books] = await Promise.all([getLibrary(userId), getTuneBooks(userId)]);
-  if (!tunes.length) return <div className="session-screen"><h1 className="session-title">Tunes</h1>
+  const [{ tunes, sharedBooks }, books, defaultSound] = await Promise.all([getLibrary(userId), getTuneBooks(userId), getDefaultSound(userId)]);
+  if (!tunes.length) return <div className="session-screen"><div className="session-title-row"><h1 className="session-title">Tunes</h1><AccountButton /></div>
     <p className="session-empty">Save tunes at home, or name one that&apos;s playing with the microphone below, and they appear here.</p>
     {sharedBooks.length > 0 && <BookRows books={[]} sharedBooks={sharedBooks} />}</div>;
+  const playalongs = await getPlayalongsBySetting(tunes.map((tune) => tune.settingId));
   return <div className="session-screen">
-    <SessionBook name="Tunes" searchable groupable books={books} shared={sharedBooks} sections={tunes.map((tune) => ({ kind: "tune", entryId: tune.id, tune: { ...tune, oftenPlayed: false } }))} />
+    <SessionBook name="Tunes" playalongs={playalongs} defaultSound={defaultSound} searchable groupable books={books} shared={sharedBooks} sections={tunes.map((tune) => ({ kind: "tune", entryId: tune.id, tune: { ...tune, oftenPlayed: false } }))} />
   </div>;
 }
