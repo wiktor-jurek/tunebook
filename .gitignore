@@ -8,3 +8,6 @@ coverage
 
 # Tune finder model, exported by ml/train/export_finder.py; too large for git
 public/finder/
+
+# ML working files: data, logs and models that never belong in the repo
+ml/scratch/
