@@ -621,3 +621,91 @@ button.session-reader-count:hover,button.session-reader-count[data-state=open]{b
 .deck-full-head{cursor:pointer}
 /* Each sentence of the headline starts its own line. */
 .lp-hero h1>span{display:block}
+
+/* Guides: long-form public pages, a reading column with tunes and tables set into it. */
+.guide-page{padding:0 16px}
+.guide-wrap{max-width:760px;margin:0 auto;padding:40px 0 80px}
+.guide-head{margin-bottom:36px}
+.guide-head .back-link{margin-bottom:22px}
+.guide-head h1{font-size:clamp(32px,5vw,48px);font-weight:570;line-height:1.08;letter-spacing:-.05em;margin:0 0 18px}
+.guide-standfirst{display:grid;gap:12px;font-size:17px;line-height:1.6;color:var(--foreground)}
+.guide-standfirst p{margin:0}
+.guide-standfirst a,.guide-method a,.guide-note a{text-decoration:underline;text-underline-offset:2px}
+.guide-standfirst>.button{justify-self:start;margin-top:6px}
+.guide-updated{margin:16px 0 0;font-size:12px;color:var(--text-3)}
+.guide-toc{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 28px}
+.guide-toc a{padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-pill);font-size:13px;color:var(--muted-foreground)}
+.guide-toc a:hover{background:var(--accent);color:var(--foreground)}
+.guide-section{margin:0 0 48px;scroll-margin-top:16px}
+.guide-section>h2{font-size:26px;font-weight:600;letter-spacing:-.03em;margin:0 0 8px}
+.guide-section>p{font-size:15px;line-height:1.65;margin:0 0 14px}
+.guide-section-intro{color:var(--muted-foreground)}
+.guide-tune,.guide-set{padding:20px 0;border-top:1px solid var(--border)}
+.guide-tune-head,.guide-set-head{display:flex;gap:14px;align-items:baseline}
+.guide-tune h3,.guide-set h3{font:24px/1.25 var(--font-music);letter-spacing:-.02em;margin:0}
+.guide-rank{flex:none;min-width:24px;font:600 13px ui-monospace,monospace;color:var(--text-3)}
+.guide-tune-meta{margin:3px 0 0;font-size:12px;color:var(--text-3);text-transform:none}
+.guide-tune-meta a{text-decoration:underline}
+.guide-note{margin:10px 0 0 38px;font-size:15px;line-height:1.55}
+.guide-follow{margin:6px 0 0 38px;font-size:13px;color:var(--muted-foreground)}
+.guide-score{margin:12px 0 0 38px;display:grid;gap:6px}
+.guide-score .opening-phrase{max-width:420px}
+.guide-score-toggle{justify-self:start;padding-left:0;color:var(--muted-foreground)}
+.guide-score-toggle .is-flipped{transform:rotate(180deg)}
+.guide-set-tunes{display:grid;gap:14px;margin:14px 0 0 38px}
+.guide-set-tune .guide-score{margin-left:0}
+.guide-set-tune-name{margin:0;font:18px/1.3 var(--font-music)}
+.guide-set-tune-name a{text-decoration:underline;text-underline-offset:2px}
+.guide-set-tune-name span{font:12px var(--font-ui);color:var(--text-3)}
+.guide-set-links{margin:8px 0 0 38px;font:16px/1.5 var(--font-music)}
+.guide-set-links a{text-decoration:underline;text-underline-offset:2px}
+.guide-set-links .guide-tune-meta{font-family:var(--font-ui)}
+.guide-sets,.guide-podium,.guide-bars,.guide-index{list-style:none;margin:0;padding:0}
+.guide-podium{display:grid;gap:0;border-top:1px solid var(--border)}
+.guide-podium li{display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--border)}
+.guide-podium a{font:18px/1.3 var(--font-music)}
+.guide-podium a:hover{text-decoration:underline}
+.guide-podium-kind{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3)}
+.guide-podium-count{font-size:12px;color:var(--text-3);white-space:nowrap}
+.guide-callout{margin:0 0 48px;padding:24px;border-radius:var(--radius-group);background:var(--brand-ink-soft)}
+.guide-callout h2{font-size:22px;letter-spacing:-.02em;margin:0 0 8px}
+.guide-callout p{margin:0 0 16px;font-size:15px;line-height:1.55}
+.guide-callout-actions{display:flex;flex-wrap:wrap;gap:8px}
+.guide-method{padding-top:24px;border-top:1px solid var(--border)}
+.guide-method ul{margin:0 0 14px;padding-left:20px;font-size:14px;line-height:1.7}
+.guide-more{padding-top:24px;border-top:1px solid var(--border)}
+.guide-more h2{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);margin:0 0 12px}
+.guide-more ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.guide-index{display:grid;gap:12px}
+.guide-link{display:grid;gap:4px;padding:18px 20px;border:1px solid var(--border);border-radius:var(--radius-group);background:var(--card)}
+.guide-link:hover{border-color:var(--line-strong)}
+.guide-link strong{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.guide-link span{font-size:14px;line-height:1.5;color:var(--muted-foreground)}
+.guide-compare{min-width:640px}
+.guide-compare .table-cell{vertical-align:top;line-height:1.45}
+.guide-app{display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.guide-app a{text-decoration:underline;text-underline-offset:2px}
+.guide-bars{display:grid;gap:10px;margin:16px 0}
+.guide-bars li{display:grid;grid-template-columns:130px 1fr 44px;gap:12px;align-items:center;font-size:14px}
+.guide-bar-track{height:12px;border-radius:var(--radius-pill);background:var(--muted);overflow:hidden}
+.guide-bar-track span{display:block;height:100%;border-radius:inherit}
+.guide-bar-value{font:600 13px ui-monospace,monospace;text-align:right}
+.guide-app-card{padding:20px 0;border-top:1px solid var(--border)}
+.guide-app-card h3{font-size:20px;margin:0 0 10px}
+.guide-app-card dl{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:0 0 10px;font-size:14px;line-height:1.5}
+.guide-app-card dt{color:var(--text-3)}
+.guide-app-card dd{margin:0}
+.guide-app-card p{margin:0;font-size:15px;line-height:1.6}
+.guide-faq{padding:14px 0;border-top:1px solid var(--border)}
+.guide-faq h3{font-size:16px;margin:0 0 6px}
+.guide-faq p{margin:0;font-size:15px;line-height:1.6}
+@media(max-width:560px){
+  .guide-wrap{padding-top:24px}
+  .guide-standfirst{font-size:16px}
+  .guide-note,.guide-follow,.guide-score,.guide-set-tunes,.guide-set-links{margin-left:0}
+  .guide-podium li{grid-template-columns:1fr auto}
+  .guide-podium-kind{grid-column:1/-1}
+  .guide-bars li{grid-template-columns:100px 1fr 40px}
+  .guide-app-card dl{grid-template-columns:1fr}
+  .guide-app-card dt{margin-top:6px}
+}

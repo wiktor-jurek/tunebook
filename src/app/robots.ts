@@ -10,7 +10,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/tunes/finder/benchmark", "/books/", "/sign-up", "/sign-in"],
+        allow: ["/", "/guides", "/tunes/finder/benchmark", "/books/", "/sign-up", "/sign-in"],
         disallow: ["/api/", "/admin/", "/oauth/"],
       },
     ],
