@@ -26,7 +26,7 @@ def source_path(row: dict) -> Path:
 
 
 def fetch_source(row: dict) -> str:
-    """The video's first few minutes, for choosing the clip in eval/review.py."""
+    """The video's first few minutes, for choosing the clip in the labeller (/admin/label)."""
     target = source_path(row)
     if target.exists():
         return "cached"
@@ -39,6 +39,27 @@ def fetch_source(row: dict) -> str:
     if result.returncode or not raw.exists():
         return f"failed: {result.stderr.strip().splitlines()[-1] if result.stderr.strip() else 'no output'}"
     converted = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(raw), "-ac", "1", "-ar", "16000", "-t", str(SOURCE_SECONDS), str(target)], capture_output=True, text=True)
+    raw.unlink(missing_ok=True)
+    return "ok" if not converted.returncode else f"failed: {converted.stderr.strip()}"
+
+
+def full_path(youtube_id: str) -> Path:
+    return CACHE / "full" / f"{youtube_id}.flac"
+
+
+def fetch_full(youtube_id: str) -> str:
+    """A whole recording, for the session benchmark (eval/sessions.py): its sets are cut from it."""
+    target = full_path(youtube_id)
+    if target.exists():
+        return "cached"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    raw = target.with_suffix(".download")
+    result = subprocess.run([
+        "yt-dlp", "-q", "--no-playlist", "-f", "bestaudio", "-o", str(raw), f"https://www.youtube.com/watch?v={youtube_id}",
+    ], capture_output=True, text=True, timeout=1800)
+    if result.returncode or not raw.exists():
+        return f"failed: {result.stderr.strip().splitlines()[-1] if result.stderr.strip() else 'no output'}"
+    converted = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(raw), "-ac", "1", "-ar", "16000", str(target)], capture_output=True, text=True)
     raw.unlink(missing_ok=True)
     return "ok" if not converted.returncode else f"failed: {converted.stderr.strip()}"
 

@@ -27,18 +27,22 @@ def clip_sequence(windows: np.ndarray, hop_seconds: float = 1.0) -> np.ndarray:
     return seq[:, :usable].reshape(12, -1, 4).mean(axis=2)
 
 
-def template(pitches: list[int], durations: list[int], kind: str | None) -> np.ndarray:
-    """(12, frames) pitch classes of the setting played twice round at its type's usual tempo."""
+def template(pitches: list[int], durations: list[int], kind: str | None, starts: list[int] | None = None) -> np.ndarray:
+    """(12, frames) pitch classes of the setting played twice round at its type's usual tempo.
+    Notes are placed by `starts` when given, so rests stay silent; otherwise back to back."""
     quaver = QUAVER_SECONDS.get((kind or "").lower(), 0.15)
     frames_per_unit = quaver * ALIGN_FPS / 6
-    total = int(np.ceil(sum(durations) * frames_per_unit)) + 1
+    if not starts:
+        starts = np.concatenate([[0], np.cumsum(durations[:-1])]).tolist()
+    origin = starts[0]
+    length = max(t + d for t, d in zip(starts, durations)) - origin
+    total = int(np.ceil(length * frames_per_unit)) + 1
     one = np.zeros((12, total), dtype=np.float32)
-    position = 0.0
-    for midi, duration in zip(pitches, durations):
+    for midi, duration, at in zip(pitches, durations, starts):
+        position = at - origin
         start, end = int(position * frames_per_unit), max(int(position * frames_per_unit) + 1, int((position + duration) * frames_per_unit))
         one[midi % 12, start:end] = 1.0
-        position += duration
-    one = one[:, : int(np.ceil(position * frames_per_unit))]
+    one = one[:, : int(np.ceil(length * frames_per_unit))]
     return np.concatenate([one, one], axis=1)
 
 
@@ -67,7 +71,7 @@ def score(sequence: np.ndarray, settings: list[dict]) -> float:
     q = sequence / (np.linalg.norm(sequence, axis=0, keepdims=True) + 1e-6)
     best = -1.0
     for setting in settings:
-        t = template(setting["pitches"], setting["durations"], setting.get("kind"))
+        t = template(setting["pitches"], setting["durations"], setting.get("kind"), setting.get("starts"))
         if t.shape[1] < 2:
             continue
         for shift in range(12):

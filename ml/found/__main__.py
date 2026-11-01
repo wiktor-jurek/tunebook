@@ -4,22 +4,20 @@
     uv run python -m found titles --searches 200      # popular tunes by name
     uv run python -m found fetch                      # download labelled sections
     uv run python -m found stats
-    uv run python -m found export                     # data/found/manifest.jsonl for training
+    uv run --group store python -m found export       # into the data home, then data/found/manifest.jsonl
 
 Add --cookies-from-browser chrome when YouTube asks to confirm you are not a bot.
 """
 
 import argparse
-import csv
-import json
 
-from found.db import DATA, ROOT, connect
-from tunebook_ml.splits import split_of
+from found.db import connect
+from tunebook_ml.splits import benchmark_tunes as split_benchmark, split_of
 
 
 def benchmark_tunes() -> set[int]:
-    with (ROOT / "eval" / "youtube.csv").open() as handle:
-        return {int(row["tune_id"]) for row in csv.DictReader(handle) if row["tune_id"].isdigit()}
+    """Eval tunes only: the benchmark's train half (eval/benchmark_split.json) is training data like any other tune."""
+    return split_benchmark()[0]
 
 
 def stats() -> None:
@@ -40,24 +38,14 @@ def stats() -> None:
     print("splits: " + ", ".join(f"{name} {count}" for name, count in sorted(splits.items())))
 
 
-def export(min_confidence: float) -> None:
-    """Training manifest. Benchmark tunes are marked so training can keep them out, which
-    keeps real-clip scores honest about tunes the model has never heard really played."""
-    db, bench = connect(), benchmark_tunes()
-    rows = db.execute("""
-        select f.*, v.channel, v.licence from found f join videos v on v.id = f.video_id
-        where f.audio is not null and coalesce(f.verified, '') != 'no' and (f.verified = 'yes' or f.confidence >= ?)
-        order by f.tune_id, f.id""", (min_confidence,)).fetchall()
-    path = DATA / "manifest.jsonl"
-    with path.open("w") as handle:
-        for row in rows:
-            handle.write(json.dumps({
-                "tune_id": row["tune_id"], "audio": row["audio"], "video_id": row["video_id"], "channel": row["channel"],
-                "start_s": row["start_s"], "end_s": row["end_s"], "confidence": 1.0 if row["verified"] == "yes" else row["confidence"],
-                "label_source": row["label_source"], "licence": row["licence"],
-                "split": "benchmark" if row["tune_id"] in bench else split_of(row["tune_id"]),
-            }) + "\n")
-    print(f"{len(rows)} sections → {path}")
+def export() -> None:
+    """Brings the collected sections into the data home (tunebook_ml/store.py), uploading new audio to the
+    bucket, then writes data/found/manifest.jsonl from it (store_export.py) for training and evaluation."""
+    import store_export
+    import store_import
+    sections, searches = store_import.found()
+    print(f"{sections} sections and {searches} searches in the data home")
+    print(f"{store_export.albums()} sections → data/found/manifest.jsonl")
 
 
 def main() -> None:
@@ -69,13 +57,12 @@ def main() -> None:
         command.add_argument("--searches", type=int, default=100, help="new searches to run")
         command.add_argument("--per-tune", type=int, default=4, help="stop looking for a tune once it has this many recordings")
         command.add_argument("--pause", type=float, default=1.0, help="seconds between YouTube requests")
-        command.add_argument("--include-benchmark", action="store_true", help="also collect the benchmark's tunes (not for training)")
+        command.add_argument("--include-benchmark", action="store_true", help="also collect the benchmark's eval tunes (not for training)")
     command = commands.add_parser("fetch")
     command.add_argument("--limit", type=int, default=1000)
     command.add_argument("--workers", type=int, default=4)
     commands.add_parser("stats")
-    command = commands.add_parser("export")
-    command.add_argument("--min-confidence", type=float, default=0.8)
+    commands.add_parser("export")
     args = parser.parse_args()
 
     if args.command in ("albums", "titles"):
@@ -89,7 +76,7 @@ def main() -> None:
     elif args.command == "stats":
         stats()
     else:
-        export(args.min_confidence)
+        export()
 
 
 if __name__ == "__main__":

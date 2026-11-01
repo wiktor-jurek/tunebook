@@ -39,7 +39,7 @@ class TuneDataset(torch.utils.data.Dataset):
         if TuneDataset._tunes is None:
             grouped: dict[int, list[dict]] = defaultdict(list)
             for row in load_catalog():
-                grouped[row["tuneId"]].append({key: row[key] for key in ("pitches", "durations", "kind", "meter", "mode")})
+                grouped[row["tuneId"]].append({key: row[key] for key in ("pitches", "durations", "starts", "kind", "meter", "mode")})
             TuneDataset._tunes = dict(grouped)
         self.tune_ids = sorted(tune for tune in TuneDataset._tunes if split_of(tune) == split)
         if TuneDataset._recorded is None:

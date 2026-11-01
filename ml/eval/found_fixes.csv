@@ -1,0 +1,10 @@
+audio,label,tune_id,evidence
+audio/Hwu8FqyGgL0.3-33.ogg,725,,"label check 2026-10-31: the section is The Meelick Team #1511 (alignment z 4.8; Eddie Kelly's z 0.5), a training-split tune"
+audio/ggPsnp7ZP5o.3-33.ogg,725,,"label check 2026-10-31: the section is The Meelick Team #1511 (alignment z 6.8; Eddie Kelly's z 0.8), a training-split tune"
+audio/AWL5iMGBprk.115-145.ogg,43,,"label check 2026-10-31: the section is Up Sligo #2272 (z 4.9; The Geese In The Bog z 0.2), a training-split tune"
+audio/Aj949qrCWcU.150-180.ogg,52,61,"label check 2026-10-31: the section is Langstrom's Pony #61 (z 4.9; The Kid On The Mountain z 1.3), a benchmark eval tune"
+audio/JolMwes3OIY.147-177.ogg,81,,"label check 2026-10-31: the other Pipe On The Hob, #1049 (z 3.1; #81 z -0.5), a benchmark train tune"
+audio/D26MARG8Bic.3-33.ogg,343,,"label check 2026-10-31: the section is Da Full Rigged Ship #878 (z 2.7; The Boys Of The Lough z -0.9), a benchmark train tune"
+audio/i_rz_G1N3GQ.92-122.ogg,449,,"label check 2026-10-31: the section is Fanny Power #957 (z 22.1; Sí Bheag Sí Mhór z -0.2), a benchmark train tune"
+audio/KrVuUC2z_HY.3-33.ogg,820,,"label check 2026-10-31: the section is The Roaring Barmaid #91 (z 2.6; The Butlers Of Glen Avenue z 0.7), a benchmark train tune"
+audio/YJuo0KpeyVk.3-33.ogg,3321,,"label check 2026-10-31: the section is The Hag's Purse #926 (z 6.1; Joe Derrane's z 0.9), a benchmark train tune"

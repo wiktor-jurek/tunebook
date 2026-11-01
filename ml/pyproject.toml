@@ -13,6 +13,8 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest>=8.3"]
+# tunebook_ml/store.py: the ml schema in the app database and audio in the private B2 bucket.
+store = ["psycopg[binary]>=3.2", "boto3>=1.35"]
 # Matches sony/clews: nnAudio 0.3.3 gives the CQT the published checkpoints were trained with.
 train = [
   "torch==2.9.1",

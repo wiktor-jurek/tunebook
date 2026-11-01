@@ -14,16 +14,32 @@ export const HISTORY = 30;
 export const MATCH_MARGIN = 0.04;
 export const MIN_WINDOWS = 3;
 export const STABLE_UPDATES = 2;
+// Popular tunes are heard more often: each tune's mean cosine gains this much per ln(tunebooks + 1).
+// On the real eval clips it gained 9 clips and lost none (YouTube 83.3 → 85.3%, albums 69.6 → 71.3%),
+// and at the 0.04 margin it answers more clips at the same precision (ml/PIPELINE.md §11).
+export const POPULARITY_WEIGHT = 0.006;
+
+/** Each tune's prior, in cosine units, from how many The Session member tunebooks hold it. */
+export function popularityPrior(tunebooks: number[]): Float32Array {
+  return Float32Array.from(tunebooks, (n) => POPULARITY_WEIGHT * Math.log(n + 1));
+}
 
 export class Decoder {
   private windows: Float32Array[] = [];
   private leaders: number[] = [];
 
+  /** `prior` is added to every tune's mean cosine before ranking (popularityPrior). */
+  constructor(private prior: Float32Array | null = null) {}
+
+  setPrior(prior: Float32Array | null) { this.prior = prior; }
+
   push(cosines: Float32Array): Verdict {
     // A copy: onnxruntime may hand back the same output buffer on every run.
     this.windows.push(cosines.slice());
     if (this.windows.length > HISTORY) this.windows.shift();
-    const candidates = topK(mean(this.windows), 10);
+    const scores = mean(this.windows);
+    if (this.prior) for (let i = 0; i < scores.length; i++) scores[i] += this.prior[i];
+    const candidates = topK(scores, 10);
     const margin = candidates.length > 1 ? candidates[0].cosine - candidates[1].cosine : 0;
     this.leaders.push(candidates[0]?.index ?? -1);
     if (this.leaders.length > STABLE_UPDATES) this.leaders.shift();

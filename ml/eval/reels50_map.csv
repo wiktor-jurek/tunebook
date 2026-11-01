@@ -1,44 +1,44 @@
 irishtune_id,irishtune_name,tune_id,title,match,candidates,verified
-72,Anderson's Reel,1631,Anderson's,primary,,
-89,Ash Plant,726,"Ashplant, The",alternate,,
-125,Banshee,8,"Banshee, The",primary,,
-135,Beauty Spot,1270,"Beauty Spot, The",primary,,
-161,Blackberry Blossom,1365,"Blackberry Blossom, The",primary,10176 7511,
-179,Bloom of Youth,1119,"Bloom Of Youth, The",primary,,
-187,Boil the Breakfast Early,3,Boil The Breakfast Early,primary,,
-199,Boy in the Gap,1579,"Boy In The Gap, The",primary,,
-222,Carmel Mahoney Mulhaire,2716,Carmel Mahoney Mulhaire,primary,,
-241,Bucks of Oranmore,2,"Bucks Of Oranmore, The",primary,,
-288,Gossan that Beat His Father,3501,"Gosson That Bate His Father, The",alternate,,
-347,Coachman's Whip,2227,"Coachman's Whip, The",primary,,
-350,Cocktail,1670,"Cocktail, The",primary,,
-528,Donegal Reel,1621,"Donegal, The",primary,,
-543,Drag Her around the Road,1148,Drag Her Round The Road,alternate,,
-545,Drowsy Maggie,27,Drowsy Maggie,primary,,
-549,Drunken Landlady,363,"Drunken Landlady, The",primary,,
-554,Dublin Reel,384,"Dublin, The",primary,,
-573,Eel in the Sink,1446,"Eel In The Sink, The",primary,,
-590,Molly Bán,1637,Molly Bán,primary,,
-602,Fantastic Reel,420,Glencolmcille,alternate,,
-606,Farewell to Ireland,33,Farewell To Ireland,primary,,
-617,Father Kelly's,791,Father Kelly's,primary,6899,
-730,Glen Allen,14008,"Glen Allen, The",primary,,
-840,Dublin Lads,4994,"Dublin Lads, The",primary,,
-843,Holy Land,616,"Holy Land, The",primary,,
-870,Humours of Westport,47,"Humours Of Westport, The",primary,,
-1033,Killavil Fancy,576,"Killavil Fancy, The",primary,,
-1035,Tilly Finn's,1723,Mick Finn's,alternate,,
-1042,King of the Clans,1174,King Of The Clans,primary,,
-1064,Knotted Cord,921,"Knotted Cord, The",primary,,
-1070,Lads of Laois,58,"Lads Of Laois, The",primary,,
-1077,Lady on the Island,938,"Lady On The Island, The",primary,,
-1101,Culfadda,1523,"Culfadda, The",primary,,
-1102,Larry Redican's Reel,613,"Galway, The",alternate,,
-1127,Limerick Lasses,516,"Limerick Lasses, The",primary,,
-1147,London Lasses,2273,"London Lasses, The",primary,,
-1149,Longford Collector,563,"Longford Collector, The",primary,,
-1151,Lord Gordon's,1774,Lord Gordon's,primary,,
-1196,Maids of Mitchelstown,120,"Maids Of Mitchelstown, The",primary,,
+72,Anderson's Reel,1631,Anderson's,primary,,yes
+89,Ash Plant,726,"Ashplant, The",alternate,,yes
+125,Banshee,8,"Banshee, The",primary,,yes
+135,Beauty Spot,1270,"Beauty Spot, The",primary,,yes
+161,Blackberry Blossom,1365,"Blackberry Blossom, The",primary,10176 7511,yes
+179,Bloom of Youth,1119,"Bloom Of Youth, The",primary,,yes
+187,Boil the Breakfast Early,3,Boil The Breakfast Early,primary,,yes
+199,Boy in the Gap,1579,"Boy In The Gap, The",primary,,yes
+222,Carmel Mahoney Mulhaire,2716,Carmel Mahoney Mulhaire,primary,,yes
+241,Bucks of Oranmore,2,"Bucks Of Oranmore, The",primary,,yes
+288,Gossan that Beat His Father,3501,"Gosson That Bate His Father, The",alternate,,yes
+347,Coachman's Whip,2227,"Coachman's Whip, The",primary,,yes
+350,Cocktail,1670,"Cocktail, The",primary,,yes
+528,Donegal Reel,1621,"Donegal, The",primary,,yes
+543,Drag Her around the Road,1148,Drag Her Round The Road,alternate,,yes
+545,Drowsy Maggie,27,Drowsy Maggie,primary,,yes
+549,Drunken Landlady,363,"Drunken Landlady, The",primary,,yes
+554,Dublin Reel,384,"Dublin, The",primary,,yes
+573,Eel in the Sink,1446,"Eel In The Sink, The",primary,,yes
+590,Molly Bán,1637,Molly Bán,primary,,yes
+602,Fantastic Reel,420,Glencolmcille,alternate,,no
+606,Farewell to Ireland,33,Farewell To Ireland,primary,,yes
+617,Father Kelly's,791,Father Kelly's,primary,6899,yes
+730,Glen Allen,14008,"Glen Allen, The",primary,,yes
+840,Dublin Lads,4994,"Dublin Lads, The",primary,,yes
+843,Holy Land,616,"Holy Land, The",primary,,yes
+870,Humours of Westport,47,"Humours Of Westport, The",primary,,yes
+1033,Killavil Fancy,576,"Killavil Fancy, The",primary,,yes
+1035,Tilly Finn's,1723,Mick Finn's,alternate,,yes
+1042,King of the Clans,1174,King Of The Clans,primary,,yes
+1064,Knotted Cord,921,"Knotted Cord, The",primary,,yes
+1070,Lads of Laois,58,"Lads Of Laois, The",primary,,yes
+1077,Lady on the Island,938,"Lady On The Island, The",primary,,yes
+1101,Culfadda,1523,"Culfadda, The",primary,,yes
+1102,Larry Redican's Reel,613,"Galway, The",alternate,,yes
+1127,Limerick Lasses,516,"Limerick Lasses, The",primary,,yes
+1147,London Lasses,2273,"London Lasses, The",primary,,yes
+1149,Longford Collector,563,"Longford Collector, The",primary,,yes
+1151,Lord Gordon's,1774,Lord Gordon's,primary,,yes
+1196,Maids of Mitchelstown,120,"Maids Of Mitchelstown, The",primary,,yes
 1197,Maid of Mount Kisco,,,none,,
 1203,Mama's Pet,902,Mama's Pet,primary,,
 1224,Martin Wynne's,359,Martin Wynne's,primary,347 461 450 5564 16214,

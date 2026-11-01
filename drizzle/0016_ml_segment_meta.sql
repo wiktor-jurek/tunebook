@@ -1,0 +1,1 @@
+ALTER TABLE "ml"."segments" ADD COLUMN "meta" jsonb;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fixture from "@/lib/finder/features.fixture.json";
 import { FRAMES, SAMPLE_RATE, WINDOW_SAMPLES, keyShift, windowFeatures } from "@/lib/finder/features";
-import { Decoder, topK } from "@/lib/finder/decode";
+import { Decoder, popularityPrior, topK } from "@/lib/finder/decode";
 import { resample } from "@/lib/finder/resample";
 
 // The same 8 s as test_signal() in ml/train/export_finder.py, which wrote the fixture from tunebook_ml/pitchclass.py.
@@ -70,5 +70,12 @@ describe("tune finder decoder", () => {
     buffer.set([0.6, 0.0, 0.2]);
     // Three windows for tune 1 and one for tune 0: tune 1 still leads on the mean.
     expect(decoder.push(buffer).candidates[0].index).toBe(1);
+  });
+
+  it("lets a much more popular tune win a near tie", () => {
+    const window = Float32Array.from([0.41, 0.4, 0.1]);
+    expect(new Decoder().push(window).candidates[0].index).toBe(0);
+    const decoder = new Decoder(popularityPrior([0, 5000, 0]));
+    expect(decoder.push(window).candidates[0].index).toBe(1);
   });
 });

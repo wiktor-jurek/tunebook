@@ -8,9 +8,15 @@ the semitone map, and only fundamentals from G3 to C7 are kept, below which sit 
 guitar, bouzouki and bass parts.
 
 Shapes: audio (B, samples) at 16 kHz → semitones (B, 128, T) → features (B, 12, T), 50 frames a second.
+
+With TUNEBOOK_FEATURES=height the features are (B, 24, T): the 12 pitch classes, then 12 heights. Folding octaves
+loses the shape of a tune (a leap up an octave reads as a repeated note), so each pitch class also carries where
+in the melody range it sounds: its salience-weighted mean semitone, 0.1 at G3 to 1.0 at C7, times its salience
+(so silence stays 0). KeyCanon turns both halves together. An experiment (ml/PIPELINE.md §14); off by default.
 """
 
 import math
+import os
 
 import torch
 import torch.nn.functional as F
@@ -22,6 +28,8 @@ FPS = SAMPLE_RATE / HOP  # 50
 MELODY_LOW, MELODY_HIGH = 55, 96  # G3 .. C7, fundamentals the melody instruments play
 HARMONICS = ((0, 1.0), (12, 0.6), (19, 0.4), (24, 0.3))  # semitone offset and weight of partials 1-4
 LOG_GAIN = 100.0
+HEIGHT = os.environ.get("TUNEBOOK_FEATURES") == "height"
+CHANNELS = 24 if HEIGHT else 12
 
 
 def _semitone_filters(device) -> torch.Tensor:
@@ -56,25 +64,31 @@ def semitones(audio: torch.Tensor) -> torch.Tensor:
     return torch.einsum("mf,bft->bmt", _filters[key], (spec * mask) ** 2)
 
 
-def features(semis: torch.Tensor, canon: bool = True) -> torch.Tensor:
-    """(B, 128, T) semitone power → (B, 12, T) pitch-class salience in [0, 1], bin 0 = C."""
+def features(semis: torch.Tensor, canon: bool = True, height: bool | None = None) -> torch.Tensor:
+    """(B, 128, T) semitone power → (B, 12, T) pitch-class salience in [0, 1], bin 0 = C; with `height`
+    (default: TUNEBOOK_FEATURES=height), (B, 24, T) with each pitch class's height after it."""
     level = semis.flatten(1).quantile(0.995, dim=1).clamp(min=1e-10)[:, None, None]
     logs = torch.log1p(LOG_GAIN * semis / level)
     salience = sum(weight * logs[:, MELODY_LOW + offset:MELODY_HIGH + 1 + offset] for offset, weight in HARMONICS)
     # Fold octaves: MIDI 55 is G, so bin k of the slice is pitch class (7 + k) % 12.
-    pcs = torch.zeros(semis.shape[0], 12, semis.shape[2], device=semis.device)
-    pcs.index_add_(1, (torch.arange(salience.shape[1], device=semis.device) + MELODY_LOW) % 12, salience)
+    fold = (torch.arange(salience.shape[1], device=semis.device) + MELODY_LOW) % 12
+    raw = torch.zeros(semis.shape[0], 12, semis.shape[2], device=semis.device)
+    raw.index_add_(1, fold, salience)
     # A tone held through the whole window (drone, hum) is not melody.
-    pcs = (pcs - pcs.min(dim=2, keepdim=True).values).clamp(min=0)
+    pcs = (raw - raw.min(dim=2, keepdim=True).values).clamp(min=0)
     pcs = pcs / pcs.flatten(1).quantile(0.99, dim=1).clamp(min=1e-6)[:, None, None]
     pcs = pcs.clamp(max=1.0)
+    if HEIGHT if height is None else height:
+        position = torch.linspace(0.1, 1.0, salience.shape[1], device=semis.device)[None, :, None]
+        weighted = torch.zeros_like(raw).index_add_(1, fold, salience * position)
+        pcs = torch.cat([pcs, pcs * weighted / raw.clamp(min=1e-6)], dim=1)
     return keycanon(pcs) if canon else pcs
 
 
 def key_shift(pcs: torch.Tensor) -> torch.Tensor:
     """Rotation that puts each window's pitch-class profile in a canonical position: the
     phase of the profile's first Fourier coefficient, so any transposition maps to one input."""
-    profile = pcs.sum(dim=2)  # (B, 12)
+    profile = pcs[:, :12].sum(dim=2)  # (B, 12): the pitch classes, not their heights
     k = torch.arange(12, device=pcs.device, dtype=torch.float32)
     re = (profile * torch.cos(2 * math.pi * k / 12)).sum(1)
     im = (profile * -torch.sin(2 * math.pi * k / 12)).sum(1)
@@ -83,8 +97,10 @@ def key_shift(pcs: torch.Tensor) -> torch.Tensor:
 
 
 def keycanon(pcs: torch.Tensor, extra: int = 0) -> torch.Tensor:
+    """Each window turned to its canonical key; with heights, both groups of 12 turn together."""
     shift = (key_shift(pcs) + extra) % 12
-    index = (torch.arange(12, device=pcs.device)[None, :] + shift[:, None]) % 12  # (B, 12)
+    k = torch.arange(pcs.shape[1], device=pcs.device)
+    index = (k // 12 * 12)[None, :] + ((k % 12)[None, :] + shift[:, None]) % 12  # (B, channels)
     return torch.gather(pcs, 1, index[:, :, None].expand(-1, -1, pcs.shape[2]))
 
 

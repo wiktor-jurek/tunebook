@@ -22,6 +22,7 @@ from collections import defaultdict
 
 from found.db import ROOT, connect, now
 from found.names import display, download, key, mentions, normalise, popularity, read_set, tunes
+from tunebook_ml.splits import benchmark_tunes
 
 SEGMENT = 30.0
 LEAD_IN = 3.0   # albums start almost at once; skip count-ins and fades
@@ -39,8 +40,8 @@ class Harvester:
         with (ROOT / "eval" / "youtube.csv").open() as handle:
             rows = list(csv.DictReader(handle))
         self.benchmark = {row["youtube_id"] for row in rows}
-        # Benchmark tunes are left out, so real-clip scores stay a test of tunes never heard really played.
-        self.skip = set() if include_benchmark else {int(row["tune_id"]) for row in rows if row["tune_id"].isdigit()}
+        # The benchmark's eval tunes are left out, so real-clip scores stay a test of tunes never heard really played.
+        self.skip = set() if include_benchmark else benchmark_tunes()[0]
 
     def yt_dlp(self, *args: str) -> dict | None:
         time.sleep(self.pause)

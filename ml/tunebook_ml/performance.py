@@ -74,6 +74,8 @@ class Performance:
     note_onsets: dict[int, float] = field(default_factory=dict)
     seconds: float = 0.0
     transpose: int = 0
+    #: Index of the setting note the performance starts on.
+    start: int = 0
 
 
 def scale_of(mode: str | None) -> tuple[int, list[int]]:
@@ -117,13 +119,14 @@ def neighbour(midi: int, direction: int, tonic: int, steps: list[int]) -> int:
     return candidate
 
 
-def play_melody(pitches, durations, start: int, length_seconds: float, instrument: Instrument, warp, transpose: int,
+def play_melody(pitches, durations, times, start: int, length_seconds: float, instrument: Instrument, warp, transpose: int,
                 tonic: int, steps: list[int], rng: np.random.Generator) -> tuple[list[Note], dict[int, float]]:
     notes: list[Note] = []
     onsets: dict[int, float] = {}
-    position = 0.0
     jitter = rng.uniform(0.004, 0.015)
     for index in range(start, len(pitches)):
+        # Placed by its start, not by adding up durations, so rests stay silent.
+        position = times[index] - times[start]
         begin, end = warp(position), warp(position + durations[index])
         position += durations[index]
         if begin > length_seconds:
@@ -166,7 +169,7 @@ def triads(tonic: int, steps: list[int]) -> list[tuple[int, list[int]]]:
     return [((tonic + steps[d]) % 12, [(tonic + steps[(d + k) % 7]) % 12 for k in (0, 2, 4)]) for d in range(7)]
 
 
-def harmonise(pitches, durations, start: int, warp, tonic: int, steps: list[int], span: int, length_seconds: float):
+def harmonise(pitches, durations, times, start: int, warp, tonic: int, steps: list[int], span: int, length_seconds: float):
     """One chord per span of units, chosen to cover the melody's pitch classes, favouring I, IV and V."""
     chords = triads(tonic, steps)
     preference = [1.0, 0.55, 0.45, 0.85, 0.9, 0.6, 0.2]
@@ -175,11 +178,12 @@ def harmonise(pitches, durations, start: int, warp, tonic: int, steps: list[int]
     while index < len(pitches) and warp(position) < length_seconds:
         weight = np.zeros(12)
         end = position + span
-        cursor = position
-        while index < len(pitches) and cursor < end:
+        while index < len(pitches) and times[index] - times[start] < end:
             weight[pitches[index] % 12] += durations[index]
-            cursor += durations[index]
             index += 1
+        # The chord lasts until the next note it didn't take, rests included.
+        cursor = times[index] - times[start] if index < len(pitches) else times[-1] + durations[-1] - times[start]
+        cursor = max(cursor, position + 1)
         scores = [sum(weight[pc] for pc in pcs) + preference[d] * span * 0.3 + (span * 0.15 if d == previous else 0) for d, (_, pcs) in enumerate(chords)]
         previous = int(np.argmax(scores))
         segments.append((warp(position), warp(cursor), chords[previous][1], chords[previous][0]))
@@ -241,6 +245,11 @@ def perform(setting: dict, rng: np.random.Generator, seconds: float = 20.0, back
     # Players go round a tune several times, so a late start wraps back to the top.
     pitches, durations = list(setting["pitches"]) * 3, list(setting["durations"]) * 3
     tune_length = len(setting["pitches"])
+    # Note starts in the same units: from the catalog's `starts`, which keep rests and rest
+    # pickups, or, for melodies without them, back to back.
+    once = list(setting.get("starts") or np.concatenate([[0], np.cumsum(setting["durations"][:-1])]).astype(int).tolist())
+    round_length = max(t + d for t, d in zip(once, setting["durations"]))
+    times = [t + r * round_length for r in range(3) for t in once]
     kind = (setting.get("kind") or "").lower()
     tonic, steps = scale_of(setting.get("mode"))
     low, high = QUAVER_SECONDS.get(kind, (0.13, 0.19))
@@ -248,11 +257,7 @@ def perform(setting: dict, rng: np.random.Generator, seconds: float = 20.0, back
     beat, weights = beat_shape(setting.get("meter"), kind, rng)
     warp = make_warp(beat, weights, quaver_seconds)
     # Start anywhere, but on a beat so the first notes sound like an entry.
-    position, starts = 0, []
-    for i in range(tune_length):
-        if position % beat == 0:
-            starts.append(i)
-        position += durations[i]
+    starts = [i for i in range(tune_length) if times[i] % beat == 0]
     start = int(rng.choice(starts or [0]))
 
     count = int(rng.choice([1, 1, 1, 2, 2, 3]))
@@ -270,7 +275,7 @@ def perform(setting: dict, rng: np.random.Generator, seconds: float = 20.0, back
 
     melody, onsets = [], {}
     for k, instrument in enumerate(instruments):
-        notes, played = play_melody(pitches, durations, start, seconds, instrument, warp, transpose, (tonic + transpose) % 12, steps, rng)
+        notes, played = play_melody(pitches, durations, times, start, seconds, instrument, warp, transpose, (tonic + transpose) % 12, steps, rng)
         octave = 0 if k == 0 or min(n.midi for n in notes) >= instrument.low - 2 else 12
         for note in notes:
             note.midi += octave
@@ -280,5 +285,5 @@ def perform(setting: dict, rng: np.random.Generator, seconds: float = 20.0, back
             onsets = {index % tune_length: onset for index, onset in sorted(played.items(), reverse=True)}
         if instrument.drone:
             melody.append(Part(Instrument("drone", 109, 0, 127, 0), [Note(0.0, seconds + 1, 38 + (tonic + transpose) % 12, 60)], rng.normal(0, 3)))
-    parts = play_backing(harmonise([p + transpose for p in pitches], durations, start, warp, (tonic + transpose) % 12, steps, beat * 2, seconds), beat, quaver_seconds, rng) if rng.random() < backing else []
-    return Performance(melody, parts, onsets, seconds, transpose)
+    parts = play_backing(harmonise([p + transpose for p in pitches], durations, times, start, warp, (tonic + transpose) % 12, steps, beat * 2, seconds), beat, quaver_seconds, rng) if rng.random() < backing else []
+    return Performance(melody, parts, onsets, seconds, transpose, start)

@@ -1,9 +1,10 @@
-"""Proposes YouTube clips of popular tunes for the real-world benchmark.
+"""Proposes YouTube clips of popular tunes for the real-world benchmark, in the data home (tunebook_ml/store.py).
 
-Labels come from video titles, so every row starts unverified: listen and set
-`verified` to `yes` (or fix `tune_id`) before a row counts in results.
+Labels come from video titles, so every clip starts unchecked: check it, trim it and fix its tune in the
+labeller (/admin/label, YouTube clips) before it counts. Each proposed video's first minutes are fetched
+and put in the bucket, so it can be labelled at once.
 
-    uv run python eval/youtube_candidates.py --tunes 300 --out eval/youtube.csv
+    uv run --group store python eval/youtube_candidates.py --tunes 300
 """
 
 import argparse
@@ -14,9 +15,15 @@ import json
 import re
 import subprocess
 import unicodedata
+import sys
 from pathlib import Path
 
 import requests
+from fetch_youtube import fetch_source, source_path
+from psycopg.types.json import Jsonb
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tunebook_ml import store  # noqa: E402
 
 POPULARITY_URL = "https://raw.githubusercontent.com/adactio/TheSession-data/main/csv/tune_popularity.csv"
 CATALOG = Path(__file__).parent.parent / "data" / "catalog.jsonl.gz"
@@ -25,7 +32,6 @@ CATALOG = Path(__file__).parent.parent / "data" / "catalog.jsonl.gz"
 EXCLUDE = re.compile(r"\b(lesson|tutorial|how to|learn|slow|backing track|play along|karaoke|lyrics|sheet music|midi)\b", re.I)
 SET_MARKERS = re.compile(r"[/|]|\bset\b|\bmedley\b|\s&\s|\band\s+the\b", re.I)
 INSTRUMENTS = ["fiddle", "tin whistle", "flute", "accordion", "concertina", "banjo", "uilleann pipes", "session"]
-FIELDS = ["youtube_id", "start_s", "duration_s", "tune_id", "title", "kind", "video_title", "query", "instrument", "backing", "verified", "notes"]
 
 
 def normalise(text: str) -> str:
@@ -49,7 +55,6 @@ def search(query: str, count: int) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tunes", type=int, default=300, help="most popular tunes to try")
-    parser.add_argument("--out", default="eval/youtube.csv")
     args = parser.parse_args()
 
     tunes: dict[int, dict] = {}
@@ -60,13 +65,9 @@ def main() -> None:
     popularity = csv.DictReader(io.StringIO(requests.get(POPULARITY_URL, timeout=60).text))
     ranked = sorted(((int(row["tunebooks"]), int(row["tune_id"])) for row in popularity if row["tune_id"].isdigit() and int(row["tune_id"]) in tunes), reverse=True)
 
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    existing = {}
-    if out.exists():
-        with out.open() as handle:
-            existing = {int(row["tune_id"]): row for row in csv.DictReader(handle)}
-    rows = list(existing.values())
+    existing = {row["tune_id"] for row in store.db().execute(
+        "select distinct g.tune_id from ml.segments g join ml.sources s on s.id = g.source_id where s.kind = 'youtube_video'")}
+    added = 0
     for index, (_, tune_id) in enumerate(ranked[: args.tunes]):
         if tune_id in existing:
             continue
@@ -86,17 +87,18 @@ def main() -> None:
             # In a set, only trust the label when the tune is named first.
             if SET_MARKERS.search(video_title) and position > len(normalise(re.split(r"[/|]", video_title)[0])):
                 continue
-            rows.append({
-                "youtube_id": entry["id"], "start_s": 20 if duration > 90 else 5, "duration_s": 15, "tune_id": tune_id,
-                "title": tune["title"], "kind": tune["kind"], "video_title": video_title, "query": query,
-                "instrument": instrument, "backing": "", "verified": "", "notes": "",
-            })
-            print(f"{len(rows):4d} {tune['title']} <- {video_title}")
+            row = {"youtube_id": entry["id"], "start_s": 20 if duration > 90 else 5}
+            key = None
+            if fetch_source(row).startswith(("ok", "cached")) and source_path(row).exists():
+                key = store.put_audio(source_path(row), f"ml/audio/youtube/source/{source_path(row).name}")
+            source = store.upsert_source("youtube_video", entry["id"], key, title=video_title, duration_s=float(duration),
+                                         status="ok" if key else "missing",
+                                         meta=Jsonb({"video": entry["id"], "offset_s": 0.0, "query": query, "instrument": instrument, "backing": ""}))
+            store.upsert_segment(source, float(row["start_s"]), tune_id, end_s=float(row["start_s"]) + 15, label_source="title",
+                                 confidence=0.7, origin="eval/youtube_candidates.py")
+            added += 1
+            print(f"{added:4d} {tune['title']} <- {video_title}{'' if key else ' (no audio yet)'}")
             break
-        with out.open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, FIELDS)
-            writer.writeheader()
-            writer.writerows(rows)
 
 
 if __name__ == "__main__":

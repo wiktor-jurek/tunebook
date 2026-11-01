@@ -2,7 +2,7 @@
 // microphone audio into features, scores every tune, and keeps the running verdict.
 // Audio never leaves this worker.
 
-import { Decoder } from "@/lib/finder/decode";
+import { Decoder, popularityPrior } from "@/lib/finder/decode";
 import { windowFeatures, FRAMES, SAMPLE_RATE, WINDOW_SAMPLES } from "@/lib/finder/features";
 import { resample } from "@/lib/finder/resample";
 import type { FinderRequest, FinderResponse } from "@/lib/finder/protocol";
@@ -18,7 +18,7 @@ type Ort = {
 const ORT_VERSION = "1.20.1";
 const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 // Bump when a new model ships: the model is cached by URL, and older caches are deleted.
-const CACHE = "tune-finder-v3";
+const CACHE = "tune-finder-v6";
 // Below this RMS the room is quiet; nothing is scored.
 const SILENCE = 0.003;
 
@@ -56,10 +56,15 @@ async function init(modelUrl: string, tunesUrl: string) {
   ort = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ `${ORT_BASE}ort.wasm.min.mjs`) as Ort;
   ort.env.wasm.wasmPaths = ORT_BASE;
   ort.env.wasm.numThreads = 1; // threads need cross-origin isolation, which the app does not set
-  const [model, ids] = await Promise.all([
+  const [model, ids, tunebooks] = await Promise.all([
     download(modelUrl, (loaded, total) => post({ type: "progress", loaded, total })),
     fetch(tunesUrl).then((r) => r.json() as Promise<number[]>),
+    // Tunebook counts in tunes.json's column order, beside it (export_finder.py writes both).
+    // Without the file the finder still works, only not weighted by popularity.
+    fetch(new URL("popularity.json", tunesUrl)).then((r) => r.ok ? r.json() as Promise<number[]> : null).catch(() => null),
   ]);
+  if (tunebooks?.length === ids.length) decoder.setPrior(popularityPrior(tunebooks));
+  else console.warn("Tune finder: no popularity.json matching tunes.json; answers are not weighted by popularity");
   session = await ort.InferenceSession.create(model, { executionProviders: ["wasm"], graphOptimizationLevel: "all" });
   tunes = ids;
   post({ type: "ready", tunes: tunes.length });
