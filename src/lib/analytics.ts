@@ -47,6 +47,8 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   playalong_started: { tempo: number; tune: string; label: string };
   playalong_selected: { label: string };
   playback_tempo_changed: { tempo: number };
+  count_in_toggled: { on: boolean };
+  player_island_toggled: { open: boolean };
   playback_seeked: Record<string, never>;
   notation_opened: Record<string, never>;
   tune_source_opened: Record<string, never>;
@@ -54,7 +56,6 @@ type Events = Record<LibraryEvent, { outcome: Outcome } & Names> & {
   contents_navigated: { kind: "tune" | "set" };
   print_requested: Record<string, never>;
   preferences_saved: { outcome: Outcome; instrument: number };
-  mode_switched: { mode: "practice" | "session" };
   appearance_changed: { theme: "system" | "light" | "dark" };
   session_book_made: { outcome: Outcome; tune_count: number };
   session_score_opened: { tune?: string };
@@ -77,8 +78,11 @@ export function analyticsPath(value: string): string {
   return ["/", "/sets", "/sign-in", "/sign-up", "/forgot-password", "/reset-password"].includes(path) ? path : "/other";
 }
 
+// The production hosts: Tune Companion's own domain, and the old one while it still redirects there.
+export const SITE_HOSTS = ["tunecompanion.com", "www.tunecompanion.com", "libresession.com", "www.libresession.com"];
+
 function enabled() {
-  return typeof window !== "undefined" && ["libresession.com", "www.libresession.com"].includes(window.location.hostname)
+  return typeof window !== "undefined" && SITE_HOSTS.includes(window.location.hostname)
     && navigator.doNotTrack !== "1" && navigator.doNotTrack !== "yes";
 }
 
