@@ -45,8 +45,8 @@ export const guide = (slug: string) => GUIDES.find((g) => g.slug === slug)!;
 // Official tunebooks behind the guides' "Open as a tunebook" buttons (scripts/seed-guide-books.ts prints their ids).
 // They are the only tunebooks search engines may index.
 export const GUIDE_BOOKS: Record<string, string | null> = {
-  "first-session-tunes": null,
-  "popular-session-sets": null,
+  "first-session-tunes": "ba3a9f66-b56c-4d46-b47e-55707ecac846",
+  "popular-session-sets": "61cfa509-41cc-455b-8b07-21e1089ed5f1",
 };
 export const isGuideBook = (id: string) => Object.values(GUIDE_BOOKS).includes(id);
 
