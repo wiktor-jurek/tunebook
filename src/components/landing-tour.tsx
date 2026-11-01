@@ -77,7 +77,7 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
     const id = window.setTimeout(() => setSlowStart(true), 500);
     return () => window.clearTimeout(id);
   }, [busy]);
-  const idleText = "Tap and let it hear the music.";
+  const idleText = "Try it now: tap and play a tune.";
   const prompt = busy && !slowStart ? idleText : finderPrompt(listener, idleText);
   const dial = (size: "hero" | "dock") => (
     <motion.div
@@ -107,10 +107,10 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
       <LayoutGroup>
         <section className="lp-hero" aria-labelledby="lp-title">
           <motion.h1 id="lp-title" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}>
-            Name that tune.
+            <span>Learn it at home.</span> <span>Play it at the session.</span>
           </motion.h1>
           <motion.p className="lp-lede" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.08, ease: [0.2, 0.8, 0.2, 1] }}>
-            Hold up your phone at a session and Tune Companion tells you what&apos;s playing. Then it helps you learn it.
+            Name tunes by ear, practise with play-alongs at your own speed, and carry every tunebook in your pocket.
           </motion.p>
           <div ref={heroSlot} className="lp-slot is-hero">{spot === "hero" && dial("hero")}</div>
           <div className="lp-hero-stage" aria-live="polite">
@@ -122,16 +122,17 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
           </div>
         </section>
 
+        {/* The loop, in order: practise at home, play out at the session, then see what you can play. */}
+        <Feature title="Practise at your own pace." body="Every tune has its score and play-along recordings. Slow them down until your fingers catch up, then share the tunebook with your session.">
+          <BookDemo tracks={tracks} />
+        </Feature>
+
         <Feature title="Record the whole night." body="Leave your phone on the table. Every tune is named as it's played, set by set.">
           <RecordDemo />
         </Feature>
 
         <Feature title="See what you can play." body="Find out how much of the night you could join in on. Tap the rest to start learning.">
           <ProgressDemo />
-        </Feature>
-
-        <Feature title="One link for the session." body="Share a tunebook with every set and score, and a play-along track for every tune, so the whole room plays from the same page.">
-          <BookDemo tracks={tracks} />
         </Feature>
 
         <section className="lp-end" aria-labelledby="lp-end-title">

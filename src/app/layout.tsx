@@ -10,8 +10,8 @@ import { NavigationProgress } from "@/components/navigation-progress";
 import "./globals.css";
 import { LayoutGuard } from "@/components/layout-guard";
 
-const title = "Tune Companion: name that tune at any Irish session";
-const description = "Hold up your phone at an Irish session and Tune Companion tells you what's playing. Then it helps you learn it: record the whole night, see what you can play, and share tunebooks.";
+const title = "Tune Companion: learn it at home, play it at the session";
+const description = "Name Irish tunes by ear, practise with play-alongs at your own speed, and carry every tunebook in your pocket.";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.BETTER_AUTH_URL || "https://tunecompanion.com"),
   title: { default: title, template: "%s | Tune Companion" },

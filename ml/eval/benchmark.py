@@ -5,6 +5,9 @@
   upsampled to the 48 kHz its frames are sized for.
 - JigRipper (jigripper.com): its public web model and front end, replayed offline by a harness kept outside
   this repo. Its files are for benchmarking only and never ship or get committed.
+- Tunepal (tunepal.org): its published method (eval/tunepal.py: note letters, substring edit distance) over
+  tunepal.db from the author's open rebuild, with the loose YIN front end on every clip, the best of the
+  three front ends overall. The shipping app's own pitch tracker is not public.
 
 Every engine hears the whole clip, then (with --timing) only its first 2, 4, ... 30 seconds:
 the answer at each length shows how soon it locks on. Engines not asked for this run keep their
@@ -15,7 +18,7 @@ FolkFriend is a Linux build, so it runs in its build image (which also has the O
 
     docker run --rm -v $FF/src/rust:/src -v $FF/target:/src/target -w /src rust:1.82-bookworm cargo build --release --bin folkfriend
     python eval/benchmark.py --tunebook --folkfriend $FF/target/release/folkfriend --folkfriend-home $FF/home \\
-        --jigripper-harness $JR/tools/jr-eval.cjs --jigripper-dir $JR/jr
+        --jigripper-harness $JR/tools/jr-eval.cjs --jigripper-dir $JR/jr --tunepal
 """
 
 import argparse
@@ -36,7 +39,7 @@ import classifier as c  # noqa: E402
 from tunebook_ml import pitchclass  # noqa: E402
 
 REPO = c.ML.parent
-ENGINES = ("tunebook", "folkfriend", "jigripper")
+ENGINES = ("tunebook", "folkfriend", "jigripper", "tunepal")
 PREFIXES = [2, 4, 6, 8, 10, 12, 15, 20, 25, 30]  # seconds heard, for --timing
 # Popularity bands by catalogue rank (most tunebooks first): 1 = top 100 ... 5 = beyond 8,000 or in no tunebook.
 BAND_RANKS = [100, 500, 2000, 8000]
@@ -214,6 +217,36 @@ def jigripper(rows: list[dict], harness: Path, folder: Path) -> dict:
     return {"name": "JigRipper", "detail": "web model #1006", "tunes": len(tunes), "missing": sorted({row["tuneId"] for row in rows} - known)}
 
 
+def tunepal(rows: list[dict], db: Path, timing: bool) -> dict:
+    """Tunepal's ranking on each whole clip and, with timing, on its first PREFIXES seconds.
+    A clip it hears no notes in gets no answer (every score ties)."""
+    sys.path.insert(0, str(Path(__file__).parent))
+    import tunepal as tp
+    corpus = tp.Corpus(db)
+    columns = {t: i for i, t in enumerate(corpus.tunes)}
+    rate = 48000
+
+    def ask(audio: np.ndarray, truth: int) -> tuple[int | None, int | None]:
+        letters = tp.letters_from_frames(tp.frames_yin(audio, rate))
+        if not letters:
+            return None, None
+        scores = corpus.scores(letters)
+        column = columns.get(truth)
+        return corpus.tunes[int(scores.argmax())], None if column is None else int((scores > scores[column]).sum()) + 1
+
+    for i, row in enumerate(rows):
+        audio = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-i", str(row["path"]), "-t", str(PREFIXES[-1]), "-ac", "1", "-ar", str(rate),
+                                              "-f", "f32le", "-"], capture_output=True, check=True).stdout, dtype=np.float32)
+        row["results"]["tunepal"] = answer(*ask(audio, row["tuneId"]))
+        if timing:
+            tops = [ask(audio[: t * rate], row["tuneId"])[0] for t in PREFIXES]
+            row["results"]["tunepal"]["curve"] = curve([None if top is None else top == row["tuneId"] for top in tops])
+        if i % 50 == 0:
+            print(f"tunepal {i}/{len(rows)}", flush=True)
+    return {"name": "Tunepal", "detail": "its published method on its own tune index", "tunes": len(corpus.tunes),
+            "missing": sorted({row["tuneId"] for row in rows} - set(corpus.tunes))}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tunebook", action="store_true", help="run the Tune finder's model")
@@ -223,6 +256,8 @@ def main() -> None:
     parser.add_argument("--folkfriend-version", default="", help="commit the binary was built from")
     parser.add_argument("--jigripper-harness", type=Path, help="jr-eval.cjs, kept outside the repo")
     parser.add_argument("--jigripper-dir", type=Path, help="JigRipper's downloaded web files")
+    parser.add_argument("--tunepal", action="store_true", help="run Tunepal's method")
+    parser.add_argument("--tunepal-db", type=Path, default=c.ML / "data" / "tunepal" / "tunepal.db")
     parser.add_argument("--timing", action="store_true", help="also score each engine run on the first 2 … 30 seconds")
     parser.add_argument("--timing-only", action="store_true", help="keep the whole-clip answers from the existing output")
     parser.add_argument("--clips", type=Path, default=c.ML / "cache" / "classifier" / "clips-v2.pt")
@@ -242,6 +277,8 @@ def main() -> None:
         engines["folkfriend"] = folkfriend(rows, args.folkfriend, args.folkfriend_home, args.folkfriend_version)
     if args.jigripper_harness and not args.timing_only:
         engines["jigripper"] = jigripper(rows, args.jigripper_harness, args.jigripper_dir)
+    if args.tunepal:
+        engines["tunepal"] = tunepal(rows, args.tunepal_db, args.timing)
     # Engines not run this time keep their earlier answers (and timing, unless it is rerun).
     earlier = {(clip["video"], clip["start"], clip["tuneId"]): clip.get("results", {}) for clip in old["clips"]}
     for row in rows:

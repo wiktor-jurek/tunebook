@@ -230,7 +230,8 @@ def finder_scores(seconds: float) -> tuple:
 
 
 def rank(scores: np.ndarray, columns: dict[int, int], truth: int) -> int | None:
-    if truth not in columns:
+    """None when the tune is not indexed, or when no notes were heard (every score ties at -inf)."""
+    if truth not in columns or not np.isfinite(scores[columns[truth]]):
         return None
     return int((scores > scores[columns[truth]]).sum()) + 1
 
@@ -278,7 +279,7 @@ def main() -> None:
         rows = [r for r in results if r["set"] == name and r["yin rank"] is not None]
         cells = []
         for k in keys:
-            ranks = [r[k] for r in rows]
+            ranks = [r[k] or math.inf for r in rows]
             cells.append(f"{np.mean([x == 1 for x in ranks]):6.1%} / {np.mean([x <= 10 for x in ranks]):6.1%}")
         print(f"{name:9} {len(rows):5}  " + "  ".join(f"{x:>22}" for x in cells))
 
