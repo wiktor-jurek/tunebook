@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import abcjs from "abcjs";
-import { Check, Link2, Pause, Play, RotateCcw } from "lucide-react";
+import { Check, CloudUpload, Link2, Pause, Play, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,7 +24,7 @@ const NIGHT: Sample[] = [
   { settingId: 71, title: "Morrison's", kind: "jig", meter: "6/8", mode: "Edorian", start: 190, end: 370, level: "mastered",
     abc: "|:E3 BEB|EBE AFD|EDE B2c|dcB AFD|E3 BEB|EBE AFD|G3 FGA|dAG FED:||:Bee fee|aee fed|Bee fee|a2g fed|Bee fee|aee fed|gfe d2A|BAG FED:|" },
   { settingId: 108, title: "Out on the Ocean", kind: "jig", meter: "6/8", mode: "Gmajor", start: 370, end: 560, level: "unlearned",
-    abc: "|:D2B BAG|BdB A2B|GED G2A|B2B AGE|D2B BAG|BdB A2B|GED G2A|BGF G3:||:efe edB|efe fdB|ded dBd|gfe dBA|G2A B2d|ege dBA|GED G2A|BGF G3:|" },
+    abc: "|:D2B BAG|BdB A2B|GED G2A|B2B AGE|D2B BAG|BdB A2B|GED G2A|B2B AGE|D2B BAG|BdB A2B|GED G2A|BGF G3:||:efe edB|efe fdB|ded dBd|gfe dBA|G2A B2d|ege dBA|GED G2A|BGF G3:|" },
   { settingId: 1, title: "Cooley's", kind: "reel", meter: "4/4", mode: "Edorian", start: 620, end: 840, level: "learning",
     abc: "|:EBBA B2 EB|B2 AB dBAG|FDAD BDAD|FDAD dAFD|EBBA B2 EB|B2 AB defg|afec dBAF|DEFD E2 GF:||:eB B2 efge|eB B2 gedB|A2 FA DAFA|A2 FA defg|eB B2 eBgB|eB B2 defg|afec dBAF|DEFD E2 GF:|" },
 ];
@@ -39,13 +39,14 @@ const NAMING = 28;
 /** The demo plays the night at this many times real speed: 14 minutes in about nine seconds. */
 const SPEED = 95;
 
-/** A recording that plays itself out when it scrolls into view: the clock runs and each tune is heard, then named. */
+/** A recording or uploaded session that plays itself out when it scrolls into view, naming each tune and building a session tunebook. */
 export function RecordDemo() {
   const card = useRef<HTMLDivElement>(null);
-  const seen = useInView(card, { once: true, amount: 0.6 });
+  const seen = useInView(card, { once: true, amount: 0.5 });
   const reduced = useReducedMotion();
   const [t, setT] = useState(0);
   const [run, setRun] = useState(0);
+  const [mode, setMode] = useState<"live" | "upload">("live");
 
   useEffect(() => {
     if (!seen) return;
@@ -61,15 +62,34 @@ export function RecordDemo() {
     return () => cancelAnimationFrame(raf);
   }, [seen, reduced, run]);
 
+  function switchMode(next: "live" | "upload") {
+    setMode(next);
+    if (!reduced) {
+      setT(0);
+      setRun((r) => r + 1);
+    }
+  }
+
   const done = t >= LENGTH;
   const heard = NIGHT.filter((tune) => t >= tune.start);
+  const namedCount = NIGHT.filter((tune) => t >= tune.start + NAMING).length;
   const playing = NIGHT.find((tune) => t >= tune.start && t < tune.end);
   return (
     <Card ref={card} className="lp-card lp-record" data-live={seen && !done ? "" : undefined}>
       <div className="lp-card-head">
         <span className="lp-live">
-          {done ? <><Check size={14} /> Saved</> : <><span className="finder-rec-dot" aria-hidden="true" /> Recording</>}
+          {done ? (
+            <><Check size={14} /> {mode === "live" ? "Saved" : "Processed"}</>
+          ) : mode === "live" ? (
+            <><span className="finder-rec-dot" aria-hidden="true" /> Recording</>
+          ) : (
+            <><CloudUpload size={14} aria-hidden="true" /> Uploading audio</>
+          )}
         </span>
+        <div className="lp-mode-pills" role="group" aria-label="Capture source">
+          <button type="button" className="lp-mode-pill" aria-pressed={mode === "live"} onClick={() => switchMode("live")}>Record live</button>
+          <button type="button" className="lp-mode-pill" aria-pressed={mode === "upload"} onClick={() => switchMode("upload")}>Upload audio</button>
+        </div>
         <span className="lp-level" aria-hidden="true" data-on={playing && !done ? "" : undefined}><i /><i /><i /><i /><i /></span>
         <span className="lp-clock">{clock(t)}</span>
       </div>
@@ -97,7 +117,7 @@ export function RecordDemo() {
                     </motion.span>
                   ) : (
                     <motion.span key="listening" className="lp-tune is-listening" exit={{ opacity: 0, y: -4 }}>
-                      <strong>Listening<span className="finder-dots" aria-hidden="true"><i /><i /></span></strong><small>&nbsp;</small>
+                      <strong>{mode === "live" ? "Listening" : "Matching"}<span className="finder-dots" aria-hidden="true"><i /><i /></span></strong><small>&nbsp;</small>
                     </motion.span>
                   )}
                 </AnimatePresence>
@@ -108,14 +128,19 @@ export function RecordDemo() {
         </AnimatePresence>
       </ol>
 
-      <div className="lp-card-foot">
-        <AnimatePresence>
-          {done && !reduced && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <Button variant="ghost" size="sm" onClick={() => { setT(0); setRun((r) => r + 1); }}><RotateCcw size={13} /> Play it again</Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div className="lp-card-foot lp-autobock" data-ready={done ? "" : undefined}>
+        <div className="lp-autobook-info">
+          <span className="lp-autobook-icon" aria-hidden="true">🎻</span>
+          <div>
+            <strong>{done ? "Friday Session tunebook created" : "Building session tunebook…"}</strong>
+            <small>{done ? "3 jigs in a set + 1 reel · ready to practise" : `${namedCount} of ${NIGHT.length} tunes named so far`}</small>
+          </div>
+        </div>
+        {done && !reduced ? (
+          <Button variant="ghost" size="sm" onClick={() => { setT(0); setRun((r) => r + 1); }}><RotateCcw size={13} /> Replay</Button>
+        ) : (
+          <span className="lp-autobook-badge">{done ? "Ready" : "Auto"}</span>
+        )}
       </div>
     </Card>
   );
@@ -125,20 +150,41 @@ export function RecordDemo() {
 export function ProgressDemo() {
   const [levels, setLevels] = useState(() => NIGHT.map((tune) => tune.level));
   const playable = levels.filter((level) => standing(level) === "join").length;
+  const learning = levels.filter((level) => standing(level) === "learning").length;
+  const untouched = levels.length - playable - learning;
+  const share = Math.round((100 * playable) / levels.length);
   const step = (i: number) =>
     setLevels((prev) => prev.map((level, j) => (j === i ? ABILITY_LEVELS[(ABILITY_LEVELS.indexOf(level) + 1) % ABILITY_LEVELS.length] : level)));
   return (
-    <Card className="lp-card">
+    <Card className="lp-card lp-passport">
+      <div className="lp-passport-head">
+        <div>
+          <span className="lp-passport-eyebrow">Session readiness</span>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p key={playable} className="lp-sentence" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
+              {playAlongSentence(playable, levels.length)}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+        <div className="lp-passport-stat" aria-hidden="true">
+          <strong>{share}%</strong>
+          <small>in your fingers</small>
+        </div>
+      </div>
+
       <div className="lp-track is-night" aria-hidden="true">
         {NIGHT.map((tune, i) => (
           <span key={tune.title} className="lp-track-seg" data-standing={standing(levels[i])} style={{ left: pct(tune.start), width: pct(tune.end - tune.start) }} />
         ))}
       </div>
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.p key={playable} className="lp-sentence" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
-          {playAlongSentence(playable, levels.length)}
-        </motion.p>
-      </AnimatePresence>
+
+      <div className="lp-passport-legend" aria-hidden="true">
+        <span><i data-standing="join" /> {playable} can play</span>
+        <span><i data-standing="learning" /> {learning} learning</span>
+        <span><i data-standing="new" /> {untouched} new</span>
+        <span className="lp-passport-hint">Tap a tune to level up</span>
+      </div>
+
       <ul className="lp-progress">
         {NIGHT.map((tune, i) => (
           <li key={tune.title}>
@@ -160,6 +206,8 @@ let audio: AudioContext | null = null;
 /** A play-along recording the landing page can tease: its lead instrument, link and timing against the score. */
 export type DemoTrack = { label: string; url: string; timing: PlayalongTiming | null };
 const BOOK = NIGHT.slice(0, 3);
+const SPEEDS = [75, 85, 100] as const;
+type PracticeSpeed = (typeof SPEEDS)[number];
 const lead = (label: string) => label.split(/ with /i)[0];
 /** The tunebook shows, and plays, this many bars of each tune. */
 const BARS = 4;
@@ -175,12 +223,13 @@ function scoreStart({ anchors }: PlayalongTiming) {
 }
 
 /**
- * A tunebook: pick a tune from its set to see its opening bars, and play along with a real recording of it (fiddle,
- * flute or whistle with guitar), its notes lighting up as they're played. Without recordings, it plays the score itself.
+ * A tunebook: pick a tune from its set to see its opening bars, slow it down, and play along with a real recording of it
+ * (fiddle, flute or whistle with guitar), its notes lighting up as they're played. Without recordings, it plays the score itself.
  */
 export function BookDemo({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
   const [chosen, setChosen] = useState(0);
   const [instrument, setInstrument] = useState(0);
+  const [speed, setSpeed] = useState<PracticeSpeed>(100);
   const [copied, setCopied] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -224,9 +273,11 @@ export function BookDemo({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
   }, [chosen, stop]);
 
   // The recording, from the first note to the end of the bars shown, following them as the full score does.
-  function playRecording(chosenTrack: DemoTrack & { timing: PlayalongTiming }, at?: number) {
+  function playRecording(chosenTrack: DemoTrack & { timing: PlayalongTiming }, nextSpeed = speed, at?: number) {
     const p = player.current;
     const el = new Audio(chosenTrack.url);
+    el.preservesPitch = true;
+    el.playbackRate = nextSpeed / 100;
     el.currentTime = (at ?? scoreStart(chosenTrack.timing)) / 1000;
     p.el = el;
     el.onended = () => { if (p.el === el) stop(); };
@@ -254,14 +305,19 @@ export function BookDemo({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
   }
 
   // Without a recording, the score itself through the synth.
-  async function playScore() {
+  async function playScore(nextSpeed = speed) {
     const p = player.current, visual = p.visual;
     if (!visual || !abcjs.synth.supportsAudio()) return stop();
     const token = p.token;
     audio ??= new AudioContext();
     await audio.resume();
     const synth = new abcjs.synth.CreateSynth();
-    await synth.init({ visualObj: visual, audioContext: audio, options: { program: DEFAULT_SOUND, soundFontUrl: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/" } });
+    await synth.init({
+      visualObj: visual,
+      audioContext: audio,
+      millisecondsPerMeasure: (visual.millisecondsPerMeasure() * 100) / nextSpeed,
+      options: { program: DEFAULT_SOUND, soundFontUrl: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/" },
+    });
     await synth.prime();
     const buffer = synth.getAudioBuffer();
     if (!buffer || p.token !== token) return;
@@ -270,7 +326,10 @@ export function BookDemo({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
     source.connect(audio.destination);
     source.onended = () => { if (p.source === source) stop(); };
     p.source = source;
-    p.timer = new abcjs.TimingCallbacks(visual, { eventCallback: (event) => { light(event?.elements?.flat() as Element[] | undefined); return undefined; } });
+    p.timer = new abcjs.TimingCallbacks(visual, {
+      qpm: Math.round((visual.getBpm() * nextSpeed) / 100),
+      eventCallback: (event) => { light(event?.elements?.flat() as Element[] | undefined); return undefined; },
+    });
     setLoading(false);
     source.start();
     p.timer.start();
@@ -280,8 +339,8 @@ export function BookDemo({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
     if (playing) return stop();
     setPlaying(true);
     setLoading(true);
-    if (timed(track)) playRecording(track);
-    else void playScore();
+    if (timed(track)) playRecording(track, speed);
+    else void playScore(speed);
   }
 
   // Switching instrument mid-tune carries on from the same moment in the other recording.
@@ -294,14 +353,31 @@ export function BookDemo({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
     const at = position === null ? undefined : next.timing.anchors.find(([, pos]) => pos >= position)?.[0];
     p.el.pause();
     p.el = undefined;
-    playRecording(next, at);
+    playRecording(next, speed, at);
+  }
+
+  function chooseSpeed(nextSpeed: PracticeSpeed) {
+    setSpeed(nextSpeed);
+    const p = player.current;
+    if (p.el) {
+      p.el.preservesPitch = true;
+      p.el.playbackRate = nextSpeed / 100;
+    } else if (playing) {
+      stop();
+      setPlaying(true);
+      setLoading(true);
+      void playScore(nextSpeed);
+    }
   }
 
   return (
     <Card className="lp-card lp-book">
       <div className="lp-book-head">
         <span className="lp-book-icon" aria-hidden="true">🎻</span>
-        <div><strong>Friday Session</strong><small>3 jigs in a set</small></div>
+        <div>
+          <strong>Friday Session</strong>
+          <small>3 jigs in a set · heard at {clock(BOOK[chosen].start)}</small>
+        </div>
         <Button size="sm" variant={copied ? "default" : "outline"} onClick={() => setCopied(true)} aria-label={copied ? "Copied" : "Copy link"}>
           {copied ? <><Check size={14} /><span className="lp-btn-text">Copied</span></> : <><Link2 size={14} /><span className="lp-btn-text">Copy link</span></>}
         </Button>
@@ -321,7 +397,22 @@ export function BookDemo({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
             {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
           </Button>
           <div className="lp-playalong-main">
-            <span className="lp-playalong-title">{options.length ? "Play along with guitar" : "Hear it"}</span>
+            <div className="lp-playalong-top">
+              <span className="lp-playalong-title">{options.length ? "Play along with guitar" : "Hear the score"}</span>
+              <div className="lp-speed-pills" role="group" aria-label="Practice tempo">
+                {SPEEDS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="lp-speed-pill"
+                    aria-pressed={speed === s}
+                    onClick={() => chooseSpeed(s)}
+                  >
+                    {s}%
+                  </button>
+                ))}
+              </div>
+            </div>
             {options.length > 0 && (
               <SegmentedControl label="Play-along instrument" value={String(instrument)} onChange={(i) => choose(Number(i))}
                 options={options.map((option, i) => ({ value: String(i), label: lead(option.label) }))} />

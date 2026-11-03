@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { MicOff, X } from "lucide-react";
+import { Disc3, Headphones, MicOff, Music, Sparkles, X } from "lucide-react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion, useMotionValue, useSpring, type MotionStyle } from "motion/react";
+import { AbilityMark } from "@/components/ability-mark";
+import { RepeatMark } from "@/components/repeat-mark";
 import { Button } from "@/components/ui/button";
 import { BookDemo, ProgressDemo, RecordDemo, type DemoTrack } from "@/components/landing-sections";
 import { MicShape } from "@/components/listen-tray";
 import { FinderAnswer, FinderScore, finderPrompt, type FinderContext } from "@/components/finder-parts";
+import { resolvePractice } from "@/lib/ability";
 import { useTuneListener } from "@/lib/finder/use-listener";
 import type { FinderTune } from "@/lib/library";
 
@@ -18,11 +21,18 @@ const rise = {
   transition: { type: "spring", stiffness: 120, damping: 22 },
 } as const;
 type Spot = "hero" | "end" | "dock";
+type StepId = "listen" | "learn" | "track";
+
+const STEPS: { id: StepId; label: string; short: string; icon: typeof Disc3 }[] = [
+  { id: "listen", label: "1. Listen & record", short: "Listen", icon: Disc3 },
+  { id: "learn", label: "2. Learn the tunes", short: "Learn", icon: Headphones },
+  { id: "track", label: "3. Play & track", short: "Play", icon: Sparkles },
+];
 
 /**
- * The one microphone on the page. It sits in the hero; once the hero scrolls away it flies down into a small dock at the
- * bottom of the screen and rides along, and it lands again beside the closing call to action. Tapping it anywhere
- * really listens. Where it sits is decided by two IntersectionObservers, never by measuring on scroll.
+ * The one microphone on the page. It sits inside the phone in the hero; once the hero scrolls away it flies down into a
+ * small dock at the bottom of the screen and rides along, and it lands again beside the closing call to action. Tapping it
+ * anywhere really listens. Where it sits is decided by two IntersectionObservers, never by measuring on scroll.
  */
 export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrack[]> }) {
   const listener = useTuneListener();
@@ -32,6 +42,7 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
   const [inView, setInView] = useState({ hero: true, end: false });
   const [sheet, setSheet] = useState<FinderTune | null>(null);
   const [dismissed, setDismissed] = useState<number | null>(null);
+  const [activeStep, setActiveStep] = useState<StepId>("listen");
 
   useEffect(() => {
     const watch = (el: HTMLElement | null, key: "hero" | "end") => {
@@ -77,7 +88,7 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
     const id = window.setTimeout(() => setSlowStart(true), 500);
     return () => window.clearTimeout(id);
   }, [busy]);
-  const idleText = "Try it now: tap and play a tune.";
+  const idleText = "Try it live: tap and play or hum a tune.";
   const prompt = busy && !slowStart ? idleText : finderPrompt(listener, idleText);
   const dial = (size: "hero" | "dock") => (
     <motion.div
@@ -96,7 +107,7 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
         <circle className="finder-arc-fill" data-empty={arc <= 0 ? "" : undefined} cx="50" cy="50" r="48" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - 100 * arc} />
       </svg>
       <button type="button" className="finder-button" data-phase={phase} disabled={busy} onClick={press} aria-label={listening ? "Stop listening" : "Name the tune that's playing"}>
-        <span className="finder-icon">{phase === "denied" ? <MicOff size={size === "hero" ? 34 : 18} /> : <MicShape dot={dot} square={square} size={size === "hero" ? 34 : 18} />}</span>
+        <span className="finder-icon">{phase === "denied" ? <MicOff size={size === "hero" ? 32 : 18} /> : <MicShape dot={dot} square={square} size={size === "hero" ? 32 : 18} />}</span>
       </button>
     </motion.div>
   );
@@ -107,31 +118,164 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
       <LayoutGroup>
         <section className="lp-hero" aria-labelledby="lp-title">
           <motion.h1 id="lp-title" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}>
-            <span>Learn it at home.</span> <span>Play it at the session.</span>
+            <span>Listen to the session.</span>{" "}
+            <span>Learn the tunes.</span>{" "}
+            <span>Play them back.</span>
           </motion.h1>
           <motion.p className="lp-lede" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.08, ease: [0.2, 0.8, 0.2, 1] }}>
-            Name tunes by ear, practise with play-alongs at your own speed, and carry every tunebook in your pocket.
+            Upload or record a session to automatically build its tunebook, practise with real backing tracks, and track every tune in your repertoire.
           </motion.p>
-          <div ref={heroSlot} className="lp-slot is-hero">{spot === "hero" && dial("hero")}</div>
-          <div className="lp-hero-stage" aria-live="polite">
-            {answer && spot === "hero" ? (
-              <FinderAnswer tune={answer} sure={sure} context={context} />
-            ) : (
-              <p className="lp-prompt" role={phase === "error" ? "alert" : undefined}>{prompt}{dots}</p>
-            )}
-          </div>
+
+          <motion.div
+            className="lp-stage"
+            data-active-step={activeStep}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.75, delay: 0.14, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            {/* Ambient whisper cards around the pocket companion, highlighting each chapter of the story. */}
+            <div className="lp-whispers is-left" aria-hidden="true">
+              <div
+                className="lp-whisper"
+                data-step="listen"
+                data-active={activeStep === "listen" ? "" : undefined}
+                onMouseEnter={() => setActiveStep("listen")}
+              >
+                <span className="lp-whisper-badge is-live"><span className="finder-rec-dot" /> Live or uploaded</span>
+                <strong>Friday Session · 4 tunes named</strong>
+                <span className="lp-whisper-sub"><RepeatMark /> The Kesh · Morrison&apos;s · Out on the Ocean</span>
+              </div>
+
+              <div
+                className="lp-whisper"
+                data-step="listen"
+                data-active={activeStep === "listen" ? "" : undefined}
+                onMouseEnter={() => setActiveStep("listen")}
+              >
+                <span className="lp-whisper-icon">🎻</span>
+                <div>
+                  <strong>Session tunebook ready</strong>
+                  <span className="lp-whisper-sub">Grouped into sets automatically</span>
+                </div>
+              </div>
+            </div>
+
+            {/* The pocket session companion: a phone frame holding the live working tune finder. */}
+            <div className="lp-phone">
+              <div className="lp-phone-bezel">
+                <div className="lp-phone-statusbar" aria-hidden="true">
+                  <span>21:42</span>
+                  <span className="lp-phone-island" />
+                  <span className="lp-phone-pill">In the pub</span>
+                </div>
+
+                <div className="lp-phone-screen">
+                  <div className="lp-phone-book" aria-hidden="true">
+                    <span className="lp-phone-book-emoji">🎻</span>
+                    <div className="lp-phone-book-text">
+                      <strong>Friday Session</strong>
+                      <small>Set 1 · 3 jigs named</small>
+                    </div>
+                    <span className="lp-phone-book-tag">Tunebook</span>
+                  </div>
+
+                  <div className="lp-phone-finder">
+                    <div ref={heroSlot} className="lp-slot is-hero">{spot === "hero" && dial("hero")}</div>
+                    <div className="lp-hero-stage" aria-live="polite">
+                      {answer && spot === "hero" ? (
+                        <FinderAnswer tune={answer} sure={sure} context={context} />
+                      ) : (
+                        <p className="lp-prompt" role={phase === "error" ? "alert" : undefined}>{prompt}{dots}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="lp-phone-tabs" aria-hidden="true">
+                    <span className="lp-phone-tab is-active"><Music size={14} /> Tunes</span>
+                    <span className="lp-phone-tab"><Disc3 size={14} /> Recordings</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lp-whispers is-right" aria-hidden="true">
+              <div
+                className="lp-whisper"
+                data-step="learn"
+                data-active={activeStep === "learn" ? "" : undefined}
+                onMouseEnter={() => setActiveStep("learn")}
+              >
+                <span className="lp-whisper-icon">🎸</span>
+                <div>
+                  <strong>Play along with guitar · 85%</strong>
+                  <span className="lp-whisper-sub">Fiddle, flute &amp; whistle backing tracks</span>
+                </div>
+              </div>
+
+              <div
+                className="lp-whisper"
+                data-step="track"
+                data-active={activeStep === "track" ? "" : undefined}
+                onMouseEnter={() => setActiveStep("track")}
+              >
+                <div className="lp-whisper-row">
+                  <strong>3 of 4 tunes you can play</strong>
+                  <AbilityMark practice={resolvePractice(null, "mastered")} label />
+                </div>
+                <span className="lp-whisper-sub">75% of tonight&apos;s session in your fingers</span>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Flighty-style pill bar anchoring the 3-part story under the phone. */}
+          <nav className="lp-steps" aria-label="How Tune Companion works">
+            {STEPS.map((step) => {
+              const Icon = step.icon;
+              const active = activeStep === step.id;
+              return (
+                <a
+                  key={step.id}
+                  href={`#${step.id}`}
+                  className="lp-step-pill"
+                  data-active={active ? "" : undefined}
+                  onMouseEnter={() => setActiveStep(step.id)}
+                  onFocus={() => setActiveStep(step.id)}
+                  onClick={() => setActiveStep(step.id)}
+                >
+                  <Icon size={15} aria-hidden="true" />
+                  <span className="lp-step-full">{step.label}</span>
+                  <span className="lp-step-short">{step.short}</span>
+                </a>
+              );
+            })}
+          </nav>
         </section>
 
-        {/* The loop, in order: practise at home, play out at the session, then see what you can play. */}
-        <Feature title="Practise at your own pace." body="Every tune has its score and play-along recordings. Slow them down until your fingers catch up, then share the tunebook with your session.">
-          <BookDemo tracks={tracks} />
-        </Feature>
-
-        <Feature title="Record the whole night." body="Leave your phone on the table. Every tune is named as it's played, set by set.">
+        {/* The 3-part loop: 1. Listen/upload -> session tunebook, 2. Full training interface, 3. Repertoire tracking. */}
+        <Feature
+          id="listen"
+          eyebrow="01 · Listen to the session"
+          title="Record or upload a session. Get the tunebook."
+          body="Leave your phone on the table at the pub, or upload a recording of a session or tune from earlier. Every tune is named by ear as it’s played, grouped into sets, and turned into a neat tunebook for the night."
+        >
           <RecordDemo />
         </Feature>
 
-        <Feature title="See what you can play." body="Find out how much of the night you could join in on. Tap the rest to start learning.">
+        <Feature
+          id="learn"
+          eyebrow="02 · Learn the tunes"
+          title="Practise with accurate backing and play-along tracks."
+          body="Open any tune from your recordings or tunebooks in a full training interface. Follow the score as notes light up, switch between fiddle, flute, or whistle with guitar, and slow the tempo down until your fingers catch up."
+        >
+          <BookDemo tracks={tracks} />
+        </Feature>
+
+        <Feature
+          id="track"
+          eyebrow="03 · Play the tunes"
+          title="Track everything you can play."
+          body="Revisit your recordings and tunelists to see how much of the night you could join in on. Move tunes from learning to mastered as they settle in, and carry your whole repertoire in your pocket."
+        >
           <ProgressDemo />
         </Feature>
 
@@ -177,10 +321,11 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
   );
 }
 
-function Feature({ title, body, children }: { title: string; body: string; children: React.ReactNode }) {
+function Feature({ id, eyebrow, title, body, children }: { id: string; eyebrow: string; title: string; body: string; children: React.ReactNode }) {
   return (
-    <section className="lp-feature">
+    <section id={id} className="lp-feature">
       <motion.div className="lp-copy" {...rise}>
+        <p className="eyebrow lp-eyebrow">{eyebrow}</p>
         <h2>{title}</h2>
         <p>{body}</p>
       </motion.div>
