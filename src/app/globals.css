@@ -271,7 +271,7 @@
 /* The tunes table: the emoji sits with the title, and columns give way as the table narrows (the Added date first, then
    Type and Key, which fold into the line under the title). */
 .tunes-table{container-type:inline-size}.tunes-table .table-head,.tunes-table .table-cell:not(:first-child){white-space:nowrap}
-.table-title-line{display:flex;align-items:center;gap:6px;min-width:0}.tune-icon-inline{width:26px;height:28px;margin-left:-3px;font-size:19px}.tunes-table .table-meta{padding-left:29px}
+.table-title-line{display:flex;align-items:center;gap:6px;min-width:0}.tune-icon-inline{width:26px;height:28px;margin-left:-3px;font-size:19px}.tune-icon-inline[data-plain]{opacity:.35;filter:grayscale(1)}.tunes-table .table-meta{padding-left:29px}.table-in-list{display:inline-flex;align-items:center;gap:5px;padding:0 6px;color:var(--learned);font-size:12px;font-weight:600;white-space:nowrap}
 @container (max-width:860px){.tunes-table .table-added{display:none}}
 @container (max-width:720px){.tunes-table .table-wide{display:none}.tunes-table .table-narrow{display:inline}}
 

@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bookShares, bookEntries, bookPopularTunes, catalogSettings, catalogTunes, folders, savedTunes, setTunes, tunebooks, tuneSets } from "@/db/schema";
 import { user } from "@/db/auth-schema";
@@ -8,6 +8,7 @@ import { displaySetName } from "@/lib/set-name";
 import { getTuneEmojiSuggestion, withTuneEmojis } from "@/lib/tune-emojis";
 import { withTunePractice, type TuneWithPractice } from "@/lib/tune-practice";
 import { libraryStatus } from "@/lib/library-status";
+import { matchesPreparedWord, preparedSearchRank, prepareSearchTune, searchWords, type PreparedSearchTune } from "@/lib/titles";
 import type { AbilityLevel } from "@/lib/ability";
 
 type Tune = TuneWithPractice & { oftenPlayed: boolean };
@@ -117,22 +118,79 @@ export async function getSavedTune(userId: string, id: string) {
 /** Lower case, letters, digits and spaces only, with no leading article: how titles are compared. */
 export const bare = (text: string) => text.toLowerCase().replace(/^(the|an?)\s+/, "").replace(/[^a-z0-9 ]/g, "").trim();
 
-export async function searchCatalog(query: string) {
+export type CatalogSettingRow = {
+  settingId: number;
+  tuneId: number;
+  title: string;
+  kind: string | null;
+  meter: string | null;
+  mode: string | null;
+  contributor: string | null;
+  composer: string | null;
+  sourceUrl: string;
+  tunebooks: number;
+};
+
+type IndexedCatalogSetting = CatalogSettingRow & { prepared: PreparedSearchTune };
+
+const globalCatalog = globalThis as typeof globalThis & {
+  __tunebookCatalogDb?: object;
+  __tunebookCatalogIndex?: Promise<IndexedCatalogSetting[]>;
+};
+
+/**
+ * Loads the catalog's searchable metadata once per server process (without the heavy ABC text),
+ * so title, type, key and composer searches answer in a millisecond without a database round-trip.
+ */
+export function getCatalogIndex(): Promise<IndexedCatalogSetting[]> {
+  const currentDb = db as object;
+  if (globalCatalog.__tunebookCatalogDb === currentDb && globalCatalog.__tunebookCatalogIndex) {
+    return globalCatalog.__tunebookCatalogIndex;
+  }
+  const promise = (async () => {
+    const result = await db.execute<CatalogSettingRow>(sql`
+      SELECT cs.setting_id AS "settingId", cs.tune_id AS "tuneId", cs.title, cs.kind, cs.meter, cs.mode,
+        cs.contributor, cs.composer, cs.source_url AS "sourceUrl", coalesce(ct.tunebooks, 0)::integer AS tunebooks
+      FROM catalog_settings cs LEFT JOIN catalog_tunes ct ON ct.tune_id = cs.tune_id
+      ORDER BY cs.tune_id, cs.setting_id
+    `);
+    if (!result.rows.length && globalCatalog.__tunebookCatalogDb === currentDb) {
+      globalCatalog.__tunebookCatalogIndex = undefined;
+    }
+    return result.rows.map((row) => ({ ...row, prepared: prepareSearchTune(row) }));
+  })().catch((error) => {
+    if (globalCatalog.__tunebookCatalogDb === currentDb) globalCatalog.__tunebookCatalogIndex = undefined;
+    throw error;
+  });
+  globalCatalog.__tunebookCatalogDb = currentDb;
+  globalCatalog.__tunebookCatalogIndex = promise;
+  return promise;
+}
+
+export async function searchCatalog(query: string): Promise<CatalogSettingRow[]> {
   const trimmed = query.trim().slice(0, 100);
   if (!trimmed) return [];
+  const settings = await getCatalogIndex();
   const parsed = parseSessionUrl(trimmed);
   if (parsed) {
-    return db.select().from(catalogSettings)
-      .where(parsed.settingId ? eq(catalogSettings.settingId, parsed.settingId) : eq(catalogSettings.tuneId, parsed.tuneId))
-      .orderBy(asc(catalogSettings.settingId)).limit(100);
+    return settings
+      .filter((s) => (parsed.settingId ? s.settingId === parsed.settingId : s.tuneId === parsed.tuneId))
+      .sort((a, b) => a.settingId - b.settingId)
+      .slice(0, 100);
   }
-  // Titles are stored "Kesh, The", so a leading article is dropped: "The Kesh" and "Kesh" both find it.
-  const words = trimmed.replace(/^(the|an?)\s+/i, "") || trimmed;
-  const pattern = `%${words.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
-  return db.select().from(catalogSettings)
-    // Punctuation-blind too, so "cooleys" finds "Cooley's".
-    .where(or(ilike(catalogSettings.title, pattern), sql`regexp_replace(lower(${catalogSettings.title}), '[^a-z0-9 ]', '', 'g') LIKE ${`%${bare(words)}%`}`, sql`${catalogSettings.tuneId}::text = ${trimmed}`))
-    .orderBy(asc(catalogSettings.title), asc(catalogSettings.settingId)).limit(50);
+  const words = searchWords(trimmed);
+  const numericId = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+  if (!words.length && numericId === null) return [];
+  const matched: { setting: IndexedCatalogSetting; rank: number }[] = [];
+  for (const setting of settings) {
+    const idMatch = numericId !== null && (setting.tuneId === numericId || setting.settingId === numericId);
+    if (!idMatch && !words.every((word, index) => matchesPreparedWord(setting.prepared, word, index === words.length - 1))) continue;
+    matched.push({ setting, rank: preparedSearchRank(setting.prepared, words, numericId) });
+  }
+  matched.sort((a, b) => a.rank - b.rank || b.setting.tunebooks - a.setting.tunebooks || a.setting.title.localeCompare(b.setting.title) || a.setting.settingId - b.setting.settingId);
+  return matched.slice(0, 50).map(({ setting: { settingId, tuneId, title, kind, meter, mode, contributor, composer, sourceUrl, tunebooks } }) => ({
+    settingId, tuneId, title, kind, meter, mode, contributor, composer, sourceUrl, tunebooks,
+  }));
 }
 
 export type CatalogTuneFilters = {
@@ -150,46 +208,59 @@ export function titleVariants(query: string) {
   const article = /^(the|an|a)\s+(.+)$/i.exec(trimmed);
   return article ? [trimmed, `${article[2]}, ${article[1][0].toUpperCase()}${article[1].slice(1).toLowerCase()}`] : [trimmed];
 }
-const likePattern = (value: string) => `%${value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
 
 // One row per tune: the first setting matching every filter represents the tune.
 export async function searchCatalogTunes(filters: CatalogTuneFilters) {
-  const conditions = [sql`true`];
-  const query = filters.query?.trim().slice(0, 100);
-  if (query) {
-    const parsed = parseSessionUrl(query);
-    if (parsed) conditions.push(parsed.settingId ? sql`cs.setting_id = ${parsed.settingId}` : sql`cs.tune_id = ${parsed.tuneId}`);
-    else conditions.push(sql`(${sql.join(titleVariants(query).map((title) => sql`cs.title ILIKE ${likePattern(title)}`), sql` OR `)} OR cs.tune_id::text = ${query})`);
-  }
-  if (filters.kind) conditions.push(sql`lower(cs.kind) = lower(${filters.kind})`);
-  if (filters.meter) conditions.push(sql`cs.meter = ${filters.meter}`);
-  if (filters.tonic) conditions.push(sql`cs.mode ~ ${`^${filters.tonic}[a-z]+$`}`);
-  if (filters.mode) conditions.push(sql`lower(cs.mode) ~ ${`^[a-g][#b]?${filters.mode.toLowerCase()}$`}`);
-  if (filters.minTunebooks) conditions.push(sql`coalesce(ct.tunebooks, 0) >= ${filters.minTunebooks}`);
-  const order = filters.sort === "title" ? sql`title ASC, "tuneId" ASC` : sql`tunebooks DESC, title ASC, "tuneId" ASC`;
-  const result = await db.execute<CatalogTune & { total: number }>(sql`
-    SELECT *, count(*) OVER ()::integer AS total FROM (
-      SELECT DISTINCT ON (cs.tune_id) cs.tune_id AS "tuneId", cs.setting_id AS "settingId", cs.title, cs.kind, cs.meter, cs.mode,
-        cs.source_url AS "sourceUrl", coalesce(ct.tunebooks, 0)::integer AS tunebooks,
-        count(*) OVER (PARTITION BY cs.tune_id)::integer AS "matchingSettings"
-      FROM catalog_settings cs LEFT JOIN catalog_tunes ct ON ct.tune_id = cs.tune_id
-      WHERE ${sql.join(conditions, sql` AND `)}
-      ORDER BY cs.tune_id, cs.setting_id
-    ) tunes
-    ORDER BY ${order} LIMIT ${filters.limit} OFFSET ${filters.offset}
-  `);
-  const total = result.rows[0]?.total ?? (filters.offset ? await countCatalogTunes(conditions) : 0);
-  return { total, tunes: result.rows as CatalogTune[] };
-}
+  const settings = await getCatalogIndex();
+  const query = filters.query?.trim().slice(0, 100) ?? "";
+  const parsed = query ? parseSessionUrl(query) : null;
+  const words = query && !parsed ? searchWords(query) : [];
+  const numericId = !parsed && /^\d+$/.test(query) ? Number(query) : null;
+  const kindFilter = filters.kind?.toLowerCase();
+  const tonicRe = filters.tonic ? new RegExp(`^${filters.tonic}[a-z]+$`) : null;
+  const modeRe = filters.mode ? new RegExp(`^[a-g][#b]?${filters.mode.toLowerCase()}$`, "i") : null;
+  const minTunebooks = filters.minTunebooks ?? 0;
 
-// An offset past the end returns no rows, so the total needs its own count.
-async function countCatalogTunes(conditions: SQL[]) {
-  const result = await db.execute<{ total: number }>(sql`
-    SELECT count(DISTINCT cs.tune_id)::integer AS total
-    FROM catalog_settings cs LEFT JOIN catalog_tunes ct ON ct.tune_id = cs.tune_id
-    WHERE ${sql.join(conditions, sql` AND `)}
-  `);
-  return result.rows[0]?.total ?? 0;
+  const byTune = new Map<number, { tune: CatalogTune; rank: number }>();
+  for (const s of settings) {
+    if (minTunebooks && s.tunebooks < minTunebooks) continue;
+    if (kindFilter && s.kind?.toLowerCase() !== kindFilter) continue;
+    if (filters.meter && s.meter !== filters.meter) continue;
+    if (tonicRe && !tonicRe.test(s.mode ?? "")) continue;
+    if (modeRe && !modeRe.test(s.mode ?? "")) continue;
+    if (parsed) {
+      if (parsed.settingId ? s.settingId !== parsed.settingId : s.tuneId !== parsed.tuneId) continue;
+    } else if (words.length || numericId !== null) {
+      const idMatch = numericId !== null && (s.tuneId === numericId || s.settingId === numericId);
+      if (!idMatch && !words.every((word, index) => matchesPreparedWord(s.prepared, word, index === words.length - 1))) continue;
+    }
+    const existing = byTune.get(s.tuneId);
+    if (existing) {
+      existing.tune.matchingSettings++;
+    } else {
+      byTune.set(s.tuneId, {
+        tune: {
+          tuneId: s.tuneId,
+          settingId: s.settingId,
+          title: s.title,
+          kind: s.kind,
+          meter: s.meter,
+          mode: s.mode,
+          tunebooks: s.tunebooks,
+          matchingSettings: 1,
+          sourceUrl: s.sourceUrl,
+        },
+        rank: preparedSearchRank(s.prepared, words, numericId),
+      });
+    }
+  }
+  const all = [...byTune.values()];
+  const titleCmp = (a: CatalogTune, b: CatalogTune) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0) || a.tuneId - b.tuneId;
+  all.sort(filters.sort === "title"
+    ? (a, b) => titleCmp(a.tune, b.tune)
+    : (a, b) => a.rank - b.rank || b.tune.tunebooks - a.tune.tunebooks || titleCmp(a.tune, b.tune));
+  const tunes = all.slice(filters.offset, filters.offset + filters.limit).map((entry) => entry.tune);
+  return { total: all.length, tunes };
 }
 
 export async function getCatalogTune(tuneId: number) {

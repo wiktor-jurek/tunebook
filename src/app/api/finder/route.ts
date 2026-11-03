@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/session";
-import { bare, getFinderTunes, searchCatalog } from "@/lib/library";
-import { displayTitle } from "@/lib/titles";
+import { getFinderTunes, searchCatalog } from "@/lib/library";
+import { tuneSearchRank } from "@/lib/titles";
 
 // The tune finder's lookups: `ids` for tunes it heard, or `q` for a tune someone names out loud.
 // Both answer in the same shape, so a searched tune shows exactly like a heard one.
@@ -14,10 +14,8 @@ export async function GET(request: Request) {
       const settings = await searchCatalog(query);
       const ids = [...new Set(settings.map((setting) => setting.tuneId))].slice(0, 20);
       const tunes = await getFinderTunes(user?.id ?? null, ids);
-      // Someone calling out a tune names it: the exact title first, then titles starting with those words, then the most played.
-      const words = bare(query);
-      const rank = (title: string) => { const t = bare(displayTitle(title)); return t === words ? 0 : t.startsWith(words) ? 1 : 2; };
-      tunes.sort((a, b) => rank(a.title) - rank(b.title) || b.tunebooks - a.tunebooks);
+      // Someone calling out a tune names it: the exact title (or title + type) first, then prefixes, then the most played.
+      tunes.sort((a, b) => tuneSearchRank(a, query) - tuneSearchRank(b, query) || b.tunebooks - a.tunebooks);
       return NextResponse.json({ tunes: tunes.slice(0, 8) });
     }
     const ids = (params.get("ids") || "").split(",").map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);

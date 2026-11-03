@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import * as Popover from "@radix-ui/react-popover";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AbilityMark } from "@/components/ability-mark";
-import { displayTitle, displaySetTitle } from "@/lib/titles";
+import { displayTitle, displaySetTitle, matchesTuneQuery } from "@/lib/titles";
 import { groupTunes, useGroupBy, type GroupBook } from "@/lib/tune-groups";
 import { AccountButton } from "@/components/session-shell";
 
@@ -105,7 +105,7 @@ export function SessionBook({ name, sections: given, searchable = false, groupab
   const router = useRouter();
   const [query, setQuery] = useState("");
   const words = query.trim().toLowerCase();
-  const matches = (tune: Tune) => !words || displayTitle(tune.title).toLowerCase().includes(words) || tune.title.toLowerCase().includes(words);
+  const matches = (tune: Tune) => !words || matchesTuneQuery(tune, query);
   const groupBy = useGroupBy();
   const matching = words ? given.flatMap((section): BookSection[] => section.kind === "tune" ? (matches(section.tune) ? [section] : [])
     : section.tunes.some(matches) ? [{ ...section, tunes: section.tunes.filter(matches) }] : []) : given;
@@ -248,7 +248,7 @@ function ReaderSearch({ pages, onPick }: { pages: Page[]; onPick: (index: number
   }, []);
   const words = query.trim().toLowerCase();
   const matches = pages.map((page, index) => ({ page, index }))
-    .filter(({ page }) => !words || displayTitle(page.tune.title).toLowerCase().includes(words) || page.tune.title.toLowerCase().includes(words)).slice(0, 8);
+    .filter(({ page }) => !words || matchesTuneQuery(page.tune, query)).slice(0, 8);
   const pick = (index: number) => { onPick(index); setOpen(false); setQuery(""); };
   return <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(""); }}>
     <Popover.Trigger asChild><Button variant="ghost" size="icon-sm" aria-label="Find a tune in this book" title="Find a tune (/)"><Search size={16} /></Button></Popover.Trigger>
