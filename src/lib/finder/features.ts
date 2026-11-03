@@ -1,6 +1,6 @@
 // The Tune finder's front end: a port of ml/tunebook_ml/pitchclass.py, so the browser feeds the
-// model exactly what it was trained on. 8 s of 16 kHz audio → 12 pitch classes × 400 frames,
-// KeyCanon'd. features.test.ts checks it against the Python output.
+// model exactly what it was trained on. 8 s of 16 kHz audio → 12 pitch classes and their 12 heights
+// (TUNEBOOK_FEATURES=height) × 400 frames, KeyCanon'd. features.test.ts checks it against the Python output.
 
 export const SAMPLE_RATE = 16000;
 export const N_FFT = 2048;
@@ -12,6 +12,9 @@ const MELODY_LOW = 55, MELODY_HIGH = 96; // G3 .. C7
 const HARMONICS: [number, number][] = [[0, 1.0], [12, 0.6], [19, 0.4], [24, 0.3]];
 const LOG_GAIN = 100;
 const NOTES = MELODY_HIGH + 24 + 1; // highest semitone a partial reaches
+// The shipped model takes heights after the pitch classes: where in the melody range each pitch class sounds,
+// so a leap up an octave is not a repeated note. Must match public/finder/model.onnx (ml/PIPELINE.md §11).
+export const CHANNELS = 24;
 
 // Periodic Hann window, as torch.hann_window.
 const hann = Float64Array.from({ length: N_FFT }, (_, n) => 0.5 - 0.5 * Math.cos((2 * Math.PI * n) / N_FFT));
@@ -143,20 +146,27 @@ export function keyShift(pcs: Float32Array): number {
   return ((rounded % 12) + 12) % 12;
 }
 
-/** Semitone power → KeyCanon'd pitch-class salience in [0, 1], (12 × FRAMES), bin 0 = C before the rotation. */
-export function features(semis: Float64Array): Float32Array {
+/** Semitone power → KeyCanon'd pitch-class salience in [0, 1], bin 0 = C before the rotation, then each pitch
+ *  class's height (its salience-weighted mean semitone, 0.1 at G3 to 1.0 at C7, times its salience):
+ *  (channels × FRAMES), the heights turned with their pitch classes. */
+export function features(semis: Float64Array, channels = CHANNELS): Float32Array {
   // The level is taken over all 128 MIDI rows in Python; rows above NOTES are silent and only shift the quantile's index.
   const all = new Float64Array(128 * FRAMES);
   all.set(semis);
   const level = Math.max(quantile(all, 0.995), 1e-10);
-  const pcs = new Float64Array(12 * FRAMES);
-  for (let k = 0; k <= MELODY_HIGH - MELODY_LOW; k++) {
-    const row = ((k + MELODY_LOW) % 12) * FRAMES;
+  const pcs = new Float64Array(12 * FRAMES), weighted = new Float64Array(12 * FRAMES);
+  const span = MELODY_HIGH - MELODY_LOW;
+  for (let k = 0; k <= span; k++) {
+    const row = ((k + MELODY_LOW) % 12) * FRAMES, position = 0.1 + (0.9 * k) / span; // torch.linspace(0.1, 1.0, 42)
     for (const [offset, weight] of HARMONICS) {
       const source = (MELODY_LOW + offset + k) * FRAMES;
-      for (let t = 0; t < FRAMES; t++) pcs[row + t] += weight * Math.log1p((LOG_GAIN * semis[source + t]) / level);
+      for (let t = 0; t < FRAMES; t++) {
+        const value = weight * Math.log1p((LOG_GAIN * semis[source + t]) / level);
+        pcs[row + t] += value; weighted[row + t] += value * position;
+      }
     }
   }
+  const before = Float64Array.from(pcs); // each pitch class's salience before the drone is taken off
   // A tone held through the whole window (drone, hum) is not melody.
   for (let k = 0; k < 12; k++) {
     let low = Infinity;
@@ -164,10 +174,13 @@ export function features(semis: Float64Array): Float32Array {
     for (let t = 0; t < FRAMES; t++) pcs[k * FRAMES + t] = Math.max(pcs[k * FRAMES + t] - low, 0);
   }
   const scale = Math.max(quantile(pcs, 0.99), 1e-6);
-  const raw = Float32Array.from(pcs, (v) => Math.min(v / scale, 1));
+  const raw = new Float32Array(channels * FRAMES);
+  for (let i = 0; i < 12 * FRAMES; i++) raw[i] = Math.min(pcs[i] / scale, 1);
+  if (channels === 24) for (let i = 0; i < 12 * FRAMES; i++) raw[12 * FRAMES + i] = raw[i] * (weighted[i] / Math.max(before[i], 1e-6));
   const shift = keyShift(raw);
-  const out = new Float32Array(12 * FRAMES);
-  for (let k = 0; k < 12; k++) out.set(raw.subarray(((k + shift) % 12) * FRAMES, ((k + shift) % 12 + 1) * FRAMES), k * FRAMES);
+  const out = new Float32Array(channels * FRAMES);
+  for (let group = 0; group < channels; group += 12)
+    for (let k = 0; k < 12; k++) out.set(raw.subarray((group + (k + shift) % 12) * FRAMES, (group + (k + shift) % 12 + 1) * FRAMES), (group + k) * FRAMES);
   return out;
 }
 

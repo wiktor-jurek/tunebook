@@ -841,13 +841,31 @@ audio included: private storage, never served or redistributed.
 - **Hard negatives in the fine-tune** (ft-hard, 2026-10-31: ft-clean's recipe with `--hard-classes 8`) did not help.
   With 32-window centres, 8 parts and the prior on `clips-v4.pt`, YouTube / albums / bands were 85.5 / 74.3 / 51.6%,
   against ft-clean's 86.4 / 74.3 / 51.6%. At 192 dimensions they were 84.3 / 73.1 / 51.6% against 85.5 / 73.7 / 51.6%.
-- **Octave information (running 2026-10-31, `scratch/octave.sh` on mantis).** Folding octaves makes a leap up an
-  octave read as a repeated note. `TUNEBOOK_FEATURES=height` adds 12 height channels to the front end
-  (`pitchclass.py`): each pitch class's salience-weighted mean semitone, scaled 0.1 to 1 across G3 to C7. The
-  height-channel caches are kept apart (`classifier.cache_path`: `renders-h/`, `yue-h.pt`, `found_train-h.pt`,
-  `clips-v4-h.pt`). The whole chain runs again with stage 1, stage 2 and ft-clean's recipes, against a 12-channel
-  fine-tune from `cur2r-full` with the same recipe (ft-rc). Both use `--yue-stride 4` to fit the larger pools in memory.
-  The browser's `features.ts` would need the same channels before a height model could ship.
+- **Octave information helps: the first significant model gain since simulated centres** (2026-11-01, `scratch/octave*.sh`).
+  Folding octaves makes a leap up an octave read as a repeated note. `TUNEBOOK_FEATURES=height` adds 12 height
+  channels to the front end (`pitchclass.py`): each pitch class's salience-weighted mean semitone, scaled 0.1 to 1
+  across G3 to C7, times its salience. KeyCanon turns both groups of 12 together. The height caches are kept apart
+  (`classifier.cache_path`: `renders-h/`, `yue-h.pt` built 8 s apart, `found_train-h.pt`, and `clips-v4-h.pt`, which
+  holds exactly clips-v4's clips). Renders and found windows are stored as uint8 so the pools fit (§13).
+  The whole chain was run again with the same recipes: stage 1 `cur1-h`, stage 2 `cur2-h` (60k), then `ft-h` with
+  ft-clean's recipe. The baseline `ft-rc` is the same fine-tune from the 12-channel `cur2r-full`; both use YuE2
+  windows 8 s apart. Scored with 32-window simulated centres, 8 parts and the prior, on the same clips:
+
+  | Head | 12 ch: YouTube / albums / bands | 24 ch | Paired, all real clips |
+  |---|---|---|---|
+  | 384 × 8 | 86.4 / 72.6 / 48.4% | 85.5 / 77.1 / 48.4% | +13 / −7, p 0.26 (albums +9 / −1, p 0.02) |
+  | **192 × 8** | 85.1 / 70.3 / 48.4% | **85.5 / 75.4 / 48.4%** | **+14 / −4, p 0.03 (albums +9 / −0, p 0.004)** |
+  | 128 × 8 | 80.6 / 70.3 / 45.2% | 84.3 / 74.9 / 48.4% | +25 / −7, p 0.002 |
+
+  Sessions are 99.4% for both. With the learned head the 24-channel model looked worse (YouTube 69.8% against
+  74.0%), the same trap as before: judge models by their simulated centres. Height features also shrink better
+  (128 dimensions loses 3 YouTube clips, against 14). Training batches were far easier from the start (50% against
+  21% top-1 at stage 2 step 4,000), but most of that did not carry over to real audio.
+  **Leak check:** `found_train-h.pt` (built 2026-10-31) has 8 album sections of two tunes (1552, 472) that
+  `found_train.pt` lacks, and the albums test set holds 8 clips of those tunes. None of the 9 gained album clips is
+  one of them, so the gain stands. But the found manifest's splits have moved since `found_train.pt` was built:
+  check them before rebuilding either cache. To ship: port the height channels to `features.ts` (and its fixture),
+  build 128-window centres for ft-h, export at 192 dimensions with the hubness offset, and check on `clips-v4-h.pt`.
 - **Switch the tools to the data home:** the collector, `sessions.py` and the fetchers write to `ml`; build training from frozen `ml.datasets` with leak checks, and record runs in `ml.runs`.
 - **Grow the test set where it is thinnest.** Every recipe change since 2026-10-29 has landed inside the error bars. Bands has 33 clips, the 1,200+ album labels are unchecked, and the sessions set is one band in one room. The labeller could confirm labels the engines agree with and queue only the disagreements: that stays unbiased as long as every disagreement is reviewed. Collect rarer tunes too (only 15% of tunes ranked 501–2,000 have any real recording).
 - **Same-name labels:** fix the ones in §9 (2026-10-31), and have the labeller warn when a label's title belongs to more than one tune and flag clips where the engines agree on the namesake. These labels also feed `found_train.pt`.

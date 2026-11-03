@@ -26,15 +26,16 @@ describe("tune finder features", () => {
   it("match the Python front end", () => {
     const features = windowFeatures(testSignal());
     let worst = 0;
-    for (let k = 0; k < 12; k++) for (let t = 0; t < FRAMES; t++) worst = Math.max(worst, Math.abs(features[k * FRAMES + t] - fixture.features[k][t]));
+    expect(features.length).toBe(fixture.features.length * FRAMES);
+    for (let k = 0; k < fixture.features.length; k++) for (let t = 0; t < FRAMES; t++) worst = Math.max(worst, Math.abs(features[k * FRAMES + t] - fixture.features[k][t]));
     expect(worst).toBeLessThan(2e-3);
   });
 
   it("rotate to the same key as Python", () => {
     // Undo the fixture's rotation and check the shift is found again.
     const canon = Float32Array.from(fixture.features.flat());
-    const raw = new Float32Array(12 * FRAMES);
-    for (let k = 0; k < 12; k++) raw.set(canon.subarray(k * FRAMES, (k + 1) * FRAMES), ((k + fixture.shift) % 12) * FRAMES);
+    const raw = new Float32Array(canon.length);
+    for (let k = 0; k < canon.length / FRAMES; k++) raw.set(canon.subarray(k * FRAMES, (k + 1) * FRAMES), (Math.floor(k / 12) * 12 + ((k % 12) + fixture.shift) % 12) * FRAMES);
     expect(keyShift(raw)).toBe(fixture.shift);
   });
 

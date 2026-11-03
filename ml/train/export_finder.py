@@ -116,7 +116,8 @@ def hubness(model: c.Classifier, tune_ids: list[int], reference: str) -> torch.T
     index = {t: i for i, t in enumerate(tune_ids)}
     total, n = torch.zeros(len(tune_ids)), torch.zeros(len(tune_ids))
     for row in torch.load(reference, weights_only=False):
-        x = pitchclass.keycanon(row["windows"].float())
+        x = row["windows"].float() / (255 if row["windows"].dtype == torch.uint8 else 1)  # height caches are uint8 (x255)
+        x = pitchclass.keycanon(x)
         mean = torch.cat([model.cosines(embed(model, x[i:i + 64])) for i in range(0, len(x), 64)]).mean(0)
         other = torch.ones(len(tune_ids))
         if row["tune_id"] in index:

@@ -3,7 +3,7 @@
 // Audio never leaves this worker.
 
 import { Decoder, popularityPrior } from "@/lib/finder/decode";
-import { windowFeatures, FRAMES, SAMPLE_RATE, WINDOW_SAMPLES } from "@/lib/finder/features";
+import { windowFeatures, CHANNELS, FRAMES, SAMPLE_RATE, WINDOW_SAMPLES } from "@/lib/finder/features";
 import { resample } from "@/lib/finder/resample";
 import type { FinderRequest, FinderResponse } from "@/lib/finder/protocol";
 
@@ -77,7 +77,7 @@ async function score(samples: Float32Array, rate: number) {
   let energy = 0;
   for (const s of audio) energy += s * s;
   if (Math.sqrt(energy / audio.length) < SILENCE) { post({ type: "quiet" }); return; }
-  const input = new ort.Tensor("float32", windowFeatures(audio), [1, 12, FRAMES]);
+  const input = new ort.Tensor("float32", windowFeatures(audio), [1, CHANNELS, FRAMES]);
   const output = await session.run({ windows: input });
   const verdict = decoder.push(output.cosines.data as Float32Array);
   post({ type: "verdict", status: verdict.status, margin: verdict.margin, ms: Math.round(performance.now() - started),
