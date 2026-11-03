@@ -13,7 +13,7 @@ mostly kept for evaluation.
 
 ```
 The Session catalog (55k settings, 23k tunes)
-   │  scripts/export-melodies.ts (abcjs)
+   │  apps/web/scripts/export-melodies.ts (abcjs)
    ▼
 data/catalog.jsonl.gz ── played-out melody of every setting: pitches, durations, starts
    │
@@ -37,7 +37,7 @@ audio ─► pitchclass.py: STFT → HPSS → semitones → harmonic salience �
 
 ## 1. The catalog
 
-`scripts/export-melodies.ts` (run from the repo root) plays every The Session setting
+`apps/web/scripts/export-melodies.ts` (run from `apps/web`) plays every The Session setting
 through abcjs and writes `ml/data/catalog.jsonl.gz`: one row per setting with `tuneId`,
 `settingId`, `kind`, `meter`, `mode`, and the played-out melody (repeats expanded) as MIDI
 `pitches`, `durations` and `starts` in 1/48 of a whole note.
@@ -168,7 +168,7 @@ shipped model can be retrained on openly licensed or donated audio alone.
 ## 7. Features (`tunebook_ml/pitchclass.py`)
 
 All audio, real or rendered, goes through the same front end; simulated windows join it at
-the semitone spectrogram. The browser runs a line-for-line port (`src/lib/finder/features.ts`).
+the semitone spectrogram. The browser runs a line-for-line port (`apps/web/src/lib/finder/features.ts`).
 
 | Step | Setting |
 |---|---|
@@ -350,7 +350,7 @@ the simulated mean for the other 2,876, which include every benchmark tune. Real
 simulated centres than to learnt ones, so those tunes then win too often: on the holdout, seen tunes
 fell 80 → 73% while unseen rose 70 → 78%. A cosine offset of 0.03 on the simulated group (`export
 --sim-centres FILE --sim-offset 0.03`, built into the ONNX output) balances the two groups (77 / 76%).
-Shipped as `public/finder/model.onnx` (cache `tune-finder-v3`): int8 YouTube (all 368) 75.1 → 80.4%,
+Shipped as `apps/web/public/finder/model.onnx` (cache `tune-finder-v3`): int8 YouTube (all 368) 75.1 → 80.4%,
 albums 62.5 → 78.1%, bands 54.7 → 53.3%; at the 0.03 margin it answers 84% of clips and is right 90%.
 The offset was chosen on the holdout, so its holdout figure flatters it slightly; any offset from 0
 to 0.04 gives about the same YouTube and album gains.
@@ -439,7 +439,7 @@ The previous finder (diag-e, hybrid head, 22 MB) scores YouTube 78.8%, albums 69
 clips. At a top-two margin of 0.03, the new model answers 81.6% of YouTube clips and is right on 95%
 of them; the old one answered 84% and was right on 90%. onnxruntime-web 1.20.1 WASM runs
 `MatMulNBits` at about 90 ms per window on a Mac, single-threaded, against 55 ms for the old model.
-The old file is kept as `public/finder/model-diag-e-hybrid.onnx.bak`.
+The old file is kept as `apps/web/public/finder/model-diag-e-hybrid.onnx.bak`.
 
 ### 2026-10-31: what is left to gain from decoding, and where the errors are
 
@@ -624,7 +624,7 @@ points; they have not been re-measured on the current one.
 
 Tunebook, FolkFriend (open source, its command-line build) and JigRipper (its public web model,
 replayed offline; never shipped) on the same clips, each hearing the whole clip. `benchmark.py` writes
-`src/lib/finder/benchmark.json` (answers and links only). An engine not rerun keeps its earlier
+`apps/web/src/lib/finder/benchmark.json` (answers and links only). An engine not rerun keeps its earlier
 answers, so a new model only needs `--tunebook --timing`. Each scenario names a winner only when
 the leader beats the runner-up on the same clips (exact McNemar, p < 0.05). 2026-10-30, hybrid model,
 539 clips (before the leak fix):
@@ -736,16 +736,16 @@ browser code is unchanged. Exported 4-bit file, eval clips, without / with the p
 | **192 dimensions, 128 windows per tune (shipped)** | **36 MB** | **83.3% / 85.3%** | **68.5% / 69.1%** | **45.5%** |
 
 All within 2 clips (§9, "how small the head can get"). The previous file is kept as
-`public/finder/model-ft-clean-p8.onnx.bak`, and both exports are on mantis in `scratch/finder-128x16-p8-d*`.
+`apps/web/public/finder/model-ft-clean-p8.onnx.bak`, and both exports are on mantis in `scratch/finder-128x16-p8-d*`.
 
 **Since 2026-10-31 evening** (cache `tune-finder-v6`) the same finder also subtracts each tune's hubness offset
 (`--hub-reference cache/classifier/found_train.pt`, §9). Exported 4-bit file on `clips-v4.pt` with the prior:
 YouTube 87.6%, albums 72.6%, bands 51.6%, against 86.4%, 72.6% and 48.4% before. At the 0.03 margin it answers
 85% of YouTube clips and is right on 94% of those. Earlier checkpoints of ft-clean (steps 1500, 2000 and 2500)
 were no better than step 4000 under simulated centres. The 192-dimension file without the offset is kept as
-`public/finder/model-d192.onnx.bak`.
+`apps/web/public/finder/model-d192.onnx.bak`.
 
-**Runtime** (`src/lib/finder/`):
+**Runtime** (`apps/web/src/lib/finder/`):
 - **Capture**: `getUserMedia` with echo cancellation, noise suppression and auto gain off
   (they are tuned for speech and smear music); an AudioWorklet copies samples into an 8 s ring
   at the device rate.
@@ -787,7 +787,7 @@ were no better than step 4000 under simulated centres. The 192-dimension file wi
 - **Sets**: each new confident tune is added to "Heard this session". `/api/finder` looks up
   names, popularity and whether the tune is already saved.
 
-Model files (`model.onnx`, `tunes.json`, `popularity.json`) live in `public/finder/` (gitignored) or wherever `NEXT_PUBLIC_FINDER_MODEL_URL`
+Model files (`model.onnx`, `tunes.json`, `popularity.json`) live in `apps/web/public/finder/` (gitignored) or wherever `NEXT_PUBLIC_FINDER_MODEL_URL`
 and `NEXT_PUBLIC_FINDER_TUNES_URL` point.
 
 ## 12. Where it runs
@@ -823,7 +823,7 @@ audio included: private storage, never served or redistributed.
   band, collecting activity and dataset leak checks. `/admin/label` is the labeller, ported from
   `eval/review.py`: album sections, YouTube clips and session sets, with the waveform, music lane,
   engine guesses, trimming and splitting, tune search, tags and keyboard shortcuts, saved straight to
-  `ml.segments` (`src/lib/labels.ts`).
+  `ml.segments` (`apps/web/src/lib/labels.ts`).
 - **The files are outputs now**: `store_export.py` regenerates `eval/youtube.csv`, `eval/sessions.csv` and
   `data/found/manifest.jsonl` from the data home (cutting again any clip whose times changed in the
   labeller), so the training and evaluation tools read them unchanged. `eval/review.py` is retired.
@@ -864,15 +864,35 @@ audio included: private storage, never served or redistributed.
   **Leak check:** `found_train-h.pt` (built 2026-10-31) has 8 album sections of two tunes (1552, 472) that
   `found_train.pt` lacks, and the albums test set holds 8 clips of those tunes. None of the 9 gained album clips is
   one of them, so the gain stands. But the found manifest's splits have moved since `found_train.pt` was built:
-  check them before rebuilding either cache. To ship: port the height channels to `features.ts` (and its fixture),
-  build 128-window centres for ft-h, export at 192 dimensions with the hubness offset, and check on `clips-v4-h.pt`.
+  check them before rebuilding either cache.
+  **Not shipped: ft-h ties the shipped ft-clean** (2026-11-03, `scratch/hub_sweep.py`, per-clip hits in
+  `scratch/sweep-ft-{clean,h}.json` on mantis). Exported as shipped (128-window centres in 8 parts, 192 dimensions,
+  prior; `scratch/finder-height`, 36 MB): YouTube / albums / bands 85.1 / 76.0 / 48.4% against ft-clean's
+  87.6 / 73.1 / 51.6%, paired +9 / −11 (p 0.82): albums +8 / −3, YouTube +1 / −7. The hubness offset is not the
+  cause: without it on both, +9 / −7 (p 0.80), and ft-h barely moves with its weight (0 to 1.5). The +14 / −4 above
+  was against ft-rc, whose stage 2 has rests; ft-clean's (`cur2-full`) has none and is ahead of ft-rc by about the
+  same margin, so rests seem to cost what height gains. Next: height without rests (or rests as a decay), best
+  measured with the quick harness below before another 60k stage 2. `features.ts` (and `listen-core`) compute the
+  24 channels behind `CHANNELS` (fixture matches the export's to 1e-5); `CHANNELS` must match the shipped model.
 - **Switch the tools to the data home:** the collector, `sessions.py` and the fetchers write to `ml`; build training from frozen `ml.datasets` with leak checks, and record runs in `ml.runs`.
 - **Grow the test set where it is thinnest.** Every recipe change since 2026-10-29 has landed inside the error bars. Bands has 33 clips, the 1,200+ album labels are unchecked, and the sessions set is one band in one room. The labeller could confirm labels the engines agree with and queue only the disagreements: that stays unbiased as long as every disagreement is reviewed. Collect rarer tunes too (only 15% of tunes ranked 501–2,000 have any real recording).
 - **Same-name labels:** fix the ones in §9 (2026-10-31), and have the labeller warn when a label's title belongs to more than one tune and flag clips where the engines agree on the namesake. These labels also feed `found_train.pt`.
 - **Covering the rest of the catalogue with YuE2 is not supported** by the 2026-10-31 measurement: with simulated centres, a tune's own YuE2 audio does not help its real recordings. If more YuE2 is bought, buy variety (line-ups and feels it renders well) for any tunes, and measure it as a fine-tune first.
 - **Better simulated centres:** they beat the learned head, and finer parts beat coarser ones. Next: more windows per part (running, §9), cleaner or noisier simulation for the centres, and then the symbolic prototypes below.
 - **Hubness correction:** subtract from each tune's cosine the mean of its top-k cosines over a background of real or YuE2 windows of other tunes (CSLS). It is the principled form of the waltz offset and the old 0.03 simulated-centre offset.
-- **A quick test harness:** train on about 2,500 tunes that include every benchmark tune and score the eval clips against those candidates only. About 20 minutes a run instead of a 60k-step stage 2, so front-end and simulator ideas (G4, octave channels, rests as decay, slower tempos for learners and slow sessions) can be compared in an afternoon before any full rebuild.
+- **A quick test harness (`train/quick.py`, built 2026-11-03):** runs use the same 2,500 tunes
+  (`cache/classifier/quick-tunes.json`: the 562 eval-clip tunes, the 513 with found audio, a seeded random fill)
+  and score the real clips as the finder does (32-window simulated centres in 8 parts plus the prior) against those
+  tunes only; `quick.py compare` gives paired McNemar tests. **Warm starts only** (`--init`): from scratch, the
+  12-channel model sits on a plateau (5k steps: 6% simulated top-1, 0% on real clips; cur1-2k was the same, 8% at
+  8k), so a from-scratch run cannot rank ideas. Each run continues `cur2-full` (or `cur2-h` for height) for 4k steps
+  with the head trained, its rows mapped by tune id (`classifier.py --tune-set` with `--init`). 600 steps already
+  score 85.5 / 75.4 / 51.6%. About 30 minutes a run on mantis (700 windows/s with 8 workers, 5 GB). Switches:
+  `TUNEBOOK_FEATURES=height`, and `TUNEBOOK_RESTS=0` (notes back to back, in `classifier.Simulated.settings`, so
+  training and centres both follow it). Renders keep the timing they were built with, so runs use
+  `--render-fraction 0` unless renders are the question. Size changes (width, layers, stride) cannot warm start
+  from these backbones. First batch: `scratch/quick2.sh` (log `quick2.log`). Only paired differences on the same
+  tune set count.
 - **Session mode on whole recordings:** measure the live decoder on the session videos' labelled sets: the time to a right answer after each tune starts, and wrong answers at set changes. The 30-window history needs about 15 s to let a new tune take over. Test a change detector and The Session's set transitions (`data/sets.csv`, `data/transitions.json`) there.
 - **Bigger model:** JigRipper has about 1.7× our parameters (9 × 768 transformer layers against our 6 × 384), and a model that large needs a rented GPU. Also raise the low end of the range to G4, as JigRipper does; that needs a full feature rebuild.
 - **More real audio:** use album tracks with weak labels (multiple-instance learning). `found_train.pt` is now built by `classifier.py found-cache`.

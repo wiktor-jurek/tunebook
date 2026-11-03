@@ -20,8 +20,9 @@ from fetch_youtube import clip_path
 
 ROOT = Path(__file__).parent.parent
 REPO = ROOT.parent
+WEB = REPO / "apps" / "web"
 ENGINES = {
-    "symbolic": ["node", "--max-old-space-size=4096", "node_modules/.bin/tsx", "scripts/listen-engine.ts"],
+    "symbolic": ["node", "--max-old-space-size=4096", str(REPO / "node_modules/.bin/tsx"), "scripts/listen-engine.ts"],
 }
 
 
@@ -60,7 +61,7 @@ def main() -> None:
     runs.mkdir(exist_ok=True)
     clips, out = runs / f"{args.engine}.clips.json", runs / f"{args.engine}.jsonl"
     clips.write_text(json.dumps([{"id": row["id"], "path": row["path"]} for row in rows]))
-    subprocess.run([*ENGINES[args.engine], str(clips), str(out)], cwd=REPO, check=True)
+    subprocess.run([*ENGINES[args.engine], str(clips), str(out)], cwd=WEB, check=True)
     output = {line["id"]: line for line in map(json.loads, out.read_text().splitlines()) if line}
 
     groups: dict[str, list[dict]] = defaultdict(list)

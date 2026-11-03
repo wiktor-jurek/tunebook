@@ -1,0 +1,28 @@
+name: iOS
+
+on:
+  pull_request:
+    paths: ["apps/ios/**", "crates/listen-core/**", "crates/listen-ffi/**", "Cargo.lock", "justfile", ".github/workflows/ios.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/ios/**", "crates/listen-core/**", "crates/listen-ffi/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+      - run: brew install xcodegen just
+      - run: just ios-core
+      - run: just ios-project
+      - name: Build for the simulator
+        run: xcodebuild -project apps/ios/TuneCompanion.xcodeproj -scheme TuneCompanion -destination "generic/platform=iOS Simulator" -quiet build

@@ -3,7 +3,7 @@
 Renders are named {tune}-s{setting}-{n} (yue/events.py --setting) or, for the first
 Homer's test, {tune}-{n}. Labels come from each request's style prompt, or from
 events.LINE_UPS when the request folder is gone. Then `bash yue/upload.sh` puts the files
-in B2 under playalong/, and `npx tsx scripts/import-playalongs.ts` registers them.
+in B2 under playalong/, and `npx tsx scripts/import-playalongs.ts` (from apps/web) registers them.
 
     uv run python yue/playalong.py cache/yue/homer-out cache/yue/listen-out --requests cache/yue/homer cache/yue/listen
 

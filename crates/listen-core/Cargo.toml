@@ -1,0 +1,11 @@
+[package]
+name = "listen-core"
+version = "0.1.0"
+description = "Tune Companion's listen engine: audio front end and decoder, shared by web, iOS and Android"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dev-dependencies]
+serde_json = "1"

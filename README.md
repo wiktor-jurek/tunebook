@@ -4,12 +4,18 @@ Tune Companion is a simple place to collect tunes from [The Session](https://the
 
 Built with Next.js, PostgreSQL, Better Auth, Drizzle, and abcjs. The player shows the current note and lets you change tempo, volume, and instrument.
 
+## Repository layout
+
+This is a monorepo: the web app lives in `apps/web`, native apps in `apps/ios` (SwiftUI) and `apps/android` (Kotlin and Compose), and the listen engine's signal processing in Rust under `crates/`, shared by all three (UniFFI for the apps, WebAssembly for the web). `packages/tokens` turns the web's design tokens into Swift and Kotlin. `ml/` trains the listen model. See `AGENTS.md` for the map and `justfile` for every task (`just` lists them); `just setup` installs the toolchains.
+
+npm commands below run from the repository root, which forwards them to `apps/web` through npm workspaces.
+
 ## Local development
 
 Requires Node.js 24 and access to a PostgreSQL server.
 
 1. Run `npm ci`.
-2. Copy `.env.example` to `.env`, set `DATABASE_URL` to an existing PostgreSQL database, and set `BETTER_AUTH_SECRET` to a long random value. Keep `.env` private.
+2. Copy `apps/web/.env.example` to `apps/web/.env`, set `DATABASE_URL` to an existing PostgreSQL database, and set `BETTER_AUTH_SECRET` to a long random value. Keep `.env` private.
 3. Configure SMTP for email/password signup and password reset. Configure Google OAuth if you want Google sign-in.
 4. Run `npm run db:migrate`.
 5. Run `npm run catalog:sync` to populate the search catalog from The Session dump. Sync is idempotent and updates the catalog while each saved tune stays a snapshot.
@@ -23,7 +29,7 @@ The catalog sync reads `csv/tunes.csv` from [TheSession-data](https://github.com
 
 ## Coolify
 
-1. Create an application from this repository with Dockerfile deployment. Use port `3000` and `/api/health` as the health URL.
+1. Create an application from this repository with Dockerfile deployment (the root `Dockerfile` builds `apps/web`). Use port `3000` and `/api/health` as the health URL.
 2. Set runtime environment variables from `.env.example`. Set `DATABASE_URL` to a PostgreSQL database reachable from Coolify. Set `BETTER_AUTH_URL` to the exact public HTTPS URL (`https://tunecompanion.com`), and register `https://YOUR_DOMAIN/api/auth/callback/google` in Google Cloud Console if using Google sign-in.
 3. Ensure the Coolify host can reach the PostgreSQL server on its configured port.
 4. Deploy. The container applies committed Drizzle migrations before starting Next.js.

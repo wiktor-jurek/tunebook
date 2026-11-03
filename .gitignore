@@ -5,9 +5,37 @@ node_modules
 .env.*.local
 *.tsbuildinfo
 coverage
+.DS_Store
 
 # Tune finder model, exported by ml/train/export_finder.py; too large for git
-public/finder/
+apps/web/public/finder/
 
 # ML working files: data, logs and models that never belong in the repo
 ml/scratch/
+
+# Rust
+target/
+
+# Built from crates/ by the justfile, never committed
+packages/listen-wasm/
+apps/ios/Packages/TuneKit/listen_ffiFFI.xcframework/
+apps/ios/Packages/TuneKit/Sources/ListenCore/Generated/
+apps/android/core/listen/src/main/jniLibs/
+apps/android/core/listen/src/main/java/uniffi/
+
+# Xcode (the project is generated from apps/ios/project.yml by XcodeGen)
+apps/ios/*.xcodeproj/
+apps/ios/build/
+xcuserdata/
+DerivedData/
+*.xcuserstate
+.swiftpm/
+
+# Android and Gradle
+.gradle/
+apps/android/**/build/
+apps/android/local.properties
+.kotlin/
+*.apk
+*.aab
+.idea/

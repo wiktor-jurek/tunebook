@@ -7,7 +7,7 @@ in cache/youtube/source/), uploads it beside the audio in the bucket and records
 t in seconds into the video). The videos come from eval/sessions.csv and eval/youtube.csv, which store_export.py
 writes from the data home.
 
-- tunebook: the Tune finder's model (public/finder/model.onnx), an 8 s window every 2 s.
+- tunebook: the Tune finder's model (apps/web/public/finder/model.onnx), an 8 s window every 2 s.
 - jigripper: JigRipper's public model replayed offline by jr-session.cjs, kept outside this repo like
   jr-eval.cjs (benchmark.py). Its files are for benchmarking and labelling only and never ship.
 - folkfriend: FolkFriend's command-line build (benchmark.py), on 12 s windows every 4 s: it transcribes,
@@ -184,7 +184,7 @@ def main() -> None:
                         help="whole sessions, YouTube clips' sources, or album sections (data/found/manifest.jsonl)")
     parser.add_argument("--no-publish", action="store_true", help="write the files beside the audio but leave the bucket and data home alone")
     parser.add_argument("--engines", default=",".join(ENGINES), help="comma-separated: " + ", ".join(ENGINES))
-    parser.add_argument("--model", type=Path, default=REPO / "public" / "finder" / "model.onnx")
+    parser.add_argument("--model", type=Path, default=REPO / "apps" / "web" / "public" / "finder" / "model.onnx")
     parser.add_argument("--jigripper-harness", type=Path, help="jr-session.cjs, kept outside the repo")
     parser.add_argument("--jigripper-dir", type=Path, help="JigRipper's downloaded web files")
     parser.add_argument("--jigripper-modules", type=Path, help="node_modules with onnxruntime-node (default: beside the harness)")

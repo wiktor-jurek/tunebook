@@ -1,6 +1,6 @@
 """Tune recognisers on the same real clips, for the Tune finder's benchmark page.
 
-- Tunebook: the shipped browser model (public/finder/model.onnx) on each clip's features (classifier.py prepare).
+- Tunebook: the shipped browser model (apps/web/public/finder/model.onnx) on each clip's features (classifier.py prepare).
 - FolkFriend (https://github.com/TomWyllie/folkfriend, GPL-3.0): its command-line build on the same audio,
   upsampled to the 48 kHz its frames are sized for.
 - JigRipper (jigripper.com): its public web model and front end, replayed offline by a harness kept outside
@@ -11,7 +11,7 @@
 
 Every engine hears the whole clip, then (with --timing) only its first 2, 4, ... 30 seconds:
 the answer at each length shows how soon it locks on. Engines not asked for this run keep their
-answers from the existing output, so a new Tunebook model only reruns Tunebook. Writes src/lib/finder/benchmark.json:
+answers from the existing output, so a new Tunebook model only reruns Tunebook. Writes apps/web/src/lib/finder/benchmark.json:
 answers and links, no audio.
 
 FolkFriend is a Linux build, so it runs in its build image (which also has the OpenSSL it links):
@@ -87,7 +87,7 @@ def answer(top: int | None, rank: int | None) -> dict:
     return {"top": top, "rank": rank}
 
 
-# The finder adds POPULARITY_WEIGHT * ln(tunebooks + 1) to each tune's mean cosine (src/lib/finder/decode.ts).
+# The finder adds POPULARITY_WEIGHT * ln(tunebooks + 1) to each tune's mean cosine (apps/web/src/lib/finder/decode.ts).
 POPULARITY_WEIGHT = 0.006
 
 
@@ -252,7 +252,7 @@ def tunepal(rows: list[dict], db: Path, timing: bool) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tunebook", action="store_true", help="run the Tune finder's model")
-    parser.add_argument("--model", type=Path, default=REPO / "public" / "finder" / "model.onnx")
+    parser.add_argument("--model", type=Path, default=REPO / "apps" / "web" / "public" / "finder" / "model.onnx")
     parser.add_argument("--folkfriend", type=Path, help="the folkfriend binary")
     parser.add_argument("--folkfriend-home", type=Path, help="HOME holding .folkfriend/folkfriend-non-user-data.json")
     parser.add_argument("--folkfriend-version", default="", help="commit the binary was built from")
@@ -264,7 +264,7 @@ def main() -> None:
     parser.add_argument("--timing-only", action="store_true", help="keep the whole-clip answers from the existing output")
     parser.add_argument("--clips", type=Path, default=c.ML / "cache" / "classifier" / "clips-v2.pt")
     parser.add_argument("--reference", type=Path, default=c.CLIPS, help="YouTube clips missing from this file form the holdout")
-    parser.add_argument("--out", type=Path, default=REPO / "src" / "lib" / "finder" / "benchmark.json")
+    parser.add_argument("--out", type=Path, default=REPO / "apps" / "web" / "src" / "lib" / "finder" / "benchmark.json")
     args = parser.parse_args()
 
     rows = clips(args.clips, args.reference)

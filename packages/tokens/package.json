@@ -1,0 +1,10 @@
+{
+  "name": "@tunecompanion/tokens",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "extract": "node scripts/extract.mjs",
+    "generate": "node scripts/generate.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}

@@ -1,0 +1,79 @@
+[
+ {
+  "tune": {
+   "title": "Cooley's",
+   "kind": "reel",
+   "meter": "4/4",
+   "mode": "Edorian",
+   "abc": "|:D2|EBBA B2 EB|B2 AB dBAG|FDAD BDAD|FDAD dAFD|\r\nEBBA B2 EB|B2 AB defg|afec dBAF|DEFD E2:|\r\n|:gf|eB B2 efge|eB B2 gedB|A2 FA DAFA|A2 FA defg|\r\neB B2 eBgB|eB B2 defg|afec dBAF|DEFD E2:|"
+  },
+  "phrase": "X:1\nM:4/4\nL:1/8\nK:Edorian\nD2 | EBBA B2 EB | B2 AB dBAG |]",
+  "score": "X:1\nM:4/4\nL:1/8\nQ:1/4=100\nK:Edorian\n|:D2|EBBA B2 EB|B2 AB dBAG|FDAD BDAD|FDAD dAFD|\r\nEBBA B2 EB|B2 AB defg|afec dBAF|DEFD E2:|\r\n|:gf|eB B2 efge|eB B2 gedB|A2 FA DAFA|A2 FA defg|\r\neB B2 eBgB|eB B2 defg|afec dBAF|DEFD E2:|"
+ },
+ {
+  "tune": {
+   "title": "Bucks Of Oranmore, The",
+   "kind": "reel",
+   "meter": "4/4",
+   "mode": "Dmajor",
+   "abc": "A2FA A2dB|A2FA BEE2|A2FA A2Bd|egfd edBd|\r\nA2FA A2dB|A2FA BEE2|DEFG AFAB|defd edBd||\r\nADFD A2dB|ADFD BEE2|ADFD A2Bd|egfd edBd|\r\nADFD A2dB|ADFD BEE2|DEFG AFAB|defd efge||\r\na2fd edef|a2fd ed B2|a2fd edef|gefd edB2|\r\na2fd edef|a2fd edB2|faaf bfaf|defd edBd||\r\nf2df e2de|f2df edBd|f2df e2de|gefd edBd|\r\nf2df e2de|f2df edBd|faaf bfaf|defd edBd||\r\nAdfd edfd|Adfd edBd|Adfd edfd|gefd edBd|\r\nAdfd edfd|Adfd edB2|faaf bfaf|defd edBd||"
+  },
+  "phrase": "X:1\nM:4/4\nL:1/8\nK:Dmajor\nA2FA A2dB | A2FA BEE2 |]",
+  "score": "X:1\nM:4/4\nL:1/8\nQ:1/4=100\nK:Dmajor\nA2FA A2dB|A2FA BEE2|A2FA A2Bd|egfd edBd|\r\nA2FA A2dB|A2FA BEE2|DEFG AFAB|defd edBd||\r\nADFD A2dB|ADFD BEE2|ADFD A2Bd|egfd edBd|\r\nADFD A2dB|ADFD BEE2|DEFG AFAB|defd efge||\r\na2fd edef|a2fd ed B2|a2fd edef|gefd edB2|\r\na2fd edef|a2fd edB2|faaf bfaf|defd edBd||\r\nf2df e2de|f2df edBd|f2df e2de|gefd edBd|\r\nf2df e2de|f2df edBd|faaf bfaf|defd edBd||\r\nAdfd edfd|Adfd edBd|Adfd edfd|gefd edBd|\r\nAdfd edfd|Adfd edB2|faaf bfaf|defd edBd||"
+ },
+ {
+  "tune": {
+   "title": "Butterfly, The",
+   "kind": "slip jig",
+   "meter": "9/8",
+   "mode": "Eminor",
+   "abc": "|:B2E G2E F3|B2E G2E FED|B2E G2E F3|B2d d2B AFD:|\r\n|:B2d e2f g3|B2d g2e dBA|B2d e2f g2a|b2a g2e dBA:|\r\n|:B3 B2A G2A|B3 BAB dBA|B3 B2A G2A|B2d g2e dBA:|"
+  },
+  "phrase": "X:1\nM:9/8\nL:1/8\nK:Eminor\nB2E G2E F3 | B2E G2E FED |]",
+  "score": "X:1\nM:9/8\nL:1/8\nQ:1/4=100\nK:Eminor\n|:B2E G2E F3|B2E G2E FED|B2E G2E F3|B2d d2B AFD:|\r\n|:B2d e2f g3|B2d g2e dBA|B2d e2f g2a|b2a g2e dBA:|\r\n|:B3 B2A G2A|B3 BAB dBA|B3 B2A G2A|B2d g2e dBA:|"
+ },
+ {
+  "tune": {
+   "title": "Drowsy Maggie",
+   "kind": "reel",
+   "meter": "4/4",
+   "mode": "Edorian",
+   "abc": "|:E2BE dEBE|E2BE AFDF|E2BE dEBE|BABc dAFD:|\r\nd2fd c2ec|defg afge|d2fd c2ec|BABc dAFA|\r\nd2fd c2ec|defg afge|afge fded|BABc dAFD|"
+  },
+  "phrase": "X:1\nM:4/4\nL:1/8\nK:Edorian\nE2BE dEBE | E2BE AFDF |]",
+  "score": "X:1\nM:4/4\nL:1/8\nQ:1/4=100\nK:Edorian\n|:E2BE dEBE|E2BE AFDF|E2BE dEBE|BABc dAFD:|\r\nd2fd c2ec|defg afge|d2fd c2ec|BABc dAFA|\r\nd2fd c2ec|defg afge|afge fded|BABc dAFD|"
+ },
+ {
+  "tune": {
+   "title": "Kesh, The",
+   "kind": "jig",
+   "meter": "6/8",
+   "mode": "Gmajor",
+   "abc": "|:G3 GAB|A3 ABd|edd gdd|edB dBA|\r\nGAG GAB|ABA ABd|edd gdd|BAF G3:|\r\n|:B2B d2d|ege dBA|B2B dBG|ABA AGA|\r\nBAB d^cd|ege dBd|gfg aga|bgg g3:|"
+  },
+  "phrase": "X:1\nM:6/8\nL:1/8\nK:Gmajor\nG3 GAB | A3 ABd |]",
+  "score": "X:1\nM:6/8\nL:1/8\nQ:1/4=100\nK:Gmajor\n|:G3 GAB|A3 ABd|edd gdd|edB dBA|\r\nGAG GAB|ABA ABd|edd gdd|BAF G3:|\r\n|:B2B d2d|ege dBA|B2B dBG|ABA AGA|\r\nBAB d^cd|ege dBd|gfg aga|bgg g3:|"
+ },
+ {
+  "tune": {
+   "title": "Out On The Ocean",
+   "kind": "jig",
+   "meter": "6/8",
+   "mode": "Gmajor",
+   "abc": "|:D2B BAG|BdB A2B|GED G2A|B2B AGE|\r\nD2B BAG|BdB A2B|GED G2A|1 BGE G2E:|2 BGE GBd||\r\n|:e2e edB|ege edB|d2B def|gfe dBA|\r\nG2A B2d|ege dBA|GED G2A|1 BGE GBd:|2 BGE G3||"
+  },
+  "phrase": "X:1\nM:6/8\nL:1/8\nK:Gmajor\nD2B BAG | BdB A2B |]",
+  "score": "X:1\nM:6/8\nL:1/8\nQ:1/4=100\nK:Gmajor\n|:D2B BAG|BdB A2B|GED G2A|B2B AGE|\r\nD2B BAG|BdB A2B|GED G2A|1 BGE G2E:|2 BGE GBd||\r\n|:e2e edB|ege edB|d2B def|gfe dBA|\r\nG2A B2d|ege dBA|GED G2A|1 BGE GBd:|2 BGE G3||"
+ },
+ {
+  "tune": {
+   "title": "Silver Spear, The",
+   "kind": "reel",
+   "meter": "4/4",
+   "mode": "Dmajor",
+   "abc": "A|:FA (3AAA BAFA|dfed BddA|FA (3AAA BAFA|dfed (3BdB AG|\r\nFA (3AAA BAFA|dfed Bdef|gage fgfe|1 dfed (3BdB AG:|2 dfed BdAd||\r\n|:fa (3aaa bfaf|gfed Bdde|fa (3aaa bfaf|gfed (3BdB A2|\r\nfa (3aaa bfaf|gfed Bdef|~g3 e ~f3 e|1 dfed BdAd:|2 dfed B2 AG||"
+  },
+  "phrase": "X:1\nM:4/4\nL:1/8\nK:Dmajor\nA | FA (3AAA BAFA | dfed BddA |]",
+  "score": "X:1\nM:4/4\nL:1/8\nQ:1/4=100\nK:Dmajor\nA|:FA (3AAA BAFA|dfed BddA|FA (3AAA BAFA|dfed (3BdB AG|\r\nFA (3AAA BAFA|dfed Bdef|gage fgfe|1 dfed (3BdB AG:|2 dfed BdAd||\r\n|:fa (3aaa bfaf|gfed Bdde|fa (3aaa bfaf|gfed (3BdB A2|\r\nfa (3aaa bfaf|gfed Bdef|~g3 e ~f3 e|1 dfed BdAd:|2 dfed B2 AG||"
+ }
+]

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <rect width="100" height="100" fill="#1F3A2E"/>
+  <!-- The mark from apps/web/src/app/icon.svg (dark colours, as apple-icon.png), centred at 70%. -->
+  <g transform="translate(50 50) scale(0.7) translate(-50.75 -50)">
+    <g transform="translate(-1 0)">
+      <circle cx="18" cy="40" r="6.5" fill="#E8894F"/>
+      <circle cx="18" cy="60" r="6.5" fill="#E8894F"/>
+      <rect x="28" y="17" width="7.5" height="66" rx="3.75" fill="#F6F1E7"/>
+      <path d="M46.5 47 L54 76.5 L86 23.5" fill="none" stroke="#F6F1E7" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

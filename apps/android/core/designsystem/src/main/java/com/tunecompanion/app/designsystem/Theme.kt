@@ -1,0 +1,53 @@
+// Hand-written companions to the generated Tokens.kt: the Material theme in the web's colours
+// (following the system's dark mode) and the serif the web uses for tune titles.
+package com.tunecompanion.app.designsystem
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
+
+private fun scheme(dark: Boolean) = with(Palette) {
+    val base = if (dark) darkColorScheme() else lightColorScheme()
+    base.copy(
+        primary = brandInk.pick(dark),
+        onPrimary = onBrandInk.pick(dark),
+        secondary = brandDot.pick(dark),
+        onSecondary = onBrandDot.pick(dark),
+        background = background.pick(dark),
+        onBackground = foreground.pick(dark),
+        surface = background.pick(dark),
+        onSurface = foreground.pick(dark),
+        surfaceContainer = card.pick(dark),
+        surfaceContainerLow = card.pick(dark),
+        surfaceContainerHigh = muted.pick(dark),
+        surfaceVariant = muted.pick(dark),
+        onSurfaceVariant = mutedForeground.pick(dark),
+        secondaryContainer = brandInkSoft.pick(dark),
+        outline = border.pick(dark),
+        outlineVariant = border.pick(dark),
+        error = danger.pick(dark),
+    )
+}
+
+@Composable
+fun TuneCompanionTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = scheme(dark), content = content)
+}
+
+/** A token in the current appearance. */
+@Composable
+@ReadOnlyComposable
+fun ColorPair.current(): Color = pick(isSystemInDarkTheme())
+
+/** Tune titles, as the web's --font-music. */
+object TuneType {
+    val title = TextStyle(fontFamily = FontFamily.Serif, fontSize = 22.sp, lineHeight = 27.sp, letterSpacing = (-0.3).sp)
+    val trayTitle = TextStyle(fontFamily = FontFamily.Serif, fontSize = 18.sp, lineHeight = 22.sp)
+}

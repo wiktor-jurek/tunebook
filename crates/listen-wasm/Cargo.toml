@@ -1,0 +1,19 @@
+[package]
+name = "listen-wasm"
+version = "0.1.0"
+description = "listen-core for browsers, built by `just wasm-core` into packages/listen-wasm"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+listen-core.workspace = true
+wasm-bindgen = "0.2"
+
+# Rust now emits bulk-memory and other post-MVP ops; wasm-pack's bundled wasm-opt needs them enabled.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3", "--enable-bulk-memory", "--enable-nontrapping-float-to-int", "--enable-sign-ext", "--enable-mutable-globals", "--enable-reference-types", "--enable-multivalue"]

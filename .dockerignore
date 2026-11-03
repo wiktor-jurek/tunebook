@@ -1,6 +1,15 @@
 node_modules
+**/node_modules
 .next
+**/.next
 .git
 .env*
+**/.env*
 coverage
 ml
+apps/ios
+apps/android
+crates
+services
+target
+packages/listen-wasm

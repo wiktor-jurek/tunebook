@@ -8,7 +8,7 @@
 The shipped finder adds --one-centre --sim-centres <prototypes.pt> --sim-parts 8 --dim 192
 --hub-reference cache/classifier/found_train.pt to export and check.
 
-The browser computes the pitch-class features itself (src/lib/finder/features.ts, a port of
+The browser computes the pitch-class features itself (apps/web/src/lib/finder/features.ts, a port of
 tunebook_ml/pitchclass.py) and feeds the model KeyCanon'd (B, 12, 400) windows; the model
 returns each tune's best-centre cosine, (B, tunes). Column i is tunes.json[i], a The Session tune id.
 """
@@ -161,7 +161,7 @@ def export(args) -> None:
     raw = pitchclass.features(pitchclass.semitones(audio)[:, :, :c.FRAMES], canon=False)
     shift = int(pitchclass.key_shift(raw)[0])
     canon = pitchclass.keycanon(raw)
-    fixture = out / "features.fixture.json"  # for src/lib/finder/features.test.ts
+    fixture = out / "features.fixture.json"  # for apps/web/src/lib/finder/features.test.ts
     fixture.write_text(json.dumps({"shift": shift, "features": [[round(v, 5) for v in row] for row in canon[0].tolist()]}))
     print(f"fixture: {fixture} (key shift {shift})")
 

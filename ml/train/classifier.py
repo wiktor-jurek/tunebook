@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,9 @@ from tunebook_ml.splits import benchmark_tunes  # noqa: E402
 
 FRAMES = 400  # 8 s at 50 frames a second
 CLIPS = ML / "cache" / "classifier" / "clips.pt"
+# TUNEBOOK_RESTS=0 places simulated notes back to back (the timing before 2026-10-29's `starts`), so the
+# rests change can be tested on its own (train/quick.py). Renders are fixed audio and keep their timing.
+RESTS = os.environ.get("TUNEBOOK_RESTS", "1") != "0"
 
 
 def cache_path(name: str) -> Path:
@@ -70,7 +74,8 @@ class Simulated(torch.utils.data.IterableDataset):
             grouped: list[list[dict]] = [[] for _ in tune_ids]
             for row in load_catalog():
                 if row["tuneId"] in index and row["pitches"]:
-                    grouped[index[row["tuneId"]]].append({k: row[k] for k in ("pitches", "durations", "starts", "kind", "meter", "mode")})
+                    grouped[index[row["tuneId"]]].append({k: row[k] for k in ("pitches", "durations", "starts", "kind", "meter", "mode")
+                                                          if RESTS or k != "starts"})
             cls._settings = grouped
         return cls._settings
 
@@ -597,6 +602,9 @@ def train(args) -> None:
     tune_ids = catalog_tunes()
     if args.tunes:  # a subset, for quick checks that the pipeline learns at all
         tune_ids = tune_ids[: args.tunes]
+    if args.tune_set:  # a fixed subset (train/quick.py tunes), kept in catalog order
+        keep = set(json.loads(args.tune_set.read_text()))
+        tune_ids = [tune for tune in tune_ids if tune in keep]
     Simulated.settings(tune_ids)  # load once, before workers fork
     cached = Cached(tune_ids, device, skip={name for name in ("found", "yue") if getattr(args, f"{name}_fraction") == 0 and not (name == "found" and args.pairs)}, yue_stride=args.yue_stride)
     print(f"cached windows: {cached.size('renders')} renders, {cached.size('found')} found, {cached.size('yue')} YuE2", flush=True)
@@ -621,10 +629,17 @@ def train(args) -> None:
     if args.init:
         # Curriculum: a backbone trained on fewer tunes. Its head is kept for those tunes
         # (catalog order is shared, so they are the first rows) and the rest start fresh.
-        state = torch.load(args.init, map_location=device, weights_only=False)["model"]  # our own checkpoint; its args hold Paths
+        checkpoint = torch.load(args.init, map_location=device, weights_only=False)  # our own checkpoint; its args hold Paths
+        state = checkpoint["model"]
         head = state.pop("weight")
         model.load_state_dict(state, strict=False)
         with torch.no_grad():
+            if args.tune_set and "tune_ids" in checkpoint:
+                # A subset (train/quick.py): take each tune's rows by tune id, not position.
+                old = {tune: i for i, tune in enumerate(checkpoint["tune_ids"])}
+                k = model.centres
+                rows = torch.tensor([old[t] * k + j for t in tune_ids for j in range(k)], device=head.device)
+                head = head[rows]
             model.weight[: len(head)] = head
         if args.freeze_head is None:
             # A fine-tune: the checkpoint already has a centre for every tune. Moving the centres
@@ -761,6 +776,7 @@ def main() -> None:
     t.add_argument("--seed", type=int, default=0)
     t.add_argument("--eval-every", type=int, default=2000)
     t.add_argument("--tunes", type=int, default=0, help="train on the first N tunes only")
+    t.add_argument("--tune-set", type=Path, help="train on the tune ids in this JSON list only (train/quick.py tunes)")
     t.add_argument("--render-fraction", type=float, default=0.3, help="share of each batch drawn from cached renders, once there are any")
     t.add_argument("--reuse-steps", type=int, default=2000, help="draw each cached window at most about once per this many steps")
     t.add_argument("--yue-fraction", type=float, default=0.2, help="share drawn from YuE2 performances")

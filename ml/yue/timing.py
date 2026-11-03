@@ -15,7 +15,7 @@ player shows no position rather than a wrong one.
     uv run python yue/timing.py --manifest cache/yue/playalong/training.jsonl cache/yue/playalong/library-manifest.jsonl
 
 Maps go to cache/yue/playalong/timings.jsonl by storage key, where
-scripts/import-playalongs.ts picks them up.
+apps/web/scripts/import-playalongs.ts picks them up.
 """
 
 import argparse

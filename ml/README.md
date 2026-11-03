@@ -10,7 +10,7 @@ training setting, evaluation and the in-browser Tune finder.
 
 ## Data
 
-- `npm run`-free export from the repo root: `node --max-old-space-size=4096 node_modules/.bin/tsx scripts/export-melodies.ts`
+- `npm run`-free export from `apps/web`: `node --max-old-space-size=4096 ../../node_modules/.bin/tsx scripts/export-melodies.ts`
   writes `ml/data/catalog.jsonl.gz` (played-out melody of every setting, via abcjs).
 - SoundFonts: GeneralUser GS (its own permissive licence) and MuseScore General (MIT), fetched by `cloud/setup.sh`.
 
@@ -30,7 +30,7 @@ training setting, evaluation and the in-browser Tune finder.
 - `eval/benchmark.py` runs the shipped browser model, [FolkFriend](https://github.com/TomWyllie/folkfriend)
   (its command-line build, in Docker) and JigRipper (its public web model, replayed by a harness kept outside
   the repo; never shipped) over the same clips, whole and as 2–30 s prefixes (`--timing`), and writes
-  `src/lib/finder/benchmark.json` for the Tune finder → Benchmark page. Engines not rerun keep their answers:
+  `apps/web/src/lib/finder/benchmark.json` for the Tune finder → Benchmark page. Engines not rerun keep their answers:
   after a new model ships, `--tunebook --timing` is enough.
 - Older engines: `eval/run.py symbolic` (note matching) and `eval/embedding.py` (CLEWS). Their results are in `eval/RESULTS.md`.
 
@@ -110,7 +110,7 @@ PIPELINE.md §9 has the exact commands and why each setting is what it is.
 ## Tune finder (in the browser)
 
 The Tunes → Tune finder page runs the classifier on the device. The page computes the features
-itself (`src/lib/finder/features.ts`, a port of `tunebook_ml/pitchclass.py`) and runs an ONNX export
+itself (`apps/web/src/lib/finder/features.ts`, a port of `tunebook_ml/pitchclass.py`) and runs an ONNX export
 of the model in a web worker with onnxruntime-web, so no audio leaves the device.
 
 ```sh
@@ -123,8 +123,8 @@ $R python train/export_finder.py quantize scratch/finder --head-bits 4          
 $R python train/export_finder.py check runs/classifier/<run>/<step>.pt scratch/finder --one-centre    # accuracy of each file, answer margin
 ```
 
-Copy `model.int4head.onnx` (or `model.int8.onnx`) to `public/finder/model.onnx`, with `tunes.json` and `popularity.json` beside it
+Copy `model.int4head.onnx` (or `model.int8.onnx`) to `apps/web/public/finder/model.onnx`, with `tunes.json` and `popularity.json` beside it
 (gitignored), or point `NEXT_PUBLIC_FINDER_MODEL_URL` and `NEXT_PUBLIC_FINDER_TUNES_URL` at hosted copies (`popularity.json` is
 fetched from beside `tunes.json`; it holds the finder's popularity prior). Copy
-`features.fixture.json` to `src/lib/finder/` so `features.test.ts` checks the port against this export.
-Browsers cache the model by URL, so bump `CACHE` in `src/lib/finder/worker.ts` whenever a new model ships.
+`features.fixture.json` to `apps/web/src/lib/finder/` so `features.test.ts` checks the port against this export.
+Browsers cache the model by URL, so bump `CACHE` in `apps/web/src/lib/finder/worker.ts` whenever a new model ships.

@@ -1,0 +1,26 @@
+name: Rust
+
+on:
+  pull_request:
+    paths: ["crates/**", "services/**", "Cargo.toml", "Cargo.lock", "rustfmt.toml", "apps/web/src/lib/finder/features.fixture.json", ".github/workflows/rust.yml"]
+  push:
+    branches: [main]
+    paths: ["crates/**", "services/**", "Cargo.toml", "Cargo.lock"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --exclude listen-wasm
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo fmt --all --check
+      - run: cargo build -p listen-wasm --target wasm32-unknown-unknown --release

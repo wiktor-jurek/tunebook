@@ -1,0 +1,86 @@
+# XcodeGen spec: `just ios-project` generates TuneCompanion.xcodeproj (gitignored).
+name: TuneCompanion
+options:
+  bundleIdPrefix: com.tunecompanion
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Fill in your Apple team to run on a device (simulator builds need none).
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+packages:
+  TuneKit:
+    path: Packages/TuneKit
+targets:
+  TuneCompanion:
+    type: application
+    platform: iOS
+    sources: [TuneCompanion, Shared]
+    dependencies:
+      - package: TuneKit
+        products: [ListenCore, Haptics, DesignSystem, API, ListenActivity, Finder, Notation]
+      - target: TuneCompanionWidgets
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tunecompanion.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # Assets.xcassets/AppIcon is rendered from design/app-icon.svg by `just ios-icon`.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: TuneCompanion/Info.plist
+      properties:
+        CFBundleDisplayName: Tune Companion
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSMicrophoneUsageDescription: Tune Companion listens to name the tune being played. The audio stays on your phone.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes: [audio]
+        # The app's Google OAuth client (public; iOS clients have no secret), and its redirect scheme.
+        GIDClientID: 227010461268-b22lpgc0godcj2jgakstsno83fu7no50.apps.googleusercontent.com
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [com.googleusercontent.apps.227010461268-b22lpgc0godcj2jgakstsno83fu7no50]
+        ITSAppUsesNonExemptEncryption: false
+        # Debug builds can talk to a dev server on this Mac (launch with -apiBase http://localhost:3000).
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    entitlements:
+      path: TuneCompanion/TuneCompanion.entitlements
+      properties:
+        com.apple.developer.applesignin: [Default]
+  TuneCompanionWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [Widgets, Shared]
+    dependencies:
+      - package: TuneKit
+        products: [DesignSystem, ListenActivity]
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tunecompanion.app.widgets
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Tune Companion
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+schemes:
+  TuneCompanion:
+    build:
+      targets:
+        TuneCompanion: all
+    run:
+      config: Debug
+    test:
+      config: Debug

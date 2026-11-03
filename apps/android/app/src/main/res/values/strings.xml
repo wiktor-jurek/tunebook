@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tune Companion</string>
+    <string name="name_a_tune">Name a tune</string>
+    <string name="listening_channel">Listening</string>
+</resources>
