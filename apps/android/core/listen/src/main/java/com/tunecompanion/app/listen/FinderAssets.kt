@@ -68,6 +68,9 @@ class FinderAssets(context: Context, private val base: String = "https://tunecom
 
     private fun fetch(name: String, target: File, progress: (Float) -> Unit, onEtag: (String?) -> Unit = {}): Boolean {
         val connection = URL(base + name).openConnection() as HttpURLConnection
+        // A stalled connection fails (and listening says so) rather than sitting at a percentage forever.
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 30_000
         try {
             if (connection.responseCode != 200) return false
             onEtag(connection.getHeaderField("ETag"))

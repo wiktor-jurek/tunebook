@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { TuneCompanionTheme { RootScreen(onListen = ::listen) } }
+        setContent { TuneCompanionTheme { AppShell(onListen = ::listen) } }
         handle(intent)
     }
 
@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent) {
         // The Quick Settings tile, and `--es autoListen session` for screenshots and UI tests.
         val auto = intent.getStringExtra(EXTRA_AUTO_LISTEN)
+        if (BuildConfig.DEBUG) intent.getStringExtra("showTune")?.toIntOrNull()?.let { ListenController.debugShow(it) }
         when {
             intent.action == ACTION_NAME_A_TUNE -> listen(Mode.NameTune)
             auto != null -> listen(if (auto == "session") Mode.RecordSession else Mode.NameTune)

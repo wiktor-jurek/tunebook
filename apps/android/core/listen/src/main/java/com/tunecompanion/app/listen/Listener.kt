@@ -37,6 +37,9 @@ class Listener(
     private val model: FinderModel,
     private val onEvent: (ListenerEvent) -> Unit,
 ) {
+    /** Each block of microphone audio as it arrives (mono float at [RATE]), on the reader thread: a session recording's. */
+    @Volatile var onAudio: ((FloatArray) -> Unit)? = null
+
     private var record: AudioRecord? = null
     private var session: ListenSession? = null
     private val jobs = mutableListOf<Job>()
@@ -64,7 +67,9 @@ class Listener(
             while (isActive) {
                 val n = record.read(block, 0, BLOCK, AudioRecord.READ_BLOCKING)
                 if (n <= 0) continue
-                onEvent(ListenerEvent.Level(session.pushAudio(block.copyOf(n).asList())))
+                val samples = block.copyOf(n)
+                onAudio?.invoke(samples)
+                onEvent(ListenerEvent.Level(session.pushAudio(samples.asList())))
             }
         }
         jobs += scope.launch(Dispatchers.Default) {
@@ -93,8 +98,8 @@ class Listener(
         session?.reset()
     }
 
-    private companion object {
+    companion object {
         const val RATE = 48_000
-        const val BLOCK = 4096
+        private const val BLOCK = 4096
     }
 }

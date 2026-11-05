@@ -2,6 +2,7 @@
 // names tunes; the reading layer asks them to sign in.
 package com.tunecompanion.app
 
+import android.util.Log
 import com.tunecompanion.app.api.ApiException
 import com.tunecompanion.app.api.BookSummary
 import com.tunecompanion.app.api.SavedTune
@@ -43,12 +44,14 @@ object Library {
         } catch (signedOut: ApiException) {
             if (signedOut.status == 401) { Services.api.forgetSession(); _state.value = LibraryState(LibraryState.Phase.SignedOut) }
             else if (_state.value.user == null) _state.update { it.copy(phase = LibraryState.Phase.Failed, problem = "Could not load your tunes. Pull down to try again.") }
-        } catch (_: Exception) {
+        } catch (cause: Exception) {
+            Log.w("TuneCompanion", "Could not load the library", cause)
             if (_state.value.user == null) _state.update { it.copy(phase = LibraryState.Phase.Failed, problem = "Could not load your tunes. Pull down to try again.") }
         }
     }
 
     suspend fun signIn(email: String, password: String) { Services.api.signIn(email, password); refresh() }
+    suspend fun signInWithGoogle(idToken: String) { Services.api.signInWithGoogle(idToken); refresh() }
     suspend fun signUp(name: String, email: String, password: String) = Services.api.signUp(name, email, password)
     suspend fun signOut() { Services.api.signOut(); _state.value = LibraryState(LibraryState.Phase.SignedOut) }
 

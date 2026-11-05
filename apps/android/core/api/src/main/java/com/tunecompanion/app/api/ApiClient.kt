@@ -8,12 +8,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.serializer
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -132,10 +135,100 @@ class ApiClient(context: Context, val base: String) {
     /** Saves a setting to your library (or finds your copy) and returns the saved tune's ID. */
     suspend fun saveSetting(settingId: Int): String = send("POST", "api/catalog", """{"settingId":$settingId}""", SavedAnswer.serializer()).tuneId
 
+    /** A tunebook's tunes and sets in playing order: yours, shared with you, or public. */
+    suspend fun book(id: String): BookDetail = get("api/app/books/${URLEncoder.encode(id, "UTF-8")}")
+
+    /** Who you are as a player: repertoire, types, popularity, favourites and sessions. */
+    suspend fun passport(): Passport = get("api/app/me")
+
+    /** One of your tunes, with its play-along recordings and your sound. */
+    suspend fun tune(savedTuneId: String): TuneDetail = get("api/app/tunes/${URLEncoder.encode(savedTuneId, "UTF-8")}")
+
     suspend fun recordings(): List<RecordingSummary> = get<RecordingsAnswer>("api/app/recordings").recordings
+
+    suspend fun recording(id: String): RecordingDetail = get<RecordingAnswer>("api/app/recordings/${URLEncoder.encode(id, "UTF-8")}").recording
+
+    suspend fun deleteRecording(id: String) { send("DELETE", "api/recordings/${URLEncoder.encode(id, "UTF-8")}", null, JsonObject.serializer()) }
+
+    /** Takes a tune off a recording's setlist (it stays, marked, as training data). */
+    suspend fun removeRecordingTune(id: String, entryId: String) {
+        send("PATCH", "api/recordings/${URLEncoder.encode(id, "UTF-8")}", buildJsonObject { put("operation", "removeTune"); put("entryId", entryId) }.toString(), JsonObject.serializer())
+    }
+
+    /**
+     * Saves each setting not yet in the library, then puts them all, in order, into a new tunebook (the web's makeTunebook).
+     * Each group of indexes into [settings] (tunes played back to back) becomes a set; a tune already in an earlier set
+     * stays there. Returns the new book's ID.
+     */
+    suspend fun makeTunebook(name: String, settings: List<Pair<Int, String?>>, sets: List<List<Int>>): String {
+        val savedIds = settings.map { (settingId, savedId) -> savedId ?: saveSetting(settingId) }
+        val bookId = send("POST", "api/library", buildJsonObject { put("operation", "createBook"); put("name", name) }.toString(), BookCreated.serializer()).bookId
+        for (id in savedIds.distinct()) {
+            send("POST", "api/library", buildJsonObject { put("operation", "addToBook"); put("bookId", bookId); put("tuneId", id) }.toString(), JsonObject.serializer())
+        }
+        val grouped = mutableSetOf<String>()
+        for (set in sets) {
+            val tuneIds = set.map { savedIds[it] }.distinct().filter { it !in grouped }
+            if (tuneIds.size < 2) continue
+            send("POST", "api/sets", buildJsonObject { put("operation", "fromTunes"); put("bookId", bookId); put("tuneIds", JsonArray(tuneIds.map { JsonPrimitive(it) })) }.toString(), JsonObject.serializer())
+            grouped += tuneIds
+        }
+        return bookId
+    }
+
+    /** Starts a recording's upload: its ID, and where to PUT the audio. */
+    suspend fun createRecording(name: String, mime: String, recordedAt: String): Pair<String, String> {
+        val body = buildJsonObject { put("name", name); put("mime", mime); put("recordedAt", recordedAt) }.toString()
+        return send("POST", "api/recordings", body, CreatedAnswer.serializer()).let { it.id to it.uploadUrl }
+    }
+
+    /** Shows the uploaded recording, with its setlist. */
+    suspend fun finishRecording(id: String, durationMs: Long, tunes: List<SetlistEntry>) {
+        val body = buildJsonObject {
+            put("operation", "finish"); put("durationMs", durationMs)
+            put("tunes", JsonArray(tunes.map { tune -> buildJsonObject {
+                put("tuneId", tune.tuneId); put("settingId", tune.settingId); put("startMs", tune.startMs); put("endMs", tune.endMs); put("rejected", tune.rejected)
+            } }))
+        }.toString()
+        send("PATCH", "api/recordings/${URLEncoder.encode(id, "UTF-8")}", body, JsonObject.serializer())
+    }
+
+    /** PUTs a file to the storage bucket's signed [url] (no session: the URL is the permission), reporting progress 0 to 1. */
+    suspend fun putFile(url: String, file: File, mime: String, progress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "PUT"
+            connection.doOutput = true
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            connection.setRequestProperty("Content-Type", mime)
+            val total = file.length()
+            connection.setFixedLengthStreamingMode(total)
+            connection.outputStream.use { out ->
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    var sent = 0L
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        out.write(buffer, 0, n)
+                        sent += n
+                        progress(if (total > 0) sent.toFloat() / total else 1f)
+                    }
+                }
+            }
+            val status = connection.responseCode
+            if (status !in 200..299) throw ApiException(status, "The upload did not finish")
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     @Serializable private data class FinderAnswer(val tunes: List<FinderTune>)
     @Serializable private data class PracticeAnswer(val practice: Practice)
     @Serializable private data class SavedAnswer(val tuneId: String)
     @Serializable private data class RecordingsAnswer(val recordings: List<RecordingSummary>)
+    @Serializable private data class CreatedAnswer(val id: String, val uploadUrl: String)
+    @Serializable private data class RecordingAnswer(val recording: RecordingDetail)
+    @Serializable private data class BookCreated(val bookId: String)
 }

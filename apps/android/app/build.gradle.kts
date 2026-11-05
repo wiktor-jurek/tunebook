@@ -13,13 +13,17 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
-        // The emulator reaches this Mac's dev server at 10.0.2.2; release builds talk to production.
+        // Debug builds reach this Mac's dev server through `adb reverse tcp:3000 tcp:3000` (just android-run sets it up), the
+        // same way on the emulator and on a phone over USB; release builds talk to production.
         buildConfigField("String", "API_BASE", "\"https://tunecompanion.com\"")
+        // The website's Google client: Sign in with Google asks for an ID token for it, which the server accepts. Client IDs
+        // are public; Google matches this app to its Android client (package name and signing certificate) in the same project.
+        buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", "\"227010461268-2ak1chs98chq247ggsrso4nfl6ig59ed.apps.googleusercontent.com\"")
     }
 
     buildTypes {
         debug {
-            buildConfigField("String", "API_BASE", "\"http://10.0.2.2:3000\"")
+            buildConfigField("String", "API_BASE", "\"http://localhost:3000\"")
         }
         release {
             isMinifyEnabled = true
@@ -43,6 +47,9 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.coroutines.android)
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services)
+    implementation(libs.googleid)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
 }

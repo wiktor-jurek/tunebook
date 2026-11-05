@@ -10,6 +10,8 @@ import android.content.pm.PackageManager
 import android.util.Log
 import com.tunecompanion.app.api.FinderTune
 import com.tunecompanion.app.api.Level
+import com.tunecompanion.app.api.LocalRecording
+import com.tunecompanion.app.api.SetlistEntry
 import com.tunecompanion.app.designsystem.Haptics
 import com.tunecompanion.app.listen.FinderAssets
 import com.tunecompanion.app.listen.FinderModel
@@ -21,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -32,6 +35,9 @@ enum class Mode { NameTune, RecordSession }
 enum class Phase { Listening, Narrowing, Named }
 
 data class Heard(val tune: FinderTune, val at: Long)
+
+/** One bar of a session's waveform: how loud, 0 to 1, and the tune it belongs to (null until one is named). */
+data class Bar(val level: Float, val tuneId: Int?, val at: Long)
 
 data class ListenState(
     val live: Boolean = false,
@@ -73,6 +79,23 @@ object ListenController {
     private val _level = MutableStateFlow(0f)
     val level: StateFlow<Float> = _level
 
+    /**
+     * A session's waveform, as the Pixel's Recorder draws it: a bar every [BAR_MS], loudest level heard in it. Bars take the
+     * tune playing; while the finder is unsure they wait, and the next tune named claims them.
+     */
+    private val _wave = MutableStateFlow<List<Bar>>(emptyList())
+    val wave: StateFlow<List<Bar>> = _wave
+    const val BAR_MS = 200L
+    private const val BARS_KEPT = 600
+    private var sampler: Job? = null
+    private var peak = 0f
+
+    /** The session being recorded to a file on the phone, and its setlist so far. */
+    private var recorder: SessionRecorder? = null
+    private var recording: LocalRecording? = null
+    /** The finder names a tune a few seconds after it starts; its setlist entry starts this much earlier. */
+    private const val NAMING_DELAY_MS = 8_000L
+
     /** Bumped whenever a tune is named, so the drawer can rise to show it. */
     private val _named = MutableStateFlow(0)
     val named: StateFlow<Int> = _named
@@ -89,7 +112,10 @@ object ListenController {
         val s = _state.value
         if (s.live) {
             // Already listening for one tune: carry on as a session.
-            if (mode == Mode.RecordSession && s.mode == Mode.NameTune) _state.update { it.copy(mode = Mode.RecordSession, startedAt = System.currentTimeMillis() - 1) }
+            if (mode == Mode.RecordSession && s.mode == Mode.NameTune) {
+                _state.update { it.copy(mode = Mode.RecordSession, startedAt = System.currentTimeMillis() - 1) }
+                beginSession()
+            }
             return
         }
         app = context.applicationContext
@@ -104,10 +130,58 @@ object ListenController {
         }
         ListenService.start(app)
         run = scope.launch { begin() }
+        if (mode == Mode.RecordSession) beginSession()
+    }
+
+    /** Starts the session's recording file and its waveform. */
+    private fun beginSession() {
+        val now = System.currentTimeMillis()
+        val local = LocalRecording(java.util.UUID.randomUUID().toString(),
+            "Session, " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(now)),
+            java.time.Instant.ofEpochMilli(now).toString())
+        recorder = runCatching { SessionRecorder(RecordingUploads.audio(local)) }.onFailure { Log.e(TAG, "Could not start recording", it) }.getOrNull()
+        recording = local
+        RecordingUploads.save(local)
+        listener?.onAudio = { samples -> recorder?.write(samples) }
+        sample()
+    }
+
+    /** Closes the session's file, keeps it with its setlist, and uploads it if signed in. */
+    private fun endSession() {
+        val recorder = recorder ?: return
+        val local = recording ?: return
+        this.recorder = null; recording = null
+        listener?.onAudio = null
+        scope.launch {
+            val duration = withContext(Dispatchers.IO) { recorder.end() }
+            val done = local.copy(durationMs = duration, finished = true, tunes = local.tunes.map { if (it.endMs == 0L) it.copy(endMs = duration) else it })
+            RecordingUploads.save(done)
+            if (Services.api.signedIn && duration > 0) RecordingUploads.upload(done)
+        }
+    }
+
+    /** Draws the session's waveform from the input level until listening stops. */
+    private fun sample() {
+        sampler?.cancel()
+        _wave.value = emptyList()
+        peak = 0f
+        sampler = scope.launch {
+            while (_state.value.live) {
+                delay(BAR_MS)
+                val s = _state.value
+                val current = s.tonight.firstOrNull()?.tune?.tuneId
+                // The tune named last owns the bar unless the finder now hears something else.
+                val owner = current?.takeIf { s.leader == null || s.leader.tuneId == it }
+                _wave.update { (it + Bar(peak, owner, System.currentTimeMillis())).takeLast(BARS_KEPT) }
+                peak = 0f
+            }
+        }
     }
 
     fun stop() {
         run?.cancel()
+        sampler?.cancel()
+        endSession()
         listener?.stop()
         listener = null
         _level.value = 0f
@@ -123,6 +197,9 @@ object ListenController {
     /** A tune named wrongly leaves tonight's list, and listening carries on. */
     fun reject(heard: Heard) {
         _state.update { s -> s.copy(heard = s.heard.filter { it != heard }) }
+        _wave.update { bars -> bars.map { if (it.tuneId == heard.tune.tuneId) it.copy(tuneId = null) else it } }
+        // It still uploads, marked, as a mistake for the finder to learn from.
+        recording = recording?.let { local -> local.copy(tunes = local.tunes.map { if (it.tuneId == heard.tune.tuneId) it.copy(rejected = true) else it }) }
         if (_state.value.leader?.tuneId == heard.tune.tuneId) restart()
     }
 
@@ -166,6 +243,7 @@ object ListenController {
             val (runner, model) = prepare()
             if (!_state.value.live) return
             val listener = Listener(app, runner, model) { event -> scope.launch { handle(event) } }
+            recorder?.let { recorder -> listener.onAudio = { recorder.write(it) } }
             listener.start(scope)
             this.listener = listener
             _state.update { it.copy(starting = false) }
@@ -182,9 +260,10 @@ object ListenController {
     private suspend fun prepare(): Pair<ModelRunner, FinderModel> {
         prepared?.let { return it }
         val assets = FinderAssets(app)
-        _state.update { it.copy(downloading = 0f) }
+        // The percentage shows only while it downloads (the first time); a model already on the phone just loads.
         try {
-            val model = assets.load { progress -> _state.update { it.copy(downloading = progress) } }
+            // The download carries on if listening stops (the next listen starts sooner); it only shows while listening.
+            val model = assets.load { progress -> _state.update { if (it.live) it.copy(downloading = progress) else it } }
             val runner = withContext(Dispatchers.Default) { ModelRunner(model.modelFile) }
             scope.launch { assets.refreshIfChanged() }
             return (runner to model).also { prepared = it }
@@ -197,7 +276,7 @@ object ListenController {
         if (!_state.value.live) return
         when (event) {
             // RMS of a few tenths is loud music close by; the halo saturates there.
-            is ListenerEvent.Level -> _level.value = (event.rms * 5f).coerceAtMost(1f)
+            is ListenerEvent.Level -> _level.value = (event.rms * 5f).coerceAtMost(1f).also { peak = maxOf(peak, it) }
             ListenerEvent.Quiet -> _state.update { it.copy(quiet = true) }
             is ListenerEvent.Failed -> Log.e(TAG, "Scoring failed: ${event.message}")
             is ListenerEvent.Verdict -> {
@@ -240,13 +319,36 @@ object ListenController {
         val first = s.tonight.isEmpty() || s.mode == Mode.NameTune
         _state.update { it.copy(phase = Phase.Named, confidence = confidence, quiet = false, heard = listOf(Heard(tune, System.currentTimeMillis())) + it.heard) }
         if (first) haptics.lockOn() else haptics.setChange()
+        // Into the recording's setlist, starting a little before it was named; the tune before ends there.
+        if (s.recording) recording = recording?.let { local ->
+            val start = maxOf(0L, (recorder?.elapsedMs ?: 0L) - NAMING_DELAY_MS)
+            val closed = local.tunes.mapIndexed { i, tune -> if (i == local.tunes.lastIndex && tune.endMs == 0L) tune.copy(endMs = start) else tune }
+            local.copy(tunes = closed + SetlistEntry(tune.tuneId, tune.settingId ?: 0, tune.title, start))
+        }?.also { RecordingUploads.save(it) }
+        // The bars it waited on while unsure were this tune all along.
+        if (s.recording) _wave.update { bars ->
+            val owned = bars.indexOfLast { it.tuneId != null }
+            bars.mapIndexed { i, bar -> if (i > owned) bar.copy(tuneId = tuneId) else bar }
+        }
         _named.value++
         if (s.mode == Mode.NameTune) stop()
     }
 
+    /** Debug builds' `--es showTune <id>`: a tune shown as if just named, with a few others as close matches. */
+    fun debugShow(tuneId: Int) = scope.launch {
+        candidateIds = listOf(tuneId, 1, 2, 27)
+        lookUp(candidateIds)
+        val tune = names[tuneId] ?: return@launch
+        refreshGuesses(true)
+        _state.update { it.copy(phase = Phase.Named, heard = listOf(Heard(tune, System.currentTimeMillis())) + it.heard) }
+        _named.value++
+    }
+
     private suspend fun lookUp(ids: List<Int>) {
         val missing = ids.filter { it !in names }
-        if (missing.isNotEmpty()) runCatching { Services.api.finderTunes(missing) }.onSuccess { tunes -> tunes.forEach { names[it.tuneId] = it } }
+        if (missing.isNotEmpty()) runCatching { Services.api.finderTunes(missing) }
+            .onSuccess { tunes -> tunes.forEach { names[it.tuneId] = it } }
+            .onFailure { Log.w(TAG, "Could not look up tunes $missing", it) }
         refreshGuesses(_state.value.leaderSure)
     }
 

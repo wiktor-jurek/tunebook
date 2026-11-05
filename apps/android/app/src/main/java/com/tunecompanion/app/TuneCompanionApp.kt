@@ -9,6 +9,7 @@ class TuneCompanionApp : Application() {
         super.onCreate()
         Services.api = ApiClient(this, BuildConfig.API_BASE)
         Library.load()
+        RecordingUploads.init(this)
     }
 }
 
