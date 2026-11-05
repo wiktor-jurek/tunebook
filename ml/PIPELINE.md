@@ -823,7 +823,11 @@ audio included: private storage, never served or redistributed.
   band, collecting activity and dataset leak checks. `/admin/label` is the labeller, ported from
   `eval/review.py`: album sections, YouTube clips and session sets, with the waveform, music lane,
   engine guesses, trimming and splitting, tune search, tags and keyboard shortcuts, saved straight to
-  `ml.segments` (`apps/web/src/lib/labels.ts`).
+  `ml.segments` (`apps/web/src/lib/labels.ts`). It opens on **Next up** (since 2026-11-04): every queue's
+  open items ranked by `rank()` in what most improves the test sets: bands sections, unchecked YouTube
+  test clips, YouTube test sets to split, albums sections, session test tunes, then training-only items;
+  popular tunes first within each. The bands tunes are `ml.tune_roles` rows with reason "bands set: …"
+  (`store_import.py roles()`, from the found manifest's valid/test split).
 - **The files are outputs now**: `store_export.py` regenerates `eval/youtube.csv`, `eval/sessions.csv` and
   `data/found/manifest.jsonl` from the data home (cutting again any clip whose times changed in the
   labeller), so the training and evaluation tools read them unchanged. `eval/review.py` is retired.
@@ -893,6 +897,29 @@ audio included: private storage, never served or redistributed.
   `--render-fraction 0` unless renders are the question. Size changes (width, layers, stride) cannot warm start
   from these backbones. First batch: `scratch/quick2.sh` (log `quick2.log`). Only paired differences on the same
   tune set count.
+  **First batch (2026-11-04, `scratch/quick2.log`): stable but insensitive.** Scored with sim centres + prior
+  (YouTube / albums / bands, 242 / 175 / 31 clips), base is 87.6 / 77.7 / 54.8%. Seeds differ by +4/−4 and +2/−2
+  clips, and no change moved the sim-centre score beyond that: no rests +4/−7, renders 0.3 +4/−5, no YuE2 +4/−7,
+  no found audio +7/−9, margin 0 +6/−10, backing 0.3 / 0.9 +4/−5 / +5/−4, 8k steps +6/−6 (all p ≥ 0.45). Height
+  from `cur2-h` against base is +11/−10, and rests make no difference with height either (+6/−7). The learned head
+  is noisier (seeds +2/−9, +5/−8) but moved with the data: no YuE2 −17/+3 (p 0.003), no found audio **+17/−2**
+  (p 0.001: the 513-tune found pool pulls the head towards its tunes). So 4k steps of continued training cannot
+  change what simulated centres see; the backbone decides. Rests and height are settled as no gain at the shipped
+  metric. Recipe tweaks look exhausted: the remaining levers are structural (the input from scratch, symbolic
+  prototypes, decoding) and a bigger test set. To test the input or a smaller model, train from scratch where it
+  learns fast (24 channels: cur1-h was at 34% simulated top-1 by 4k steps), or distil a small student from ft-clean.
+  **From scratch (2026-11-04, `scratch/quick3.sh`, log `quick3.log`): 12k steps is far too short to rank ideas.**
+  Runs from scratch on the 2,500 tunes, 12k steps (80 minutes each), no renders. Sim centres + prior, YouTube /
+  albums / bands: `s-h` (24 ch, 6 × 384) 59.1 / 52.6 / 41.9%, its seed 1 62.4 / 52.6 / 35.5%, `s-h-small`
+  (4 × 256, heads 4) 52.1 / 41.1 / 25.8%, `s-12` (12 ch) 62.0 / 52.0 / 38.7%, against the warm-started base's
+  87.6 / 77.7 / 54.8%. Every run was still climbing steeply at 12k (simulated top-1 0.29 → 0.64 → 0.71 at 6k / 9k /
+  12k for `s-h`; YouTube top-1 by the learned head 2 → 14 → 19%). Seeds alone differ by +28/−22 clips (sim) and
+  +55/−21 (head, p < 0.001), so from-scratch runs this short only show large effects. **The 12-channel plateau did
+  not appear here:** `s-12` kept pace with `s-h` at every evaluation (sim +22/−27 for height, p 0.57), so height
+  gives no gain from scratch either, and the plateau seen in cur1-2k and the 5k-step quick smoke is not a property
+  of 12 channels on this tune set. The smaller model is clearly behind at equal steps (+11/−53, p < 0.001), but it
+  may only be slower. To compare sizes or inputs from scratch, runs need to be near convergence (30k+ steps, about
+  3.5 hours each on mantis) with two seeds an arm.
 - **Session mode on whole recordings:** measure the live decoder on the session videos' labelled sets: the time to a right answer after each tune starts, and wrong answers at set changes. The 30-window history needs about 15 s to let a new tune take over. Test a change detector and The Session's set transitions (`data/sets.csv`, `data/transitions.json`) there.
 - **Bigger model:** JigRipper has about 1.7× our parameters (9 × 768 transformer layers against our 6 × 384), and a model that large needs a rented GPU. Also raise the low end of the range to G4, as JigRipper does; that needs a full feature rebuild.
 - **More real audio:** use album tracks with weak labels (multiple-instance learning). `found_train.pt` is now built by `classifier.py found-cache`.

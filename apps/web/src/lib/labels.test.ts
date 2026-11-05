@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/db", () => ({ db: {}, pool: {} }));
 vi.mock("@/lib/library", () => ({ searchCatalogTunes: vi.fn() }));
-const { LabelError, planSave } = await import("@/lib/labels");
+const { LabelError, planSave, rank } = await import("@/lib/labels");
 
 const tags = { instruments: [], ensemble: null, setting: null };
 const clip = { startS: 30, endS: 45, tuneId: 27, setId: null, meta: null, video: "abc" };
@@ -37,5 +37,33 @@ describe("planSave", () => {
   it("refuses tunes that overlap or end before they start", () => {
     expect(() => planSave("youtube", [clip], { segments: [{ startS: 30, endS: 40, tuneId: 1 }, { startS: 35, endS: 45, tuneId: 2 }], verdict: "set", tags, notes: "" })).toThrow("overlap");
     expect(() => planSave("youtube", [clip], { segments: [{ startS: 40, endS: 30, tuneId: 1 }], verdict: "set", tags, notes: "" })).toThrow("end after");
+  });
+});
+
+describe("rank", () => {
+  const open = { unchecked: 1, sets: 0, evalRole: false, trainOnly: false, bands: false };
+  const tier = (g: Partial<typeof open> & { kind: string }) => rank({ ...open, ...g })?.tier ?? null;
+
+  it("puts the bands set first, then unchecked YouTube test clips, sets to split, then the albums test set", () => {
+    const order = [
+      tier({ kind: "album", evalRole: true, bands: true }),
+      tier({ kind: "youtube_video", evalRole: true }),
+      tier({ kind: "youtube_video", unchecked: 0, sets: 1, evalRole: true }),
+      tier({ kind: "album", evalRole: true }),
+    ];
+    expect(order).toEqual([...order].sort((a, b) => a! - b!));
+    expect(new Set(order).size).toBe(4);
+  });
+
+  it("ranks training tunes after every test-set item", () => {
+    const test = Math.max(...[{ kind: "album", evalRole: true }, { kind: "youtube_full" }].map((g) => tier(g)!));
+    expect(tier({ kind: "youtube_video", trainOnly: true })).toBeGreaterThan(test);
+    expect(tier({ kind: "album" })).toBeGreaterThan(test);
+  });
+
+  it("leaves out what is already labelled", () => {
+    expect(tier({ kind: "album", unchecked: 0 })).toBeNull();
+    expect(tier({ kind: "youtube_video", unchecked: 0 })).toBeNull();
+    expect(tier({ kind: "youtube_full", unchecked: 0, sets: 1 })).toBeNull();
   });
 });

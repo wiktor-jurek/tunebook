@@ -101,6 +101,8 @@ def sessions(names: dict) -> tuple[int, int]:
 
 def albums() -> int:
     roles = store.roles()
+    # The bands set's tunes are eval too (store_import.roles), but keep their own valid/test split, not "benchmark".
+    bands = {row["tune_id"] for row in store.db().execute("select tune_id from ml.tune_roles where reason like 'bands set:%'")}
     out = []
     for r in rows("album"):
         meta = r["source_meta"] or {}
@@ -120,7 +122,8 @@ def albums() -> int:
         out.append({"tune_id": r["tune_id"], "audio": f"audio/{audio}", "video_id": meta.get("video"), "channel": r["channel"],
                     "start_s": video_start + r["start_s"], "end_s": video_start + r["end_s"], "confidence": confidence,
                     "label_source": "human" if r["verified"] == "yes" else r["label_source"], "licence": r["licence"],
-                    "split": "benchmark" if role == "eval" else "train" if role == "train" else split_of(r["tune_id"])})
+                    "split": split_of(r["tune_id"]) if r["tune_id"] in bands else "benchmark" if role == "eval"
+                    else "train" if role == "train" else split_of(r["tune_id"])})
     (OUT / "data" / "found").mkdir(parents=True, exist_ok=True)
     with (OUT / "data" / "found" / "manifest.jsonl").open("w") as handle:
         for row in out:

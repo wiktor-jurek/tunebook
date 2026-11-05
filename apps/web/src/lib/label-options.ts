@@ -6,6 +6,8 @@ export const QUEUES = {
   sessions: { label: "Sessions", kinds: ["youtube_full"] },
 } as const;
 export type Queue = keyof typeof QUEUES;
+/** What the labeller shows: one queue, or "next", every queue's open items ranked by what helps the test sets most. */
+export type Mode = Queue | "next";
 export const FILTERS = { unchecked: "Not checked", set: "Sets to split", checked: "Checked right", rejected: "Rejected", all: "All" } as const;
 export type Filter = keyof typeof FILTERS;
 export type Verdict = "yes" | "no" | "set";

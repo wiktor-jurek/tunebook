@@ -22,29 +22,79 @@ function parseGroup(key: string): { sourceId: number; setId: string } | { segmen
   return Number.isSafeInteger(sourceId) && at < key.length - 1 ? { sourceId, setId: key.slice(at + 1) } : null;
 }
 
-export type QueueItem = { key: string; title: string; tunes: number; verified: string | null };
+export type QueueItem = { key: string; queue: Queue; title: string; tunes: number; verified: string | null; why?: string };
 
-/** The queue's groups under a filter, benchmark (eval) tunes first, then the most popular. */
-export async function listQueue(queue: Queue, filter: Filter): Promise<{ items: QueueItem[]; counts: Record<Filter, number> }> {
-  const kinds = sql.join(QUEUES[queue].kinds.map((k) => sql`${k}`), sql`, `);
-  const groups = await rows<{ key: string; title: string; tunes: number; unchecked: number; sets: number; no: number; yes: number; evalRole: boolean; popularity: number; sourceId: number; start: number }>(sql`
-    select case when g.set_id is null then g.id::text else s.id || '~' || g.set_id end as key,
+/** ml.tune_roles reasons that mark the bands test set (ml/store_import.py). */
+const BANDS_REASON = "bands set:";
+
+type GroupRow = {
+  key: string; kind: string; title: string; tunes: number; unchecked: number; sets: number; no: number; yes: number;
+  evalRole: boolean; trainOnly: boolean; bands: boolean; popularity: number; sourceId: number; start: number;
+};
+
+const queueOf = (kind: string) => (Object.keys(QUEUES) as Queue[]).find((q) => (QUEUES[q].kinds as readonly string[]).includes(kind)) ?? "album";
+const stateOf = (g: GroupRow): Filter => (g.unchecked ? "unchecked" : g.sets ? "set" : g.no ? "rejected" : "checked");
+const toItem = (g: GroupRow, why?: string): QueueItem => ({
+  key: g.key, queue: queueOf(g.kind), title: g.title, tunes: g.tunes, verified: g.unchecked ? null : g.sets ? "set" : g.no ? "no" : "yes", ...(why ? { why } : {}),
+});
+
+async function listGroups(kinds: readonly string[]) {
+  return rows<GroupRow>(sql`
+    select case when g.set_id is null then g.id::text else s.id || '~' || g.set_id end as key, min(s.kind) as kind,
       coalesce(min(cs.title), min(s.title), 'Untitled') as title, count(*)::int as tunes,
       count(*) filter (where g.verified is null)::int as unchecked, count(*) filter (where g.verified = 'set')::int as sets,
       count(*) filter (where g.verified = 'no')::int as no, count(*) filter (where g.verified = 'yes')::int as yes,
-      bool_or(r.role = 'eval') as "evalRole", max(coalesce(ct.tunebooks, 0))::int as popularity, min(s.id)::int as "sourceId", min(g.start_s)::float as start
+      coalesce(bool_or(r.role = 'eval'), false) as "evalRole", coalesce(bool_and(r.role = 'train'), false) as "trainOnly",
+      coalesce(bool_or(r.reason like ${BANDS_REASON + "%"}), false) as bands,
+      max(coalesce(ct.tunebooks, 0))::int as popularity, min(s.id)::int as "sourceId", min(g.start_s)::float as start
     from ml.segments g join ml.sources s on s.id = g.source_id
       left join lateral (select title from catalog_settings c where c.tune_id = g.tune_id order by setting_id limit 1) cs on true
       left join catalog_tunes ct on ct.tune_id = g.tune_id left join ml.tune_roles r on r.tune_id = g.tune_id
-    where s.kind in (${kinds}) and s.storage_key is not null
+    where s.kind in (${sql.join(kinds.map((k) => sql`${k}`), sql`, `)}) and s.storage_key is not null
     group by 1, case when g.set_id is null then g.id else s.id end`);
-  const state = (g: (typeof groups)[number]): Filter => (g.unchecked ? "unchecked" : g.sets ? "set" : g.no ? "rejected" : "checked");
+}
+
+/** The queue's groups under a filter, benchmark (eval) tunes first, then the most popular. */
+export async function listQueue(queue: Queue, filter: Filter): Promise<{ items: QueueItem[]; counts: Record<Filter, number> }> {
+  const groups = await listGroups(QUEUES[queue].kinds);
   const counts = { unchecked: 0, set: 0, checked: 0, rejected: 0, all: groups.length };
-  for (const g of groups) counts[state(g)]++;
-  const items = groups.filter((g) => filter === "all" || state(g) === filter)
+  for (const g of groups) counts[stateOf(g)]++;
+  const items = groups.filter((g) => filter === "all" || stateOf(g) === filter)
     .sort((a, b) => Number(b.evalRole) - Number(a.evalRole) || b.popularity - a.popularity || a.sourceId - b.sourceId || a.start - b.start)
-    .map((g) => ({ key: g.key, title: g.title, tunes: g.tunes, verified: g.unchecked ? null : g.sets ? "set" : g.no ? "no" : "yes" }));
+    .map((g) => toItem(g));
   return { items, counts };
+}
+
+/** How much labelling a group helps, as a tier (lower first) and the reason shown to the labeller; null when it is done.
+ *  Test-set labels come first, the thinnest set first: each wrong label in the 31-clip bands set moves it ~3 points.
+ *  The test sets follow ml/train/classifier.py prepare(): album sections of bands tunes and of the benchmark's eval
+ *  half, and YouTube clips and session tunes of any tune outside the benchmark's train half. */
+export function rank(g: Pick<GroupRow, "kind" | "unchecked" | "sets" | "evalRole" | "trainOnly" | "bands">): { tier: number; why: string } | null {
+  const queue = queueOf(g.kind);
+  if (queue === "album") {
+    if (!g.unchecked) return null;
+    if (g.bands) return { tier: 0, why: "Bands test set: the smallest, so every check counts most" };
+    if (g.evalRole) return { tier: 3, why: "Albums test set: check the label is right" };
+    return { tier: 6, why: "Training data: check the label is right" };
+  }
+  const test = !g.trainOnly;
+  if (g.unchecked) {
+    if (queue === "youtube") return test ? { tier: 1, why: "YouTube test clip that nobody has checked" } : { tier: 5, why: "YouTube clip (training tune)" };
+    return test ? { tier: 4, why: "Session test tune that nobody has checked" } : { tier: 5, why: "Session tune (training tune)" };
+  }
+  if (g.sets && queue === "youtube") {
+    return test ? { tier: 2, why: "A set left out of the YouTube test: split it into its tunes to add clips" }
+      : { tier: 5, why: "A set to split (training tunes)" };
+  }
+  return null;
+}
+
+/** Everything still to label, across queues, in the order that most improves the test sets; popular tunes first within a tier. */
+export async function listNext(): Promise<{ items: QueueItem[]; left: number }> {
+  const groups = await listGroups(Object.values(QUEUES).flatMap((q) => q.kinds));
+  const ranked = groups.flatMap((g) => { const r = rank(g); return r ? [{ g, ...r }] : []; })
+    .sort((a, b) => a.tier - b.tier || b.g.popularity - a.g.popularity || a.g.sourceId - b.g.sourceId || a.g.start - b.g.start);
+  return { items: ranked.map(({ g, why }) => toItem(g, why)), left: ranked.filter((r) => r.tier <= 4).length };
 }
 
 export type Segment = { id: number; startS: number; endS: number; tuneId: number | null; title: string | null; kind: string | null; verified: string | null; meta: SegmentMeta | null };
@@ -112,7 +162,8 @@ export async function getGroup(key: string, queue: Queue): Promise<GroupDetail |
   const first = segments[0];
   return {
     key, queue, source: { id: source.id, kind: source.kind, title: source.title, channel: source.channel, video: (meta.video as string) ?? null },
-    audio: { url, start, end, offsetInVideo: Number(meta.offset_s ?? 0) },
+    // YouTube clips past the cached minutes record offset_s; album sections, video_start_s (ml/store_import.py).
+    audio: { url, start, end, offsetInVideo: Number(meta.offset_s ?? meta.video_start_s ?? 0) },
     segments: segments.map(({ id, startS, endS, tuneId, title, kind, verified, meta: m }) => ({ id, startS, endS, tuneId, title, kind, verified, meta: m })),
     tags: { instruments: first.instruments ? first.instruments.split(/[;,]\s*/).filter(Boolean) : [], ensemble: first.ensemble, setting: first.settingTag },
     notes: first.notes ?? "",

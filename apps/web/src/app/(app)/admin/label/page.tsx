@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/session";
-import { FILTERS, QUEUES, type Filter, type Queue } from "@/lib/label-options";
+import { FILTERS, QUEUES, type Filter, type Mode } from "@/lib/label-options";
 import { Labeller } from "@/components/labeller/labeller";
 
 export const metadata = { title: "Label recordings" };
@@ -8,7 +8,7 @@ export const metadata = { title: "Label recordings" };
 export default async function LabelPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requireAdmin();
   const params = await searchParams;
-  const queue = (params.queue && params.queue in QUEUES ? params.queue : "album") as Queue;
+  const queue = (params.queue && params.queue in QUEUES ? params.queue : "next") as Mode;
   const filter = (params.filter && params.filter in FILTERS ? params.filter : "unchecked") as Filter;
   return <Labeller queue={queue} filter={filter} item={params.item ?? null} />;
 }

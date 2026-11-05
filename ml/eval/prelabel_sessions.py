@@ -154,7 +154,8 @@ def resolve(rows: list[dict], names: Tunes) -> None:
 
 def publish(videos: list[Path], kind: str) -> None:
     """Puts each recording's prelabel files in the bucket beside its audio, and records their keys on the source."""
-    folder = {"youtube_full": "ml/audio/youtube/full/", "album": "ml/audio/album/"}.get(kind, "ml/audio/youtube/source/")
+    folder = {"youtube_full": "ml/audio/youtube/full/", "album": "ml/audio/album/", "album-track": "ml/audio/album-track/"}.get(kind, "ml/audio/youtube/source/")
+    kind = "album" if kind == "album-track" else kind  # a whole track is an album source named by its video
     for video in videos:
         keys = {engine: store.put_audio(output(video, engine), folder + output(video, engine).name) for engine in ENGINES if done(video, engine)}
         if keys:
@@ -180,8 +181,9 @@ def report(rows: list[dict]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--set", choices=("sessions", "youtube", "albums"), default="sessions",
-                        help="whole sessions, YouTube clips' sources, or album sections (data/found/manifest.jsonl)")
+    parser.add_argument("--set", choices=("sessions", "youtube", "albums", "tracks"), default="sessions",
+                        help="whole sessions, YouTube clips' sources, album sections (data/found/manifest.jsonl), "
+                             "or whole album tracks (data/found/tracks/, store_tracks.py)")
     parser.add_argument("--no-publish", action="store_true", help="write the files beside the audio but leave the bucket and data home alone")
     parser.add_argument("--engines", default=",".join(ENGINES), help="comma-separated: " + ", ".join(ENGINES))
     parser.add_argument("--model", type=Path, default=REPO / "apps" / "web" / "public" / "finder" / "model.onnx")
@@ -207,6 +209,8 @@ def main() -> None:
         # Each album section is its own source, named by its audio file (store_import.py found()).
         manifest = c.ML / "data" / "found" / "manifest.jsonl"
         videos = [c.ML / "data" / "found" / a for a in dict.fromkeys(json.loads(line)["audio"] for line in manifest.open())]
+    elif args.set == "tracks":
+        videos = sorted((c.ML / "data" / "found" / "tracks").glob("*.ogg"))
     else:
         where = full_path if args.set == "sessions" else lambda youtube_id: source_path({"youtube_id": youtube_id})
         videos = [where(v) for v in dict.fromkeys(row["youtube_id"] for row in rows)]
@@ -239,7 +243,7 @@ def main() -> None:
             target.write_text(json.dumps(result))
             print(f"{video.stem} {engine}: {len(result['windows'])} windows", flush=True)
     if not args.no_publish:
-        publish(videos, {"sessions": "youtube_full", "youtube": "youtube_video", "albums": "album"}[args.set])
+        publish(videos, {"sessions": "youtube_full", "youtube": "youtube_video", "albums": "album", "tracks": "album-track"}[args.set])
 
 
 if __name__ == "__main__":

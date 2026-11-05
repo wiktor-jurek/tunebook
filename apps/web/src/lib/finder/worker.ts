@@ -25,6 +25,7 @@ const SILENCE = 0.003;
 let ort: Ort | null = null;
 let session: Session | null = null;
 let tunes: number[] = [];
+let channels = CHANNELS;
 const decoder = new Decoder();
 const post = (message: FinderResponse) => self.postMessage(message);
 
@@ -66,8 +67,20 @@ async function init(modelUrl: string, tunesUrl: string) {
   if (tunebooks?.length === ids.length) decoder.setPrior(popularityPrior(tunebooks));
   else console.warn("Tune finder: no popularity.json matching tunes.json; answers are not weighted by popularity");
   session = await ort.InferenceSession.create(model, { executionProviders: ["wasm"], graphOptimizationLevel: "all" });
+  channels = await inputChannels(ort, session);
   tunes = ids;
   post({ type: "ready", tunes: tunes.length });
+}
+
+/** 12 or 24: what the model takes. onnxruntime-web 1.20 does not expose input shapes, so try a silent window of each. */
+async function inputChannels(ort: Ort, session: Session): Promise<number> {
+  for (const n of [CHANNELS, CHANNELS === 24 ? 12 : 24]) {
+    try {
+      await session.run({ windows: new ort.Tensor("float32", new Float32Array(n * FRAMES), [1, n, FRAMES]) });
+      return n;
+    } catch { /* the other size */ }
+  }
+  throw new Error("The tune model takes neither 12 nor 24 channels");
 }
 
 async function score(samples: Float32Array, rate: number) {
@@ -77,7 +90,7 @@ async function score(samples: Float32Array, rate: number) {
   let energy = 0;
   for (const s of audio) energy += s * s;
   if (Math.sqrt(energy / audio.length) < SILENCE) { post({ type: "quiet" }); return; }
-  const input = new ort.Tensor("float32", windowFeatures(audio), [1, CHANNELS, FRAMES]);
+  const input = new ort.Tensor("float32", windowFeatures(audio, channels), [1, channels, FRAMES]);
   const output = await session.run({ windows: input });
   const verdict = decoder.push(output.cosines.data as Float32Array);
   post({ type: "verdict", status: verdict.status, margin: verdict.margin, ms: Math.round(performance.now() - started),

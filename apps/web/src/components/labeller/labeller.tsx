@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Keyboard, Pause, Play, Scissors, ZoomIn, ZoomOut } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { FILTERS, QUEUES, type Filter, type Queue, type Verdict } from "@/lib/label-options";
+import { FILTERS, QUEUES, type Filter, type Mode, type Queue, type Verdict } from "@/lib/label-options";
 import type { GroupDetail, QueueItem, Segment } from "@/lib/labels";
 import { Timeline, type Peaks } from "@/components/labeller/timeline";
 import { Segments, type Tune } from "@/components/labeller/segments";
@@ -37,15 +37,19 @@ async function decodePeaks(url: string, start: number): Promise<Peaks> {
   return { rate: buffer.sampleRate / step, low, high, start, duration: buffer.duration };
 }
 
-export function Labeller({ queue, filter, item }: { queue: Queue; filter: Filter; item: string | null }) {
+type ListResponse = { items: QueueItem[]; counts?: Record<Filter, number>; left?: number };
+
+export function Labeller({ queue, filter, item }: { queue: Mode; filter: Filter; item: string | null }) {
   const router = useRouter();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [counts, setCounts] = useState<Record<Filter, number> | null>(null);
+  const [left, setLeft] = useState<number | null>(null);
   const [position, setPosition] = useState(0);
   const [failed, setFailed] = useState(false);
-  const key = items[position]?.key ?? null;
+  const current = items[position] ?? null, key = current?.key ?? null;
+  const loaded = (data: ListResponse) => { setItems(data.items); setCounts(data.counts ?? null); setLeft(data.left ?? null); setFailed(false); };
 
-  const go = useCallback((next: { queue?: Queue; filter?: Filter; item?: string | null }) => {
+  const go = useCallback((next: { queue?: Mode; filter?: Filter; item?: string | null }) => {
     const params = new URLSearchParams({ queue: next.queue ?? queue, filter: next.filter ?? filter });
     if (next.item) params.set("item", next.item);
     router.replace(`/admin/label?${params}`, { scroll: false });
@@ -54,8 +58,8 @@ export function Labeller({ queue, filter, item }: { queue: Queue; filter: Filter
   const loadList = useCallback(async () => {
     const response = await fetch(`/api/admin/labels?queue=${queue}&filter=${filter}`).catch(() => null);
     if (!response?.ok) { setFailed(true); return null; }
-    const data = await response.json() as { items: QueueItem[]; counts: Record<Filter, number> };
-    setItems(data.items); setCounts(data.counts); setFailed(false);
+    const data = await response.json() as ListResponse;
+    loaded(data);
     return data.items;
   }, [queue, filter]);
 
@@ -67,9 +71,9 @@ export function Labeller({ queue, filter, item }: { queue: Queue; filter: Filter
       const response = await fetch(`/api/admin/labels?queue=${queue}&filter=${filter}`).catch(() => null);
       if (cancelled) return;
       if (!response?.ok) { setFailed(true); return; }
-      const data = await response.json() as { items: QueueItem[]; counts: Record<Filter, number> };
+      const data = await response.json() as ListResponse;
       if (cancelled) return;
-      setItems(data.items); setCounts(data.counts); setFailed(false);
+      loaded(data);
       setPosition(first.current ? Math.max(0, data.items.findIndex((i) => i.key === first.current)) : 0);
       first.current = null;
     })();
@@ -79,24 +83,27 @@ export function Labeller({ queue, filter, item }: { queue: Queue; filter: Filter
 
   const next = useCallback(() => setPosition((p) => Math.min(items.length - 1, p + 1)), [items.length]);
   const previous = useCallback(() => setPosition((p) => Math.max(0, p - 1)), []);
-  // As in review.py: stay at the same place in the list, which now holds the next item when the saved one drops out.
+  // Move on to the item that followed the saved one, wherever the reloaded list now has it (a saved item may drop out,
+  // or, in Next up, move to another tier); failing that, stay at the same place.
   const saved = useCallback(async () => {
-    const before = items.length;
+    const following = items[position + 1]?.key;
     const list = await loadList();
-    if (list) setPosition((p) => Math.min(list.length - 1, list.length === before ? p + 1 : p));
-  }, [items.length, loadList]);
+    if (!list) return;
+    const at = following ? list.findIndex((i) => i.key === following) : -1;
+    setPosition(Math.max(0, Math.min(list.length - 1, at >= 0 ? at : position)));
+  }, [items, position, loadList]);
 
   return <div className="labeller">
     <header className="label-bar">
       <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href="/admin/data"><ArrowLeft size={15} /> Training data</Link>
       <SegmentedControl className="label-switch" label="Recordings" value={queue} onChange={(q) => go({ queue: q, item: null })}
-        options={(Object.keys(QUEUES) as Queue[]).map((q) => ({ value: q, label: QUEUES[q].label }))} />
-      <select className="table-filter" value={filter} aria-label="Which labels" onChange={(event) => go({ filter: event.target.value as Filter, item: null })}>
+        options={[{ value: "next" as Mode, label: "Next up" }, ...(Object.keys(QUEUES) as Queue[]).map((q) => ({ value: q as Mode, label: QUEUES[q].label }))]} />
+      {queue === "next" ? left !== null && <span className="table-count">{left.toLocaleString("en-GB")} left for the test sets</span> : <select className="table-filter" value={filter} aria-label="Which labels" onChange={(event) => go({ filter: event.target.value as Filter, item: null })}>
         {(Object.keys(FILTERS) as Filter[]).map((f) => <option key={f} value={f}>{FILTERS[f]}{counts ? ` (${counts[f].toLocaleString("en-GB")})` : ""}</option>)}
-      </select>
+      </select>}
       <div className="label-nav">
         <Button variant="outline" size="icon" aria-label="Previous (K)" disabled={position <= 0} onClick={previous}><ChevronLeft size={16} /></Button>
-        <span className="table-count" role="status">{items.length ? `${position + 1} of ${items.length.toLocaleString("en-GB")}` : counts ? "Nothing here" : "Loading"}</span>
+        <span className="table-count" role="status">{items.length ? `${position + 1} of ${items.length.toLocaleString("en-GB")}` : counts || left !== null ? "Nothing here" : "Loading"}</span>
         <Button variant="outline" size="icon" aria-label="Next (J)" disabled={position >= items.length - 1} onClick={next}><ChevronRight size={16} /></Button>
       </div>
       <details className="label-shortcuts"><summary><Keyboard size={15} /> Shortcuts</summary>
@@ -104,14 +111,14 @@ export function Labeller({ queue, filter, item }: { queue: Queue; filter: Filter
       </details>
     </header>
     <main className="label-main">
-      {key ? <LabelItem key={key} itemKey={key} queue={queue} onSaved={saved} onNext={next} onPrevious={previous} />
-        : <section className="label-item label-empty"><p className="muted">{failed ? "Couldn't load the queue." : counts ? "Nothing to label here." : "Loading"}</p></section>}
+      {current ? <LabelItem key={current.key} itemKey={current.key} queue={current.queue} why={current.why} onSaved={saved} onNext={next} onPrevious={previous} />
+        : <section className="label-item label-empty"><p className="muted">{failed ? "Couldn't load the queue." : counts || left !== null ? "Nothing to label here." : "Loading"}</p></section>}
     </main>
   </div>;
 }
 
 /** One recording to label, loaded fresh whenever the item changes (the parent keys it by item). */
-function LabelItem({ itemKey: key, queue, onSaved, onNext, onPrevious }: { itemKey: string; queue: Queue; onSaved: () => Promise<void>; onNext: () => void; onPrevious: () => void }) {
+function LabelItem({ itemKey: key, queue, why, onSaved, onNext, onPrevious }: { itemKey: string; queue: Queue; why?: string; onSaved: () => Promise<void>; onNext: () => void; onPrevious: () => void }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [peaks, setPeaks] = useState<Peaks | null>(null);
@@ -259,6 +266,7 @@ function LabelItem({ itemKey: key, queue, onSaved, onNext, onPrevious }: { itemK
   return <section className="label-item" aria-busy={!peaks}>
     <header className="label-head">
       <div>
+        {why && <p className="label-why">{why}</p>}
         <h2>{names.join(" / ")}</h2>
         <p className="label-meta">{details.map((d) => <span key={d}>{d}</span>)}</p>
       </div>

@@ -21,7 +21,9 @@ export async function getMlOverview() {
     rows<Inventory>(sql`
       select s.kind, count(distinct s.id)::int as sources, count(distinct s.id) filter (where s.storage_key is not null)::int as stored,
         count(g.id)::int as segments, round(coalesce(sum(g.end_s - g.start_s), 0)::numeric / 3600, 1)::float as hours
-      from ml.sources s left join ml.segments g on g.source_id = s.id group by 1 order by 1`),
+      from ml.sources s left join ml.segments g on g.source_id = s.id
+      where coalesce(s.status, '') <> 'merged' -- album sections now inside their whole track (ml/store_tracks.py)
+      group by 1 order by 1`),
     rows<Labels>(sql`
       select s.kind, g.label_source as "labelSource", count(*) filter (where g.verified = 'yes')::int as yes,
         count(*) filter (where g.verified = 'no')::int as no, count(*) filter (where g.verified is null)::int as unverified, count(*) filter (where g.verified = 'set')::int as sets
@@ -42,7 +44,7 @@ export async function getMlOverview() {
       with days as (select generate_series(current_date - 13, current_date, interval '1 day')::date as day)
       select to_char(d.day, 'YYYY-MM-DD') as day,
         (select count(*) from ml.searches q where q.searched_at::date = d.day)::int as searches,
-        (select count(*) from ml.sources s where s.kind = 'album' and s.created_at::date = d.day)::int as found
+        (select count(*) from ml.sources s where s.kind = 'album' and not (s.meta ? 'sections') and s.created_at::date = d.day)::int as found
       from days d order by d.day`),
     rows<Dataset>(sql`
       select id, name, purpose, created_at as "createdAt", (counts->>'segments')::int as segments, (counts->>'tunes')::int as tunes,

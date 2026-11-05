@@ -12,8 +12,8 @@ const MELODY_LOW = 55, MELODY_HIGH = 96; // G3 .. C7
 const HARMONICS: [number, number][] = [[0, 1.0], [12, 0.6], [19, 0.4], [24, 0.3]];
 const LOG_GAIN = 100;
 const NOTES = MELODY_HIGH + 24 + 1; // highest semitone a partial reaches
-// The shipped model takes heights after the pitch classes: where in the melody range each pitch class sounds,
-// so a leap up an octave is not a repeated note. Must match public/finder/model.onnx (ml/PIPELINE.md §11).
+// Heights after the pitch classes: where in the melody range each pitch class sounds, so a leap up an octave is not
+// a repeated note (24 channels). The worker uses whatever the loaded model takes, 12 or 24 (ml/PIPELINE.md §11).
 export const CHANNELS = 24;
 
 // Periodic Hann window, as torch.hann_window.
@@ -185,7 +185,7 @@ export function features(semis: Float64Array, channels = CHANNELS): Float32Array
 }
 
 /** 8 s of 16 kHz mono audio (zero-padded if shorter) → one model input window. */
-export function windowFeatures(audio: Float32Array): Float32Array {
+export function windowFeatures(audio: Float32Array, channels = CHANNELS): Float32Array {
   const window = audio.length === WINDOW_SAMPLES ? audio : (() => { const a = new Float32Array(WINDOW_SAMPLES); a.set(audio.subarray(0, WINDOW_SAMPLES)); return a; })();
-  return features(semitones(window));
+  return features(semitones(window), channels);
 }

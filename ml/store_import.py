@@ -8,7 +8,7 @@ eval/sessions.csv are written from the data home by store_export.py. Importing t
 segments the labeller has since split or retimed, so that needs --from-label-csvs, for a deliberate restore.
 
 Sources it reads, and what each becomes:
-  eval/benchmark_split.json   tune_roles
+  eval/benchmark_split.json   tune_roles (with data/found/manifest.jsonl's valid/test tunes, the bands set)
   eval/youtube.csv            youtube_video sources (one per video) with a segment per clip, in video seconds
   eval/sessions.csv           youtube_full sources (one per video) with a segment per tune, in set order
   data/found.sqlite           album sources (one per downloaded section) with their segments; searches
@@ -44,6 +44,10 @@ def roles() -> int:
     split = json.loads((ML / "eval" / "benchmark_split.json").read_text())
     rows = [(t, "train", "benchmark train half (eval/benchmark_split.json)") for t in split["train"]]
     rows += [(t, "eval", "benchmark eval half (eval/benchmark_split.json)") for t in split["eval"]]
+    # The found manifest's valid/test tunes are the "bands" test set (classifier.prepare); training never sees them.
+    # The labeller ranks them first by this reason's prefix (apps/web/src/lib/labels.ts, BANDS_REASON).
+    held = {int(r["tune_id"]) for r in map(json.loads, (ML / "data" / "found" / "manifest.jsonl").open()) if r["split"] in ("valid", "test")}
+    rows += [(t, "eval", "bands set: found valid/test split (data/found/manifest.jsonl)") for t in sorted(held)]
     with store.db().cursor() as cursor:
         cursor.executemany("insert into ml.tune_roles (tune_id, role, reason) values (%s, %s, %s) on conflict do nothing", rows)
     return len(rows)
@@ -129,10 +133,14 @@ def found() -> tuple[int, int]:
     db.row_factory = sqlite3.Row
     videos = {row["id"]: dict(row) for row in db.execute("select * from videos")}
     stored = {r["external_id"] for r in store.db().execute("select external_id from ml.sources where kind = 'album' and storage_key is not null")}
+    # Sections whose segments moved onto their whole track (store_tracks.py merge) must not get them back.
+    merged = {r["external_id"] for r in store.db().execute("select external_id from ml.sources where kind = 'album' and status = 'merged'")}
     count = 0
     for row in db.execute("select * from found order by id"):
         video = videos[row["video_id"]]
         external = f"{row['video_id']}.{row['start_s']:g}-{row['end_s']:g}"
+        if (Path(row["audio"]).stem if row["audio"] else external) in merged:
+            continue
         audio = row["audio"] and ML / "data" / "found" / row["audio"]
         if audio and audio.exists() and audio.stem not in stored:  # downloaded since the last import: into the bucket
             store.put_audio(audio, f"ml/audio/album/{audio.name}")

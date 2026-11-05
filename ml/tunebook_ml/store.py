@@ -28,8 +28,10 @@ TRAIN_SHARE = 30
 @cache
 def env() -> dict[str, str]:
     values = dict(os.environ)
-    path = ML.parent / ".env"
-    if path.exists():
+    # The repo's .env moved to apps/web/ with the monorepo; a root .env, if any, still wins.
+    for path in (ML.parent / ".env", ML.parent / "apps" / "web" / ".env"):
+        if not path.exists():
+            continue
         for line in path.read_text().splitlines():
             name, sep, value = line.partition("=")
             if sep and not line.lstrip().startswith("#"):
