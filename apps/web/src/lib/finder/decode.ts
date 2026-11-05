@@ -1,6 +1,7 @@
 // Turns per-window cosines into a live answer. Windows are averaged over the last few seconds,
 // as the mean cosine scored best on real recordings, and an answer is only given when the
-// leader is clearly ahead of the runner-up and has stayed in front.
+// leader is clearly ahead of the runner-up and has stayed in front. Once a tune is named, a
+// short view of the last few windows notices when a set moves on to the next one.
 
 export type Candidate = { index: number; cosine: number };
 export type Verdict = { status: "listening" | "unsure" | "match"; candidates: Candidate[]; margin: number };
@@ -18,6 +19,14 @@ export const STABLE_UPDATES = 2;
 // On the real eval clips it gained 9 clips and lost none (YouTube 83.3 → 85.3%, albums 69.6 → 71.3%),
 // and at the 0.04 margin it answers more clips at the same precision (ml/PIPELINE.md §11).
 export const POPULARITY_WEIGHT = 0.006;
+// Moving on: after a tune is named, the mean of only the last SWITCH_WINDOW windows is watched. When another tune
+// leads it by SWITCH_MARGIN for STABLE_UPDATES updates, that tune is named and the history is cut to those windows,
+// so it need not outvote half a minute of the last one. Replayed on 11 hours of labelled sessions
+// (ml/eval/session_decode.py), the median time to name each tune of a set fell from 19.4 s to 10.2 s, and tunes
+// named within 15 s rose from 11% to 81%, with as few wrong names (0.2 and 0.5 an hour on the two halves);
+// one tune in 180 more went unnamed. The first answer, and so single clips, are unchanged.
+export const SWITCH_WINDOW = 8;
+export const SWITCH_MARGIN = MATCH_MARGIN + 0.06;
 
 /** Each tune's prior, in cosine units, from how many The Session member tunebooks hold it. */
 export function popularityPrior(tunebooks: number[]): Float32Array {
@@ -27,6 +36,8 @@ export function popularityPrior(tunebooks: number[]): Float32Array {
 export class Decoder {
   private windows: Float32Array[] = [];
   private leaders: number[] = [];
+  private recentLeaders: number[] = [];
+  private named = -1; // the tune last answered, which the short view watches for a change
 
   /** `prior` is added to every tune's mean cosine before ranking (popularityPrior). */
   constructor(private prior: Float32Array | null = null) {}
@@ -37,6 +48,22 @@ export class Decoder {
     // A copy: onnxruntime may hand back the same output buffer on every run.
     this.windows.push(cosines.slice());
     if (this.windows.length > HISTORY) this.windows.shift();
+    if (this.named >= 0 && this.windows.length >= SWITCH_WINDOW) {
+      const recent = mean(this.windows.slice(-SWITCH_WINDOW));
+      if (this.prior) for (let i = 0; i < recent.length; i++) recent[i] += this.prior[i];
+      const candidates = topK(recent, 10);
+      const margin = candidates.length > 1 ? candidates[0].cosine - candidates[1].cosine : 0;
+      const leader = candidates[0]?.index ?? -1;
+      this.recentLeaders.push(leader);
+      if (this.recentLeaders.length > STABLE_UPDATES) this.recentLeaders.shift();
+      const held = this.recentLeaders.length === STABLE_UPDATES && this.recentLeaders.every((l) => l === leader);
+      if (leader !== this.named && margin >= SWITCH_MARGIN && held) {
+        this.windows = this.windows.slice(-SWITCH_WINDOW);
+        this.leaders = Array(STABLE_UPDATES).fill(leader);
+        this.named = leader;
+        return { status: "match", candidates, margin };
+      }
+    }
     const scores = mean(this.windows);
     if (this.prior) for (let i = 0; i < scores.length; i++) scores[i] += this.prior[i];
     const candidates = topK(scores, 10);
@@ -45,10 +72,11 @@ export class Decoder {
     if (this.leaders.length > STABLE_UPDATES) this.leaders.shift();
     const stable = this.leaders.length === STABLE_UPDATES && this.leaders.every((leader) => leader === this.leaders[0]);
     const status = this.windows.length < MIN_WINDOWS ? "listening" : margin >= MATCH_MARGIN && stable ? "match" : "unsure";
+    if (status === "match") this.named = candidates[0].index;
     return { status, candidates, margin };
   }
 
-  reset() { this.windows = []; this.leaders = []; }
+  reset() { this.windows = []; this.leaders = []; this.recentLeaders = []; this.named = -1; }
 }
 
 function mean(windows: Float32Array[]): Float32Array {

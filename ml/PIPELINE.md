@@ -920,7 +920,26 @@ audio included: private storage, never served or redistributed.
   of 12 channels on this tune set. The smaller model is clearly behind at equal steps (+11/−53, p < 0.001), but it
   may only be slower. To compare sizes or inputs from scratch, runs need to be near convergence (30k+ steps, about
   3.5 hours each on mantis) with two seeds an arm.
-- **Session mode on whole recordings:** measure the live decoder on the session videos' labelled sets: the time to a right answer after each tune starts, and wrong answers at set changes. The 30-window history needs about 15 s to let a new tune take over. Test a change detector and The Session's set transitions (`data/sets.csv`, `data/transitions.json`) there.
+  **Model size from scratch (2026-11-05, `scratch/quick4.sh`, log `quick4.log`): the smaller model loses.** 30k steps,
+  12 channels, two seeds an arm; real-clip accuracy levelled off by 20k. 6 × 384 scored 80.6 / 70.9 / 51.6% and
+  79.3 / 68.0 / 48.4% (YouTube / albums / bands, sim centres + prior); 4 × 256 scored 78.9 / 65.7 / 45.2% and
+  78.9 / 64.0 / 41.9%. All four cross pairs favour the larger model (+12/−27, +6/−25, +14/−20, +12/−22), while its
+  seeds differ by +10/−19; the learned head drops about 10 points. Shrinking costs 3–4 points, mostly albums and bands,
+  so a bigger model (rented GPU) is the direction to test, not a smaller one. From scratch on 2,500 tunes stays about
+  7 points under the warm-started base (87.6 / 77.7 / 54.8%).
+- **Session mode on whole recordings: done (2026-11-05, `eval/session_decode.py`).** The shipped model runs once
+  along each session video (one 8 s window a second, top 256 tunes kept, `cache/decode/`; 10 videos, 11.3 hours, two
+  minutes each on mantis), and the decoder and the setlist rule of `use-listener.ts` are replayed against the checked
+  sets. Shipped (30 windows): every tune named, but a median 19.6 / 19.2 s after it starts (halves a / b, 177 / 188
+  tunes) and only 11% within 15 s; 0.2 / 0.5 wrong names an hour. A shorter history alone is fast but flips (10
+  windows: 10 s, 5 wrong an hour) and gives more wrong first answers on single clips (`session_decode.py clips`: 8
+  windows, YouTube 20 → 24%, albums 23 → 28%, bands 32 → 42% of clips). **Shipped instead: a switch view**
+  (`SWITCH_WINDOW` 8, `SWITCH_MARGIN` = 0.04 + 0.06 in `decode.ts` and `listen-core`): once a tune is named, the mean
+  of the last 8 windows watches for another tune leading by 0.10 for 2 updates, which is then named and the history
+  cut to those 8. Median 10.2 / 10.2 s, 48 / 46% within 10 s and 81 / 80% within 15 s, wrong names unchanged at
+  0.2 / 0.5 an hour, one tune per half more never named; single clips unchanged (the first answer uses the long
+  history). Not tried yet: The Session's set transitions (`data/sets.csv`, `data/transitions.json`) as a prior on
+  the next tune, and Cadence's Viterbi segmenter (below).
 - **Bigger model:** JigRipper has about 1.7× our parameters (9 × 768 transformer layers against our 6 × 384), and a model that large needs a rented GPU. Also raise the low end of the range to G4, as JigRipper does; that needs a full feature rebuild.
 - **More real audio:** use album tracks with weak labels (multiple-instance learning). `found_train.pt` is now built by `classifier.py found-cache`.
 - **Popularity prior:** in the finder since 2026-10-31 (§11). Measured without gain: key test-time augmentation, an absolute-key prior on top of it, tune-type agreement, window weighting and model ensembles (§9). Re-test hard negatives on their own.

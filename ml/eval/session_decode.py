@@ -110,6 +110,10 @@ class Settings:
     short_stable: int = 1
     # Switching: a tune other than the one last added must lead by this much more than `margin`.
     switch_extra: float = 0.0
+    # Two views: once a tune is named, the mean of only the last `switch_window` windows decides whether the music has
+    # moved on (its leader ahead by margin + switch_extra for `stable` updates); the history is then cut to those windows.
+    # Naming the first tune, and staying on it, keep the long history.
+    switch_window: int = 0
 
     def label(self) -> str:
         base = Settings()
@@ -125,6 +129,7 @@ class Decoder:
         self.leaders: deque[int] = deque(maxlen=s.stable)
         self.short_run = 0
         self.last_added = -1
+        self.recent_leaders: deque[int] = deque(maxlen=s.stable)
 
     def push(self, w: np.ndarray) -> int | None:
         """One window's cosines → the tune to add to the list, if any."""
@@ -143,6 +148,19 @@ class Decoder:
                 while len(self.windows) > s.short:
                     self.total -= self.windows.popleft()
                 self.short_run = 0
+        if s.switch_window and self.last_added >= 0 and len(self.windows) >= s.switch_window:
+            recent = sum(list(self.windows)[-s.switch_window:]) / s.switch_window + self.prior
+            r2 = np.argpartition(-recent, 2)[:2]
+            ra, rb = (r2 if recent[r2[0]] >= recent[r2[1]] else r2[::-1])
+            self.recent_leaders.append(int(ra))
+            if (ra != self.last_added and recent[ra] - recent[rb] >= s.margin + s.switch_extra
+                    and len(self.recent_leaders) == s.stable and len(set(self.recent_leaders)) == 1):
+                while len(self.windows) > s.switch_window:
+                    self.total -= self.windows.popleft()
+                self.leaders.clear()
+                self.leaders.extend([int(ra)] * s.stable)
+                self.last_added = int(ra)
+                return int(ra)
         scores = self.total / len(self.windows) + self.prior
         top2 = np.argpartition(-scores, 2)[:2]
         a, b = (top2 if scores[top2[0]] >= scores[top2[1]] else top2[::-1])
@@ -237,16 +255,52 @@ def compare(args) -> None:
         print(f"{s.label():58} {m['found']:6.1%} {m['in10']:6.1%} {m['in15']:6.1%} {m['latency'] or 0:6.1f}s {m['wrong_per_hour']:8.1f}", flush=True)
 
 
+def clips(args) -> None:
+    """One tune at a time, as the finder is mostly used: each test clip's windows in order through the decoder, from a
+    fresh start. Reports how many clips get an answer, how many answers are right, and the median second of the first."""
+    import onnxruntime as ort
+    data = torch.load(ML / "cache" / "classifier" / "clips-v4.pt", weights_only=False, mmap=True)
+    session = ort.InferenceSession(str(args.model))
+    tunes = json.loads((args.model.parent / "tunes.json").read_text())
+    index = {t: i for i, t in enumerate(tunes)}
+    counts = popularity()
+    prior = (PRIOR * np.log(np.array([counts.get(t, 0) for t in tunes], dtype=np.float32) + 1)).astype(np.float32)
+    cosines = {}
+    for name in ("youtube", "albums", "bands"):
+        rows = [r for r in data[name] if r["tune_id"] in index]
+        cosines[name] = [(index[r["tune_id"]], session.run(None, {"windows": pitchclass.keycanon(
+            r["windows"].float() / (255 if r["windows"].dtype == torch.uint8 else 1)).numpy()})[0]) for r in rows]
+    variants = [Settings(**json.loads(v)) for v in args.variant] if args.variant else VARIANTS
+    print(f"{'variant':58} " + " ".join(f"{n + ' answered/right/at':>26}" for n in cosines))
+    for s in variants:
+        cells = []
+        for name, rows in cosines.items():
+            answered = right = 0
+            at = []
+            for truth, cos in rows:
+                decoder = Decoder(s, prior)
+                first = next(((k, t) for k, w in enumerate(cos) if (t := decoder.push(w.astype(np.float32))) is not None), None)
+                if first:
+                    answered += 1
+                    right += first[1] == truth
+                    at.append(first[0] + 8)
+            cells.append(f"{answered / len(rows):8.1%} {right / max(answered, 1):7.1%} {np.median(at) if at else 0:6.1f}s")
+        print(f"{s.label():58} " + " ".join(f"{c:>26}" for c in cells), flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
     m = sub.add_parser("score")
     m.add_argument("--model", type=Path, default=MODEL, help="the finder's ONNX model (default: the web app's)")
+    v = sub.add_parser("clips")
+    v.add_argument("--model", type=Path, default=MODEL)
+    v.add_argument("--variant", action="append", help="JSON settings; repeatable")
     k = sub.add_parser("compare")
     k.add_argument("--half", choices=("a", "b"), help="every other video: tune on a, check on b")
     k.add_argument("--variant", action="append", help='JSON settings, e.g. {"history": 15}; repeatable (default: the built-in grid)')
     args = parser.parse_args()
-    (score if args.command == "score" else compare)(args)
+    {"score": score, "clips": clips, "compare": compare}[args.command](args)
 
 
 if __name__ == "__main__":
