@@ -1,8 +1,8 @@
 # Tune Companion monorepo tasks. `just` lists them.
 # Toolchains live where `just setup` put them; override any of these in your shell.
 
-export PATH := "/opt/homebrew/opt/rustup/bin:" + env("HOME") + "/.cargo/bin:" + env("PATH")
-export DEVELOPER_DIR := env("DEVELOPER_DIR", "/Volumes/Storage/Applications/Xcode.app/Contents/Developer")
+export PATH := "/opt/homebrew/opt/rustup/bin:" + env("HOME") + "/.cargo/bin:" + env("HOME") + "/Library/Android/sdk/platform-tools:" + env("HOME") + "/Library/Android/sdk/emulator:" + env("PATH")
+export DEVELOPER_DIR := env("DEVELOPER_DIR", "/Applications/Xcode.app/Contents/Developer")
 export JAVA_HOME := env("JAVA_HOME", "/Volumes/Storage/Applications/Android Studio.app/Contents/jbr/Contents/Home")
 export ANDROID_HOME := env("ANDROID_HOME", env("HOME") + "/Library/Android/sdk")
 
@@ -81,6 +81,10 @@ ios-run: ios-build
     xcrun simctl install booted apps/ios/build/Build/Products/Debug-iphonesimulator/TuneCompanion.app
     xcrun simctl launch --console-pty booted com.tunecompanion.app
 
+# Build and run on the iPhone Duo simulator; fold and unfold it from Device Hub to switch displays.
+ios-run-duo:
+    IOS_SIMULATOR="iPhone Duo" just ios-run
+
 # Run TuneKit's Swift tests (they call the Rust engine) on the simulator.
 ios-test:
     cd {{ios_kit}} && xcodebuild test -scheme TuneKit-Package -destination "platform=iOS Simulator,name={{simulator}}" 2>&1 | grep -E "^.?(✔|✘|➜) Test|error:"
@@ -115,8 +119,17 @@ android-build:
 
 # Install and launch on a running emulator or device.
 android-run: android-build
+    # Debug builds talk to the dev server on this Mac at localhost:3000, tunnelled by adb.
+    adb reverse tcp:3000 tcp:3000
     adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk
     adb shell am start -n com.tunecompanion.app/.MainActivity
+
+# Boot the Android emulator headless and mirror it in a window (its own window hangs on this Mac), with the dev server tunnelled.
+android-emulator:
+    emulator -avd TuneCompanion_API37 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect > /dev/null 2>&1 &
+    adb wait-for-device && until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
+    adb reverse tcp:3000 tcp:3000
+    scrcpy --window-title "Tune Companion (Android)" --stay-awake > /dev/null 2>&1 &
 
 # Build the listen engine for browsers into packages/listen-wasm.
 wasm-core:

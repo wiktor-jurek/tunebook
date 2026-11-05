@@ -14,4 +14,4 @@
 - Web work: read `apps/web/AGENTS.md` first (this Next.js version differs from training data).
 - `listen-core` ports `apps/web/src/lib/finder/{features,resample,decode}.ts`. Change both together until the web uses the WASM build; both are checked against `features.fixture.json`.
 - Generated, never edited by hand: `Tokens.swift`, `Tokens.kt` (from `packages/tokens/tokens.json`), the UniFFI bindings, the XCFramework, `jniLibs` and `apps/ios/TuneCompanion.xcodeproj`.
-- `just` sets `DEVELOPER_DIR` (Xcode on /Volumes/Storage), `JAVA_HOME` (Android Studio's JBR) and `ANDROID_HOME`.
+- `just` sets `DEVELOPER_DIR` (Xcode 27.2 in /Applications, for the iOS 27 SDK and iPhone Duo), `JAVA_HOME` (Android Studio's JBR) and `ANDROID_HOME`.
