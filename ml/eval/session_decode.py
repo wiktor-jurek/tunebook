@@ -54,9 +54,9 @@ def windows(audio: np.ndarray) -> torch.Tensor:
     length = FRAMES * pitchclass.HOP
     batch = torch.stack([torch.from_numpy(np.pad(audio[s:s + length], (0, max(0, s + length - len(audio)))))
                          for s in range(0, max(1, len(audio) - length + 1), pitchclass.SAMPLE_RATE)])
-    if torch.cuda.is_available():
-        batch = batch.cuda()
-    return pitchclass.features(pitchclass.semitones(batch)[:, :, :FRAMES], canon=False).half().cpu()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return torch.cat([pitchclass.features(pitchclass.semitones(batch[i:i + 32].to(device))[:, :, :FRAMES], canon=False).half().cpu()
+                      for i in range(0, len(batch), 32)])
 
 
 def popularity() -> dict[int, int]:

@@ -1,120 +1,160 @@
-// Music notation drawn by abcjs, the same engine, options and files as the website and the iPhone
-// app (the iOS package's Resources are this app's assets), in a transparent WebView that sizes
-// itself to the music and stays hidden until it is drawn, so it never flashes blank or jumps.
+// Music notation, engraved by the Rust notation engine (crates/notation-core, through the listen
+// library's bindings, as on the iPhone) and drawn natively: Bravura's glyphs, staff lines, stems, beams
+// and ties on a Compose Canvas. No web view: a score is laid out in well under a millisecond and draws
+// in the first frame, at its final height.
 package com.tunecompanion.app
 
-import android.annotation.SuppressLint
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import android.content.Context
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import org.json.JSONArray
+import com.tunecompanion.app.designsystem.Palette
+import com.tunecompanion.app.designsystem.current
+import uniffi.listen_ffi.ScoreEngraving
+import uniffi.listen_ffi.ScoreTextKind
+import uniffi.listen_ffi.engraveScore
 
 enum class AbcStyle { Phrase, Score }
 
-/** Heights of scores already drawn, so a score seen again lays out at once. */
-private val heights = mutableMapOf<String, Float>()
+/** Points (dp) per staff space for opening bars: as abcjs drew them at its 360 staff width. */
+private const val PHRASE_SCALE = 5.8f
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun AbcView(abc: String, style: AbcStyle, modifier: Modifier = Modifier, playback: ScorePlayback? = null) {
-    val key = "$style-${abc.hashCode()}"
-    var height by remember(key) { mutableStateOf(heights[key] ?: if (style == AbcStyle.Phrase) 64f else 110f) }
-    var drawn by remember(key) { mutableStateOf(false) }
-    val shown by animateFloatAsState(if (drawn) 1f else 0f, tween(180), label = "drawn")
-    val colour = if (isSystemInDarkTheme()) "#ecece8" else "#171717"
-    BoxWithConstraints(modifier.fillMaxWidth()) {
-        // Given room (a phone on its side, a tablet), a score lays out wider, as the web's does.
-        val wide = style == AbcStyle.Score && maxWidth > 600.dp
-        val options = if (style == AbcStyle.Phrase) """{"staffwidth":360,"paddingtop":0,"paddingbottom":0,"paddingleft":0,"paddingright":0}"""
-        else """{"staffwidth":${if (wide) 760 else 400},"paddingtop":0,"paddingbottom":0,"wrap":{"minSpacing":1.6,"maxSpacing":2.6,"preferredMeasuresPerLine":4}}"""
-        AndroidView(
-            modifier = Modifier.then(if (style == AbcStyle.Phrase) Modifier.widthIn(max = 420.dp) else Modifier.fillMaxWidth())
-                .height(height.dp).alpha(shown),
-            factory = { context ->
-                WebView(context).apply {
-                    setBackgroundColor(0)
-                    isVerticalScrollBarEnabled = false
-                    isHorizontalScrollBarEnabled = false
-                    settings.javaScriptEnabled = true
-                    settings.mediaPlaybackRequiresUserGesture = false
-                    addJavascriptInterface(object {
-                        @JavascriptInterface fun size(value: Float) {
-                            post {
-                                // -1: a score was just drawn (its height already reported); show it, and its player starts afresh on it.
-                                if (value < 0) { drawn = true; playback?.configure(); return@post }
-                                heights[key] = value
-                                height = value
-                            }
-                        }
-                        @JavascriptInterface fun player(state: String) { post { playback?.receive(state) } }
-                    }, "native")
-                    playback?.webView = this
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView, url: String?) { tag = true; (getTag(R.id.pending) as? String)?.let { view.evaluateJavascript(it, null) } }
-                    }
-                    loadDataWithBaseURL("file:///android_asset/", if (playback != null) PLAYER_PAGE else PAGE, "text/html", "utf-8", null)
-                }
-            },
-            update = { view ->
-                val script = "window.draw(${JSONArray(listOf(abc, colour)).toString().removeSurrounding("[", "]")}, $options)"
-                if (view.getTag(R.id.drawn) == script) return@AndroidView
-                view.setTag(R.id.drawn, script)
-                if (view.tag == true) view.evaluateJavascript(script, null) else view.setTag(R.id.pending, script)
-            },
-            onRelease = { view -> playback?.let { it.pause(); if (it.webView === view) it.webView = null } },
-        )
+    when (style) {
+        AbcStyle.Phrase -> {
+            // Opening bars at reading size, as wide as they are.
+            val engraving = remember(abc) { Engravings.phrase(abc) }
+            ScoreCanvas(engraving, emptySet(), modifier.widthIn(max = 420.dp)
+                .size((engraving.width * PHRASE_SCALE).dp, (engraving.height * PHRASE_SCALE).dp)
+                .semantics { contentDescription = "Opening bars" })
+        }
+        AbcStyle.Score -> BoxWithConstraints(modifier.fillMaxWidth()) {
+            // Laid out as abcjs did, 400 wide on a phone and 760 given room (a phone on its side, a tablet), scaled to fit.
+            val width = if (maxWidth > 600.dp) 760 else 400
+            val engraving = remember(abc, width) { Engravings.score(abc, width) }
+            LaunchedEffect(abc, playback) { playback?.load(abc) }
+            ScoreCanvas(engraving, playback?.playingNotes ?: emptySet(), Modifier.fillMaxWidth()
+                .aspectRatio(engraving.width / maxOf(engraving.height, 1f))
+                .semantics { contentDescription = "Score" })
+        }
     }
 }
 
-// The same page as the iPhone's AbcView: abcjs draws into #paper; its drawn extent (a clef's tail or a high note can
-// pass the SVG's box) is measured and reported, then -1 says it is ready to show.
-private const val PAGE = """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<style>html,body{margin:0;padding:0;background:transparent;overflow:hidden}#paper svg{display:block;overflow:visible}
-.playing-note path,.playing-note ellipse{fill:#C8642A!important;stroke:#C8642A!important}.abcjs-tempo{display:none}</style>
-<script src="abcjs-basic-min.js"></script>
-<script>
-window.draw = function (abc, colour, options) {
-  document.body.style.color = colour;
-  window.currentVisual = ABCJS.renderAbc("paper", abc, Object.assign({ responsive: "resize", add_classes: true }, options))[0] || null;
-  report();
-  native.size(-1);
-};
-function report() {
-  var paper = document.getElementById("paper"), svg = paper.querySelector("svg");
-  paper.style.paddingTop = "0px";
-  var height = paper.getBoundingClientRect().height;
-  if (svg) {
-    var rect = svg.getBoundingClientRect(), view = svg.viewBox && svg.viewBox.baseVal;
-    var scale = view && view.width ? rect.width / view.width : 1, drawn = svg.getBBox();
-    var above = Math.max(0, -(drawn.y * scale)), below = Math.max(0, (drawn.y + drawn.height) * scale - rect.height);
-    paper.style.paddingTop = Math.ceil(above) + "px";
-    height = rect.height + Math.ceil(above) + Math.ceil(below) + 2;
-  }
-  native.size(height);
-}
-window.addEventListener("resize", function () { setTimeout(report, 0); });
-</script></head><body><div id="paper"></div></body></html>"""
+/** Engravings by tune and width: the engine is fast, but a score redrawn as it plays need not be laid out again. */
+private object Engravings {
+    private val cache = HashMap<String, ScoreEngraving>()
+    /** abcjs's staff width is in its pixels, about eight to a staff space. */
+    private const val PIXELS_PER_SPACE = 8f
 
-// The page with the website's player beside abcjs. The player reports to the iPhone's message handler; here that is
-// bridged to the same native object the size goes to.
-private val PLAYER_PAGE = PAGE.replace("</head>", """<script>window.webkit={messageHandlers:{player:{postMessage:function(s){native.player(JSON.stringify(s))}}}};</script>
-<script src="score-player.js"></script></head>""")
+    fun score(abc: String, width: Int) =
+        engraving(abc, "s$width", width / PIXELS_PER_SPACE, if (width in 481..699) 3u else 4u, 0u)
+
+    fun phrase(abc: String) = engraving(abc, "p", 45f, 99u, 2u)
+
+    private fun engraving(abc: String, key: String, width: Float, barsPerLine: UInt, phrase: UInt): ScoreEngraving {
+        val id = "$key-$abc"
+        cache[id]?.let { return it }
+        if (cache.size > 400) cache.clear()
+        return engraveScore(abc, width, barsPerLine, phrase).also { cache[id] = it }
+    }
+}
+
+/** Draws an engraving to fill its frame (which keeps its aspect), notes playing in the brand's orange. */
+@Composable
+private fun ScoreCanvas(engraving: ScoreEngraving, playing: Set<UInt>, modifier: Modifier) {
+    val context = LocalContext.current
+    val ink = if (isSystemInDarkTheme()) Color(0xFFECECE8) else Color(0xFF171717)
+    val lit = Palette.brandDot.current()
+    val paints = remember(context) { Paints(context) }
+    Canvas(modifier) {
+        val s = size.width / maxOf(engraving.width, 1f)
+        fun shade(note: Long) = if (note >= 0 && note.toUInt() in playing) lit else ink
+
+        for (line in engraving.lines) {
+            drawLine(shade(line.note), Offset(line.x1 * s, line.y1 * s), Offset(line.x2 * s, line.y2 * s), strokeWidth = line.thickness * s)
+        }
+        for (beam in engraving.beams) {
+            val t = beam.thickness * s
+            drawPath(Path().apply {
+                moveTo(beam.x1 * s, beam.y1 * s)
+                lineTo(beam.x2 * s, beam.y2 * s)
+                lineTo(beam.x2 * s, beam.y2 * s + t)
+                lineTo(beam.x1 * s, beam.y1 * s + t)
+                close()
+            }, ink)
+        }
+        for (arc in engraving.arcs) {
+            // A crescent: thick in the middle, fine at the ends, as engraved ties are.
+            val x1 = arc.x1 * s; val y1 = arc.y1 * s; val x2 = arc.x2 * s; val y2 = arc.y2 * s
+            val mx = (x1 + x2) / 2; val my = (y1 + y2) / 2
+            val bulge = arc.bulge * s * 2
+            val thick = arc.thickness * s * 2 * (if (arc.bulge < 0) 1 else -1)
+            drawPath(Path().apply {
+                moveTo(x1, y1)
+                quadraticTo(mx, my + bulge, x2, y2)
+                quadraticTo(mx, my + bulge + thick, x1, y1)
+                close()
+            }, ink)
+        }
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+            val glyph = paints.glyph
+            for (g in engraving.glyphs) {
+                // Bravura is 4 staff spaces to the em, its glyphs' origin on the baseline.
+                glyph.textSize = 4 * g.scale * s
+                glyph.color = shade(g.note).toArgb()
+                native.drawText(String(Character.toChars(g.code.toInt())), g.x * s, g.y * s, glyph)
+            }
+            for (text in engraving.texts) {
+                val paint = when (text.kind) {
+                    ScoreTextKind.CHORD -> paints.chord
+                    ScoreTextKind.TUPLET -> paints.tuplet
+                    ScoreTextKind.ENDING -> paints.ending
+                }
+                paint.textSize = text.size * s
+                paint.color = ink.toArgb()
+                // The engine places text by its bottom left.
+                native.drawText(text.text, text.x * s, text.y * s - paint.descent(), paint)
+            }
+        }
+    }
+}
+
+private class Paints(context: Context) {
+    val glyph = paint(Bravura.typeface(context))
+    val chord = paint(Typeface.create(Typeface.SANS_SERIF, 500, false))
+    val tuplet = paint(Typeface.create(Typeface.SERIF, Typeface.ITALIC))
+    val ending = paint(Typeface.SANS_SERIF)
+
+    private fun paint(face: Typeface) = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = face }
+}
+
+/** The music font (SMuFL's Bravura, SIL Open Font Licence), one copy shared with the iPhone's package. */
+private object Bravura {
+    private var loaded: Typeface? = null
+    fun typeface(context: Context): Typeface = loaded ?: Typeface.createFromAsset(context.assets, "Bravura.otf").also { loaded = it }
+}
 
 /** ABC helpers, ported from apps/web/src/lib/notation.ts (as the iPhone's Abc.swift). */
 object Abc {

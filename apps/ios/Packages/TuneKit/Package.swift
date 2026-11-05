@@ -30,11 +30,10 @@ let package = Package(
             "ListenCore", "API",
             .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
         ]),
-        // abcjs 6.7.1 (MIT, see Resources/abcjs-LICENSE.txt), the same version the website renders with.
-        // Scores engraved by the Rust notation engine (in ListenCore's framework) and drawn in Bravura, a SMuFL music font.
-        // abcjs stays only for Android, which reads it from here until it draws natively too.
+        // Scores engraved by the Rust notation engine (in ListenCore's framework) and drawn in Bravura, a SMuFL music font
+        // (SIL OFL); Android draws with the same file, from here.
         .target(name: "Notation", dependencies: ["ListenCore", "DesignSystem"],
-                resources: [.copy("Resources/abcjs-basic-min.js"), .copy("Resources/Bravura.otf"), .copy("Resources/Bravura-OFL.txt")]),
+                resources: [.copy("Resources/Bravura.otf"), .copy("Resources/Bravura-OFL.txt")]),
         .testTarget(name: "NotationTests", dependencies: ["Notation"], resources: [.copy("phrases.json")]),
         .testTarget(name: "ListenCoreTests", dependencies: ["ListenCore"]),
         .testTarget(name: "FinderTests", dependencies: ["Finder", "ListenCore"]),

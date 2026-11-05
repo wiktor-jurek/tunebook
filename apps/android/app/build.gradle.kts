@@ -34,7 +34,7 @@ android {
         compose = true
         buildConfig = true
     }
-    // Notation's abcjs and the score player: the same files the iPhone app bundles, one copy for both.
+    // The music font (Bravura) the notation draws with: the same file the iPhone app bundles, one copy for both.
     sourceSets["main"].assets.directories.add("../../ios/Packages/TuneKit/Sources/Notation/Resources")
 }
 
