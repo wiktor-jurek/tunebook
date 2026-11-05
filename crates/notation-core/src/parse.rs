@@ -439,16 +439,20 @@ impl Reader {
         }
     }
 
+    /// `!trill!` or `+trill+`; a `!` that closes no such name (no space or bar before the next) is the old ABC
+    /// line break The Session still writes (`|edef a4|! f2ed`), and means nothing to the music.
     fn decoration(&mut self, close: char) {
-        self.at += 1;
-        let mut name = String::new();
-        while let Some(c) = self.peek(0) {
+        let name: String = (1..)
+            .map_while(|i| self.peek(i).filter(|&c| c != close && !c.is_whitespace() && c != '|'))
+            .collect();
+        if self.peek(name.chars().count() + 1) != Some(close) || name.is_empty() {
             self.at += 1;
-            if c == close || c == '\n' {
-                break;
+            if close == '+' {
+                self.skip("+".to_string());
             }
-            name.push(c);
+            return;
         }
+        self.at += name.chars().count() + 2;
         if name == "roll" {
             self.pending.roll = true;
         } else {

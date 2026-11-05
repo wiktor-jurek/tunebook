@@ -160,6 +160,7 @@ pub fn engrave(tune: &Tune, options: &LayoutOptions) -> Engraving {
         return Engraving { width: options.staff_width, height: 4.0, ..Default::default() };
     }
     let widths: Vec<f32> = measures.iter().map(|m| m.natural()).collect();
+    let tightest: Vec<f32> = measures.iter().map(|m| m.tightest()).collect();
 
     // Measures to lines: up to the preferred count, while they fit; a short pickup does not count.
     let mut lines: Vec<std::ops::Range<usize>> = vec![];
@@ -171,7 +172,7 @@ pub fn engrave(tune: &Tune, options: &LayoutOptions) -> Engraving {
         let mut used = 0.0;
         let mut counted = 0;
         while end < measures.len() {
-            let width = widths[end];
+            let width = tightest[end];
             let counts = !(end == 0 && measures[0].duration().f64() < tune.meter.bar().f64() * 0.75);
             if !phrase && end > start && (used + width > available || (counts && counted >= options.bars_per_line)) {
                 break;
@@ -192,7 +193,19 @@ pub fn engrave(tune: &Tune, options: &LayoutOptions) -> Engraving {
     let mut carry = Carry::default();
     for (index, range) in lines.into_iter().enumerate() {
         let header = header_width(&measures[range.start], range.start == 0);
-        let natural: f32 = header + range.clone().map(|i| widths[i]).sum::<f32>();
+        let mut natural: f32 = header + range.clone().map(|i| widths[i]).sum::<f32>();
+        // A repeat starting at a line break is drawn at the start of the next line, not the end of this one.
+        let opens = |close: Option<BarKind>| matches!(close, Some(BarKind::StartRepeat | BarKind::DoubleRepeat));
+        if range.start > 0 && measures[range.start].lead.is_none() && opens(measures[range.start - 1].close) {
+            natural += bar_width(BarKind::StartRepeat);
+        }
+        if index + 1 < count {
+            natural -= match measures[range.end - 1].close {
+                Some(BarKind::StartRepeat) => bar_width(BarKind::StartRepeat),
+                Some(BarKind::DoubleRepeat) => bar_width(BarKind::DoubleRepeat) - bar_width(BarKind::EndRepeat),
+                _ => 0.0,
+            };
+        }
         // Justified to the width, except one-line phrases and a last line well short of it.
         let width = if phrase {
             natural
@@ -259,7 +272,17 @@ impl Measure<'_> {
         let lead = self.lead.map_or(0.0, bar_width);
         lead + 1.0 + self.slots().iter().map(|s| s.width()).sum::<f32>() + 0.5 + self.close.map_or(0.0, bar_width)
     }
+
+    /// The least it may be squeezed to so a line holds another bar: the room after each note halved, as abcjs's
+    /// wrapping squeezes toward its minimum spacing before it gives a line one bar fewer.
+    fn tightest(&self) -> f32 {
+        let slack: f32 = self.slots().iter().map(|s| s.space).sum();
+        self.natural() - slack * (1.0 - SQUEEZE)
+    }
 }
+
+/// How far the room after a note may shrink (as a share of its natural room) to fit another bar on a line.
+const SQUEEZE: f32 = 0.5;
 
 /// An event's room: `before` (accidentals, grace notes), the head, then `space` that justifying stretches.
 #[derive(Debug, Clone, Copy)]
