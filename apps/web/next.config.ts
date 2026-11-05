@@ -6,9 +6,12 @@ const nextConfig: NextConfig = {
   // npm workspaces hoist node_modules to the monorepo root, so trace from there.
   // The standalone server then sits at .next/standalone/apps/web/server.js.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
-  // The tune finder page became the landing page's microphone; old links land there.
+  // The tune finder page became the landing page's microphone; old links land there. Recordings became Sessions.
   async redirects() {
-    return [{ source: "/tunes/finder", destination: "/", permanent: true }];
+    return [
+      { source: "/tunes/finder", destination: "/", permanent: true },
+      { source: "/recordings/:path*", destination: "/sessions/:path*", permanent: true },
+    ];
   },
   serverExternalPackages: ["@yarflam/potion-base-8m"],
   outputFileTracingIncludes: {

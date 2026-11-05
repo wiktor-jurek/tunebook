@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform, type AnimationPlaybackControls, type MotionStyle, type MotionValue } from "motion/react";
-import { ChevronDown, ChevronUp, Disc3, MicOff, Moon, Music, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleUser, Disc3, MicOff, Moon, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { FinderTune } from "@/lib/library";
 import { useTuneListener, type Heard } from "@/lib/finder/use-listener";
@@ -35,7 +35,8 @@ const PEEK_MS = 5000;
 const SWIPE = 110, SWIPE_SPEED = 600;
 const TABS = [
   { href: "/", label: "Tunes", icon: Music, active: (path: string) => path === "/" || path.startsWith("/books") || path.startsWith("/tunes/") },
-  { href: "/recordings", label: "Recordings", icon: Disc3, active: (path: string) => path.startsWith("/recordings") },
+  { href: "/sessions", label: "Sessions", icon: Disc3, active: (path: string) => path.startsWith("/sessions") },
+  { href: "/me", label: "Me", icon: CircleUser, active: (path: string) => path.startsWith("/me") },
 ];
 /** Past where the deck can go, the finger pulls against more and more resistance. */
 const rubber = (distance: number, limit: number) => (distance * limit) / (limit + Math.abs(distance));

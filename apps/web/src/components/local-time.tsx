@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { sessionName } from "@/lib/session-names";
 
 const noop = () => () => undefined;
 
@@ -22,6 +23,12 @@ export function timeAgo(then: Date, now = new Date()) {
   const months = (now.getFullYear() - then.getFullYear()) * 12 + now.getMonth() - then.getMonth();
   if (months < 12) return RELATIVE.format(-Math.max(1, months), "month");
   return RELATIVE.format(-Math.floor(months / 12), "year");
+}
+
+/** A session named for when it was, in the viewer's time ("Last night"); the server shows [fallback], its day. */
+export function SessionName({ iso, fallback }: { iso: string; fallback: string }) {
+  const text = useSyncExternalStore(noop, () => sessionName(new Date(iso)), () => fallback);
+  return <>{text}</>;
 }
 
 /** `timeAgo` in the browser, where the viewer's time zone and today are known; the server renders nothing. */

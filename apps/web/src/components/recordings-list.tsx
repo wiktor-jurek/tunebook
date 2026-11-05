@@ -18,8 +18,8 @@ const progressText = (r: LocalRecording, state?: UploadState) =>
   : state.error ?? "The upload stopped";
 
 /**
- * The Recordings list: recordings still on this device come first, each to upload or discard, then the uploaded ones
- * (the server's rows, passed as children). Uploading, a row fills its ring as the audio goes, ticks when it arrives,
+ * The Sessions list: sessions still on this device come first, each to upload or discard, then the uploaded ones
+ * (the server's month groups, passed as children). Uploading, a row fills its ring as the audio goes, ticks when it arrives,
  * and a moment later takes its place among the others.
  */
 export function RecordingsList({ hasUploaded, empty, children }: { hasUploaded: boolean; empty: React.ReactNode; children: React.ReactNode }) {
@@ -35,7 +35,7 @@ export function RecordingsList({ hasUploaded, empty, children }: { hasUploaded: 
 
   if (!rows.length && !hasUploaded) return empty;
   return <>
-    <ul className="session-group recordings-list">
+    {rows.length > 0 && <section><h2 className="session-group-title">On this device</h2><ul className="session-group recordings-list">
       {rows.map((r) => {
         const state = uploads[r.id], working = !!state && state.status !== "failed" && state.status !== "done";
         return <li key={r.id} className="session-row pending-row" data-status={state?.status ?? "waiting"}>
@@ -49,9 +49,9 @@ export function RecordingsList({ hasUploaded, empty, children }: { hasUploaded: 
           {state && state.status !== "failed" && <span className="pending-bar" aria-hidden="true"><span style={{ transform: `scaleX(${state.status === "preparing" ? 0.04 : state.progress})` }} /></span>}
         </li>;
       })}
-      {children}
-    </ul>
-    <ConfirmDialog open={!!discarding} onOpenChange={(value) => { if (!value) setDiscarding(null); }} title={`Discard ${discarding?.name ?? "this recording"}?`}
+    </ul></section>}
+    {children}
+    <ConfirmDialog open={!!discarding} onOpenChange={(value) => { if (!value) setDiscarding(null); }} title={`Discard ${discarding?.name ?? "this session"}?`}
       description="It was never uploaded, so the audio and its setlist will be gone for good." action="Discard"
       onConfirm={() => { if (discarding) void discard(discarding.id); setDiscarding(null); }} />
   </>;

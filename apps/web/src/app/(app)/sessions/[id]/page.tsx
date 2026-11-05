@@ -7,7 +7,7 @@ import { getMode } from "@/lib/mode";
 import { getRecording, recordingLength, recordingTitle } from "@/lib/recordings";
 import { RecordingPlayer } from "@/components/recording-player";
 
-export default async function RecordingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser();
   if (!z.uuid().safeParse(id).success) notFound();
@@ -15,7 +15,7 @@ export default async function RecordingPage({ params }: { params: Promise<{ id: 
   if (!recording) notFound();
   const session = mode === "session";
   return <div className={session ? "session-screen" : "page-wrap"}>
-    {!session && <nav className="page-bar"><Link className="back-link" href="/recordings"><ArrowLeft size={15} /> Recordings</Link></nav>}
+    {!session && <nav className="page-bar"><Link className="back-link" href="/sessions"><ArrowLeft size={15} /> Sessions</Link></nav>}
     <RecordingPlayer recording={recording} title={recordingTitle(recording.recordedAt)} length={recordingLength(recording.durationMs)} titleClass={session ? "session-title" : "recording-title"} />
   </div>;
 }

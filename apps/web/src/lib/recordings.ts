@@ -45,11 +45,21 @@ export async function listRecordings(userId: string) {
   // A join rather than a correlated subquery: Drizzle leaves single-table columns unqualified, so "id" inside a subquery would mean recording_tunes.id.
   return db.select({ id: recordings.id, name: recordings.name, durationMs: recordings.durationMs, recordedAt: recordings.recordedAt, tunes: sql<number>`count(${recordingTunes.id})::integer`,
     // The first tunes heard, so two recordings from the same day can be told apart.
-    firstTunes: sql<string[]>`coalesce((array_agg(${catalogSettings.title} ORDER BY ${recordingTunes.startMs}) FILTER (WHERE ${catalogSettings.title} IS NOT NULL))[1:3], '{}')` })
+    firstTunes: sql<string[]>`coalesce((array_agg(${catalogSettings.title} ORDER BY ${recordingTunes.startMs}) FILTER (WHERE ${catalogSettings.title} IS NOT NULL))[1:3], '{}')`,
+    // Where each tune plays, for the apps' recording bars coloured tune by tune.
+    segments: sql<{ tuneId: number; startMs: number; endMs: number }[]>`coalesce(json_agg(json_build_object('tuneId', ${recordingTunes.tuneId}, 'startMs', ${recordingTunes.startMs}, 'endMs', ${recordingTunes.endMs}) ORDER BY ${recordingTunes.startMs}) FILTER (WHERE ${recordingTunes.id} IS NOT NULL), '[]'::json)` })
     .from(recordings).leftJoin(recordingTunes, and(eq(recordingTunes.recordingId, recordings.id), eq(recordingTunes.rejected, false)))
     .leftJoin(catalogSettings, eq(catalogSettings.settingId, recordingTunes.settingId))
     .where(and(eq(recordings.userId, userId), isNotNull(recordings.uploadedAt)))
     .groupBy(recordings.id).orderBy(desc(recordings.recordedAt));
+}
+
+/** Where you heard a tune: each of your recordings it was named in (not taken off as wrong), newest first. */
+export async function tuneHeard(userId: string, tuneId: number, limit = 12) {
+  return db.select({ recordingId: recordings.id, recordedAt: recordings.recordedAt, startMs: recordingTunes.startMs, endMs: recordingTunes.endMs })
+    .from(recordingTunes).innerJoin(recordings, eq(recordings.id, recordingTunes.recordingId))
+    .where(and(eq(recordings.userId, userId), eq(recordingTunes.tuneId, tuneId), eq(recordingTunes.rejected, false), isNotNull(recordings.uploadedAt)))
+    .orderBy(desc(recordings.recordedAt), asc(recordingTunes.startMs)).limit(limit);
 }
 
 export async function getRecording(userId: string, id: string) {

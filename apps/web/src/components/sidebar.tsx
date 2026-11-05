@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { BrandMark } from "@/components/brand-mark";
-import { BookOpen, Menu, ChevronDown, ChevronRight, Database, Folder, Music2, LogOut, Plus, Disc3, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
+import { BookOpen, Menu, ChevronDown, ChevronRight, CircleUser, Database, Folder, Music2, LogOut, Plus, Disc3, MoreHorizontal, Pencil, FolderInput, Trash2, X } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { ProfilePreferences } from "@/components/profile-preferences";
 import { LinkPending } from "@/components/navigation-progress";
@@ -68,7 +68,8 @@ export function Sidebar({ library, userName, defaultSound, admin = false }: { li
         {/* One list, each of equal weight: your tunes, and recorded sessions. Naming a tune is the dock in the corner. */}
         <div className="nav-section">{guest ? <><div className="nav-link"><Music2 size={16} /> Tunes</div><Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunes</Link></> : <>
           {main("/", <Music2 size={16} />, "Tunes", path === "/", library.tunes.length)}
-          {main("/recordings", <Disc3 size={16} />, "Recordings", path.startsWith("/recordings"))}
+          {main("/sessions", <Disc3 size={16} />, "Sessions", path.startsWith("/sessions"))}
+          {main("/me", <CircleUser size={16} />, "Me", path.startsWith("/me"))}
         </>}</div>
         <div className="nav-label-row"><span>TUNEBOOKS</span>{!guest && creationMenu()}</div>
         {guest ? <Link onClick={closeMobile} href={signIn} className="nav-login">Log in to save tunebooks</Link> : <div>{booksByFolder(null).map(bookLink)}{foldersByParent(null).map(renderFolder)}</div>}

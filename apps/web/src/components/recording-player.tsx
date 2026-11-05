@@ -13,7 +13,7 @@ import { keyName } from "@/lib/notation";
 import { ABILITY_LABELS } from "@/lib/ability";
 import { TuneAbility } from "@/components/tune-ability";
 import { RecordingTuneBooks } from "@/components/recording-tune-books";
-import { LocalTime } from "@/components/local-time";
+import { LocalTime, SessionName } from "@/components/local-time";
 import { OpeningPhrase } from "@/components/opening-phrase";
 import { ScoreSheet } from "@/components/score-sheet";
 import type { getRecording } from "@/lib/recordings";
@@ -73,7 +73,7 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
     const there = at(ms);
     if (there && there.id !== selected) setSelected(there.id);
   }
-  async function play() { await audio.current?.play().catch(() => setError("Could not play the recording")); }
+  async function play() { await audio.current?.play().catch(() => setError("This session's audio wouldn't play")); }
   async function toggle() { if (audio.current?.paused) await play(); else audio.current?.pause(); }
   function playFrom(entry: Entry) { setSelected(entry.id); seek(entry.startMs); void play(); }
   async function makeBook() {
@@ -87,7 +87,7 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
   async function change(init: RequestInit, done: () => void) {
     setError("");
     const response = await fetch(`/api/recordings/${recording.id}`, { ...init, headers: { "Content-Type": "application/json" } });
-    if (!response.ok) { setError((await response.json().catch(() => ({}))).error || "Could not update the recording"); return; }
+    if (!response.ok) { setError((await response.json().catch(() => ({}))).error || "Couldn't update the session. Try again."); return; }
     done();
   }
 
@@ -104,8 +104,8 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
 
   return <div className="recording">
     <header className="recording-head">
-      <h1 className={titleClass}>{title}<LocalTime iso={new Date(recording.recordedAt).toISOString()} prefix=", " /></h1>
-      <p className="recording-sub">{length}, {unique} {unique === 1 ? "tune" : "tunes"}</p>
+      <h1 className={titleClass}><SessionName iso={new Date(recording.recordedAt).toISOString()} fallback={title} /></h1>
+      <p className="recording-sub">{title}<LocalTime iso={new Date(recording.recordedAt).toISOString()} prefix=", " />, {length.toLowerCase()}, {unique} {unique === 1 ? "tune" : "tunes"}</p>
     </header>
 
     <audio ref={audio} src={recording.audioUrl ?? undefined} preload="metadata" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onLoadedMetadata={(event) => { if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration * 1000); }} />
@@ -115,7 +115,7 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
       <div className="recording-track">
         {tunes.map((entry) => <span key={entry.id} className="recording-segment" data-standing={standingOf(entry)} data-selected={entry.id === selected ? "" : undefined} style={{ left: percent(entry.startMs), width: percent(Math.max(entry.endMs - entry.startMs, duration / 200)) }}><span aria-hidden="true">{displayTitle(entry.title)}</span></span>)}
         <span className="recording-playhead" style={{ left: percent(now) }} />
-        <input type="range" min={0} max={duration} step={250} value={now} aria-label="Position in the recording" aria-valuetext={`${clock(now)}${current ? `, ${displayTitle(current.title)}` : ""}`}
+        <input type="range" min={0} max={duration} step={250} value={now} aria-label="Position in the session" aria-valuetext={`${clock(now)}${current ? `, ${displayTitle(current.title)}` : ""}`}
           onChange={(event) => scrub(Number(event.target.value))} />
       </div>
       <div className="recording-transport">
@@ -134,16 +134,16 @@ export function RecordingPlayer({ recording, title, length, titleClass }: { reco
           onToggle={() => setSelected(row.entry.id === selected ? null : row.entry.id)} onPlay={() => playFrom(row.entry)}
           onScore={() => setScore(row.entry)} books={<RecordingTuneBooks title={displayTitle(row.entry.title)} settingId={row.entry.settingId} savedId={row.entry.savedId} inBooks={row.entry.inBooks} books={recording.books} />}
           onReject={() => void change({ method: "PATCH", body: JSON.stringify({ operation: "removeTune", entryId: row.entry.id }) }, () => { setSelected(null); router.refresh(); })} />)}
-      {!tunes.length && <li className="recording-gap">The finder did not name any tunes in this recording.</li>}
+      {!tunes.length && <li className="recording-gap">No tunes were named in this session.</li>}
     </ol>
 
     <footer className="recording-actions">
       {tunes.length > 0 && <Button variant="outline" disabled={busy !== null} onClick={() => void makeBook()}><BookPlus size={15} /> {busy === "book" ? "Making the tunebook" : "Make a tunebook of these"}</Button>}
-      <Button variant="ghost" className="recording-delete" disabled={busy !== null} onClick={() => setConfirmDelete(true)}><Trash2 size={15} /> Delete recording</Button>
+      <Button variant="ghost" className="recording-delete" disabled={busy !== null} onClick={() => setConfirmDelete(true)}><Trash2 size={15} /> Delete this session</Button>
     </footer>
     {score && <ScoreSheet tune={score} title={displayTitle(score.title)} meta={meta(score)} onClose={() => setScore(null)} />}
-    <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} busy={busy === "delete"} title={`Delete the recording from ${title}?`} description="The audio and its setlist are deleted. Tunes you saved from it stay in your library." action={busy === "delete" ? "Deleting" : "Delete"}
-      onConfirm={() => { setBusy("delete"); void change({ method: "DELETE" }, () => { router.push("/recordings"); router.refresh(); }).finally(() => setBusy(null)); }} />
+    <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} busy={busy === "delete"} title={`Delete the session from ${title}?`} description="The audio and its setlist are deleted. Tunes you saved from it stay in your library." action={busy === "delete" ? "Deleting" : "Delete"}
+      onConfirm={() => { setBusy("delete"); void change({ method: "DELETE" }, () => { router.push("/sessions"); router.refresh(); }).finally(() => setBusy(null)); }} />
   </div>;
 }
 

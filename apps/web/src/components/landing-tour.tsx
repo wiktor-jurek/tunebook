@@ -192,7 +192,7 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
 
                   <div className="lp-phone-tabs" aria-hidden="true">
                     <span className="lp-phone-tab is-active"><Music size={14} /> Tunes</span>
-                    <span className="lp-phone-tab"><Disc3 size={14} /> Recordings</span>
+                    <span className="lp-phone-tab"><Disc3 size={14} /> Sessions</span>
                   </div>
                 </div>
               </div>
@@ -265,7 +265,7 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
           id="learn"
           eyebrow="02 · Learn the tunes"
           title="Practise with accurate backing and play-along tracks."
-          body="Open any tune from your recordings or tunebooks in a full training interface. Follow the score as notes light up, switch between fiddle, flute, or whistle with guitar, and slow the tempo down until your fingers catch up."
+          body="Open any tune from your sessions or tunebooks in a full training interface. Follow the score as notes light up, switch between fiddle, flute, or whistle with guitar, and slow the tempo down until your fingers catch up."
         >
           <BookDemo tracks={tracks} />
         </Feature>
@@ -274,7 +274,7 @@ export function LandingInteractive({ tracks }: { tracks: Record<number, DemoTrac
           id="track"
           eyebrow="03 · Play the tunes"
           title="Track everything you can play."
-          body="Revisit your recordings and tunelists to see how much of the night you could join in on. Move tunes from learning to mastered as they settle in, and carry your whole repertoire in your pocket."
+          body="Revisit your sessions and tunelists to see how much of the night you could join in on. Move tunes from learning to mastered as they settle in, and carry your whole repertoire in your pocket."
         >
           <ProgressDemo />
         </Feature>
