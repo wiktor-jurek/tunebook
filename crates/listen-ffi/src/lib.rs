@@ -1,9 +1,12 @@
-//! The listen engine as the native apps see it. UniFFI generates `ListenCore.swift` and
+//! The listen engine (and the notation engine, `notation`) as the native apps see it. UniFFI generates `ListenCore.swift` and
 //! `listen_ffi.kt` from these exports (see `just ios-core` and `just android-core`).
 
 use std::sync::Mutex;
 
 uniffi::setup_scaffolding!();
+
+mod notation;
+pub use notation::*;
 
 /// The engine's version, shown in the apps' about screens and logs.
 #[uniffi::export]

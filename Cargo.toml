@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/listen-core", "crates/listen-ffi", "crates/listen-wasm", "services/realtime"]
+members = ["crates/listen-core", "crates/notation-core", "crates/listen-ffi", "crates/listen-wasm", "services/realtime"]
 
 [workspace.package]
 edition = "2024"
@@ -10,6 +10,7 @@ rust-version = "1.88"
 
 [workspace.dependencies]
 listen-core = { path = "crates/listen-core" }
+notation-core = { path = "crates/notation-core" }
 
 [profile.release]
 lto = true

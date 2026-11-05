@@ -1,0 +1,11 @@
+[package]
+name = "notation-core"
+version = "0.1.0"
+description = "Tune Companion's notation engine: ABC parsed, engraved and timed, shared by iOS and Android (and the web, later)"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dev-dependencies]
+serde_json = "1"
