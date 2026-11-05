@@ -1,5 +1,5 @@
-// Recordings, as the phone's web screen: sessions recorded with the deck, newest first, titled by
-// their day. One still on this phone (stopped with no connection) waits at the top to upload or
+// Sessions, as the phone's web screen: sessions recorded with the deck, newest first by month, each
+// named for when it was in your own time ("Last night", "Saturday afternoon"). One still on this phone (stopped with no connection) waits at the top to upload or
 // discard. Opening one shows how much of it you could join in on, when each tune was played, and
 // plays it back from any tune.
 
@@ -17,25 +17,29 @@ struct RecordingsView: View {
     @State private var path: [RecordingSummary] = []
 
     var body: some View {
-        NavigationStack(path: $path) {
+        ListAndDetail(path: $path, split: library.signedIn && !(recordings ?? []).isEmpty) {
             Group {
                 if !library.signedIn {
-                    ContentUnavailableView("Sign in to keep recordings", systemImage: "waveform",
-                                           description: Text("Record a session and its tunes become a setlist to practise at home."))
+                    ContentUnavailableView("Sign in to keep your sessions", systemImage: "waveform",
+                                           description: Text("Record a night at the pub and every tune is named as it's played. Sign in and the setlist is here afterwards, to play back and practise at home."))
                 } else if let recordings, recordings.isEmpty, listen.uploads.pending.isEmpty {
-                    ContentUnavailableView("No recordings yet", systemImage: "waveform",
-                                           description: Text("Expand the tray below and press record. The session uploads when you stop, with a setlist of the tunes it named."))
+                    ContentUnavailableView("No sessions yet", systemImage: "waveform",
+                                           description: Text("Next time the tunes start, open the tray below and tap record. Every tune is named as it's played, and the setlist waits for you here."))
                 } else if recordings == nil, problem == nil {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     list
                 }
             }
-            .navigationTitle("Recordings")
-            .navigationDestination(for: RecordingSummary.self) { RecordingPage(summary: $0) }
-            .task(id: "\(library.signedIn)-\(listen.uploads.landed)") { await load() }
+            .navigationTitle("Sessions")
             .refreshable { await load() }
+        } placeholder: {
+            ContentUnavailableView("Choose a session", systemImage: "waveform", description: Text("Its tunes and player open here."))
+        } destination: { recording in
+            RecordingPage(summary: recording).id(recording.id)
         }
+        // Outside the split, so swapping it for a stack on a fold doesn't load again.
+        .task(id: "\(library.signedIn)-\(listen.uploads.landed)") { await load() }
     }
 
     private var list: some View {
@@ -46,31 +50,48 @@ struct RecordingsView: View {
                 }
             }
             if let problem { Text(problem).foregroundStyle(Palette.danger) }
-            ForEach(recordings ?? []) { recording in
-                NavigationLink(value: recording) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "waveform").foregroundStyle(Palette.text3).frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(title(recording)).font(.headline)
-                            Text(detail(recording)).font(.caption).foregroundStyle(Palette.text3).lineLimit(2)
+            ForEach(months, id: \.0) { month, rows in
+                Section(month) {
+                    ForEach(rows) { recording in
+                        RouteLink(route: recording, path: $path) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(title(recording)).font(.tuneTitle(.title3))
+                                    Spacer()
+                                    Text(recordingLength(recording.durationMs ?? 0)).font(.caption).foregroundStyle(Palette.text3)
+                                }
+                                Text(detail(recording)).font(.caption).foregroundStyle(Palette.text3)
+                                if recording.tunes > 0 { Text(tunes(recording)).font(.subheadline).lineLimit(2) }
+                            }
+                            .padding(.vertical, 4)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
             }
         }
     }
 
+    /// Uploaded sessions under their month's heading ("November", or "November 2025" from another year).
+    private var months: [(String, [RecordingSummary])] {
+        var groups: [(String, [RecordingSummary])] = []
+        for recording in recordings ?? [] {
+            let month = Self.parse(recording.recordedAt).map(sessionMonth) ?? ""
+            if groups.last?.0 == month { groups[groups.count - 1].1.append(recording) } else { groups.append((month, [recording])) }
+        }
+        return groups
+    }
+
     private func title(_ recording: RecordingSummary) -> String {
-        guard let date = Self.parse(recording.recordedAt) else { return recording.title }
-        return "\(recording.title), \(date.formatted(date: .omitted, time: .shortened))"
+        Self.parse(recording.recordedAt).map { sessionName($0) } ?? recording.title
     }
 
     private func detail(_ recording: RecordingSummary) -> String {
-        let ago = Self.parse(recording.recordedAt).map { $0.formatted(.relative(presentation: .named)) }
-        let tunes = recording.tunes == 0 ? "no tunes named"
-            : recording.firstTunes.map(displayTitle).joined(separator: ", ") + (recording.tunes > recording.firstTunes.count ? " and \(recording.tunes - recording.firstTunes.count) more" : "")
-        return [ago, recordingLength(recording.durationMs ?? 0), tunes].compactMap { $0 }.joined(separator: ", ")
+        let when = Self.parse(recording.recordedAt).map { "\(recording.title), \($0.formatted(date: .omitted, time: .shortened))" } ?? recording.title
+        return "\(when), \(recording.tunes == 0 ? "no tunes named" : recording.tunes == 1 ? "1 tune" : "\(recording.tunes) tunes")"
+    }
+
+    private func tunes(_ recording: RecordingSummary) -> String {
+        recording.firstTunes.map(displayTitle).joined(separator: ", ") + (recording.tunes > recording.firstTunes.count ? " and \(recording.tunes - recording.firstTunes.count) more" : "")
     }
 
     private func load() async {
@@ -86,7 +107,7 @@ struct RecordingsView: View {
                let match = recordings?.first(where: { $0.id == id }) { path = [match] }
             #endif
         } catch {
-            problem = "Could not load your recordings. Pull down to try again."
+            problem = "Couldn't load your sessions. Pull down to try again."
         }
     }
 
@@ -95,6 +116,29 @@ struct RecordingsView: View {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
     }
+}
+
+/// A session named for when it was, in your own time, as the web and Android name it: "This evening", "Last night",
+/// "Yesterday afternoon", "Saturday morning". The small hours count as the night before.
+func sessionName(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+    let hour = calendar.component(.hour, from: date)
+    let part = (5..<12).contains(hour) ? "morning" : (12..<17).contains(hour) ? "afternoon" : (17..<21).contains(hour) ? "evening" : "night"
+    func day(_ moment: Date) -> Date {
+        let start = calendar.startOfDay(for: moment)
+        return calendar.component(.hour, from: moment) < 5 ? calendar.date(byAdding: .day, value: -1, to: start)! : start
+    }
+    let days = calendar.dateComponents([.day], from: day(date), to: day(now)).day ?? 0
+    switch days {
+    case 0: return part == "night" ? "Tonight" : "This \(part)"
+    case 1: return part == "night" ? "Last night" : "Yesterday \(part)"
+    default: return "\(day(date).formatted(.dateTime.weekday(.wide).locale(Locale(identifier: "en_GB")))) \(part)"
+    }
+}
+
+/// "November", or "November 2025" from another year.
+func sessionMonth(_ date: Date) -> String {
+    let sameYear = Calendar.current.isDate(date, equalTo: .now, toGranularity: .year)
+    return date.formatted(sameYear ? .dateTime.month(.wide).locale(Locale(identifier: "en_GB")) : .dateTime.month(.wide).year().locale(Locale(identifier: "en_GB")))
 }
 
 func recordingLength(_ ms: Int) -> String {
@@ -142,7 +186,7 @@ private struct PendingRow: View {
         .swipeActions {
             if !isBusy { Button("Discard", role: .destructive) { confirming = true } }
         }
-        .confirmationDialog("Discard this recording? It hasn't uploaded, so it will be gone.", isPresented: $confirming, titleVisibility: .visible) {
+        .confirmationDialog("Discard this session? It hasn't uploaded, so it will be gone.", isPresented: $confirming, titleVisibility: .visible) {
             Button("Discard", role: .destructive) { listen.uploads.discard(recording) }
         }
     }
@@ -178,7 +222,7 @@ private enum Standing {
     }
 }
 
-private struct RecordingPage: View {
+struct RecordingPage: View {
     @Environment(LibraryStore.self) private var library
     @Environment(ListenModel.self) private var listen
     @Environment(\.dismiss) private var dismiss
@@ -201,18 +245,18 @@ private struct RecordingPage: View {
     var body: some View {
         Group {
             if let detail { content(detail) } else if let problem {
-                ContentUnavailableView("Couldn't open the recording", systemImage: "waveform", description: Text(problem))
+                ContentUnavailableView("Couldn't open this session", systemImage: "waveform", description: Text(problem))
             } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
-        .navigationTitle(summary.title)
+        .navigationTitle(RecordingsView.parse(summary.recordedAt).map { sessionName($0) } ?? summary.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .onDisappear { player.pause() }
         .sheet(item: $score) { entry in
             ScoreScreen(tune: tuneFor(entry))
         }
-        .confirmationDialog("Delete this recording? Its audio and setlist go for good.", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete recording", role: .destructive) {
+        .confirmationDialog("Delete this session? Its audio and setlist go for good.", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete session", role: .destructive) {
                 Task {
                     busy = true
                     do { try await library.api.deleteRecording(summary.id); dismiss() } catch { problem = error.localizedDescription }
@@ -228,8 +272,8 @@ private struct RecordingPage: View {
         return ScrollViewReader { proxy in List {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(summary.title).font(.system(size: 30, design: .serif))
-                    Text("\(recordingLength(detail.durationMs ?? 0)), \(Set(tunes.map(\.tuneId)).count) tunes").font(.subheadline).foregroundStyle(Palette.text3)
+                    Text(RecordingsView.parse(summary.recordedAt).map { sessionName($0) } ?? summary.title).font(.system(size: 30, design: .serif))
+                    Text("\(summary.title), \(recordingLength(detail.durationMs ?? 0).lowercased()), \(Set(tunes.map(\.tuneId)).count) tunes").font(.subheadline).foregroundStyle(Palette.text3)
                 }
             }
             .listRowSeparator(.hidden)
@@ -258,7 +302,7 @@ private struct RecordingPage: View {
                     Button(busy ? "Making the tunebook" : "Make a tunebook of these", systemImage: "book.closed") { Task { await makeBook(detail) } }
                         .disabled(busy)
                 }
-                Button("Delete recording", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(busy)
+                Button("Delete this session", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(busy)
                 if let problem { Text(problem).foregroundStyle(Palette.danger) }
             }
         }
@@ -317,7 +361,7 @@ private struct RecordingPage: View {
             }
             .frame(height: 32)
             .accessibilityElement()
-            .accessibilityLabel("Position in the recording")
+            .accessibilityLabel("Position in the session")
             .accessibilityValue("\(clock(player.time))\(current.map { ", \(displayTitle($0.title))" } ?? "")")
             HStack(spacing: 14) {
                 Button { player.toggle() } label: {

@@ -102,26 +102,7 @@ struct PlayerIsland: View {
 
     private var soundMenu: some View {
         Menu {
-            Section("Notes") {
-                ForEach(ScoreSound.allCases) { sound in
-                    Button { playback.setSound(sound.rawValue) } label: {
-                        if playback.track == nil, playback.program == sound.rawValue { Label(sound.label, systemImage: "checkmark") } else { Text(sound.label) }
-                    }
-                }
-            }
-            if !playalongs.isEmpty {
-                Section("Play-along recordings") {
-                    ForEach(playalongs) { track in
-                        Button { playback.setTrack(track) } label: {
-                            let label = "\(leadEmoji(track.label)) \(track.label)\(track.otherSetting ? ", other setting" : "")"
-                            if playback.track?.id == track.id { Label(label, systemImage: "checkmark") } else { Text(label) }
-                        }
-                    }
-                }
-            }
-            if playback.track == nil {
-                Toggle("Count-in", isOn: Binding(get: { playback.countIn }, set: { playback.countIn = $0 }))
-            }
+            SoundChoices(playback: playback, playalongs: playalongs)
         } label: {
             VStack(alignment: .leading, spacing: 1) {
                 Text(playback.soundName).font(.footnote.weight(.semibold)).lineLimit(1)
@@ -137,12 +118,6 @@ struct PlayerIsland: View {
         }
         .pickerStyle(.segmented)
         .frame(width: 150)
-    }
-
-    /// The lead instrument of a play-along, for its menu item.
-    private func leadEmoji(_ label: String) -> String {
-        let lead: [(String, String)] = [("fiddle|violin", "🎻"), ("whistle|flute", "🪈"), ("accordion|concertina", "🪗"), ("banjo", "🪕"), ("piano", "🎹"), ("guitar|bouzouki", "🎸")]
-        return lead.first { label.range(of: $0.0, options: [.regularExpression, .caseInsensitive]) != nil }?.1 ?? "🎶"
     }
 }
 
@@ -160,4 +135,156 @@ private struct LiveBars: View {
         .frame(height: 18)
         .onAppear { bob = true }
     }
+}
+
+// MARK: - The player in the bars' column (iPhone Duo's outer display)
+
+/// Which side the system stands its bars on, when iOS 27.1 stands them up the screen's edge (iPhone Duo's
+/// outer display): there the player and the mic join them, and the music keeps the whole page. nil elsewhere.
+struct BarEdgeReader<Content: View>: View {
+    @ViewBuilder let content: (HorizontalEdge?) -> Content
+
+    var body: some View {
+        if #available(iOS 27.1, *) { Reading(content: content) } else { content(nil) }
+    }
+
+    @available(iOS 27.1, *)
+    private struct Reading: View {
+        @Environment(\.toolbarVerticalEdge) private var edge
+        let content: (HorizontalEdge?) -> Content
+        var body: some View { content(edge) }
+    }
+}
+
+/// The reader's hold on the tune on screen, so its bars can carry that tune's player. A score page claims it
+/// while it is the current one; `edge` says whether the bars stand up the side, when the page leaves its island off.
+@MainActor @Observable final class PlayerRailSlot {
+    struct Live { let owner: String; let playback: ScorePlayback; let playalongs: [PlayalongTrack] }
+    var edge: HorizontalEdge?
+    private(set) var live: Live?
+
+    func claim(_ owner: String, playback: ScorePlayback, playalongs: [PlayalongTrack]) {
+        live = Live(owner: owner, playback: playback, playalongs: playalongs)
+    }
+
+    func release(_ owner: String) { if live?.owner == owner { live = nil } }
+}
+
+/// The player as bar items, so the system stands them in its column in line with close and find (iPhone Duo with
+/// its bars up the side) and the score keeps the page: the sound and speed in one menu, and play, ringed with how
+/// far through the tune it is. The column takes only round buttons; anything taller spills into a bar over the score.
+struct RailPlayer: ToolbarContent {
+    /// The tune on screen's player; nil for the moment between one tune and the next, when the buttons stay put, idle,
+    /// rather than leave the column and come back (the column would lay itself out again, and they'd jump).
+    let playback: ScorePlayback?
+    let playalongs: [PlayalongTrack]
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .bottomBar) {
+            Menu {
+                if let playback {
+                    Section("Speed") {
+                        Picker("Speed", selection: Binding(get: { playback.speed }, set: { playback.setSpeed($0) })) {
+                            ForEach([75, 85, 100], id: \.self) { Text("\($0)%").tag($0) }
+                        }
+                        .pickerStyle(.palette)
+                    }
+                    SoundChoices(playback: playback, playalongs: playalongs)
+                    Button("From the top", systemImage: "backward.end") { playback.seek(0) }
+                }
+            } label: {
+                // One size whatever it says, so the column never lays itself out again.
+                Image(systemName: playback?.track == nil ? "music.note" : "waveform")
+                    .frame(width: 24, height: 24)
+                    .overlay(alignment: .bottom) {
+                        if let speed = playback?.speed, speed != 100 {
+                            Text("\(speed)").font(.system(size: 8, weight: .bold)).monospacedDigit().offset(y: 9)
+                        }
+                    }
+            }
+            .disabled(playback == nil)
+            .accessibilityLabel("Sound and speed" + (playback.map { ": \($0.soundName), \($0.speed)%" } ?? ""))
+        }
+        ToolbarItem(placement: .bottomBar) {
+            Button { playback?.toggle() } label: { PlayRing(playback: playback) }
+                .tint(Palette.brandInk)
+                .buttonStyle(.glassProminent)
+                .disabled(playback == nil)
+                .accessibilityLabel(playback?.playing == true ? "Pause" : "Play")
+                .accessibilityValue(playback?.loading == true ? "Loading" : "\(Int(playback?.progress ?? 0))% through")
+                .sensoryFeedback(.impact(weight: .light), trigger: playback?.playing == true)
+        }
+    }
+}
+
+/// Play or pause, ringed with how far through the tune it is. While the sound loads (a play-along from storage) or
+/// counts in, the ring spins instead: the button keeps its glyph and its size, so nothing round it moves.
+private struct PlayRing: View {
+    let playback: ScorePlayback?
+
+    var body: some View {
+        let waiting = playback?.loading == true || playback?.counting == true
+        ZStack {
+            Circle().stroke(Palette.onBrandInk.opacity(0.25), lineWidth: 2.5)
+            if waiting {
+                LoadingArc()
+            } else {
+                Circle().trim(from: 0, to: (playback?.progress ?? 0) / 100)
+                    .stroke(Palette.onBrandInk, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.2), value: playback?.progress)
+            }
+            Image(systemName: playback?.playing == true ? "pause.fill" : "play.fill").font(.system(size: 14))
+                .opacity(waiting ? 0.5 : 1)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .frame(width: 32, height: 32)
+    }
+}
+
+/// A short arc going round, turned by the clock rather than a repeating animation, so it stops the moment it goes.
+private struct LoadingArc: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9
+            Circle().trim(from: 0, to: 0.28)
+                .stroke(Palette.onBrandInk, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(turn * 360))
+        }
+    }
+}
+
+/// The sounds a tune can play in: notes on an instrument, or a play-along recording; and the count-in.
+struct SoundChoices: View {
+    let playback: ScorePlayback
+    let playalongs: [PlayalongTrack]
+
+    var body: some View {
+        Section("Notes") {
+            ForEach(ScoreSound.allCases) { sound in
+                Button { playback.setSound(sound.rawValue) } label: {
+                    if playback.track == nil, playback.program == sound.rawValue { Label(sound.label, systemImage: "checkmark") } else { Text(sound.label) }
+                }
+            }
+        }
+        if !playalongs.isEmpty {
+            Section("Play-along recordings") {
+                ForEach(playalongs) { track in
+                    Button { playback.setTrack(track) } label: {
+                        let label = "\(leadEmoji(track.label)) \(track.label)\(track.otherSetting ? ", other setting" : "")"
+                        if playback.track?.id == track.id { Label(label, systemImage: "checkmark") } else { Text(label) }
+                    }
+                }
+            }
+        }
+        if playback.track == nil {
+            Toggle("Count-in", isOn: Binding(get: { playback.countIn }, set: { playback.countIn = $0 }))
+        }
+    }
+}
+
+/// The lead instrument of a play-along, for its menu item.
+func leadEmoji(_ label: String) -> String {
+    let lead: [(String, String)] = [("fiddle|violin", "🎻"), ("whistle|flute", "🪈"), ("accordion|concertina", "🪗"), ("banjo", "🪕"), ("piano", "🎹"), ("guitar|bouzouki", "🎸")]
+    return lead.first { label.range(of: $0.0, options: [.regularExpression, .caseInsensitive]) != nil }?.1 ?? "🎶"
 }

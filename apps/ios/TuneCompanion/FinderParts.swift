@@ -264,23 +264,28 @@ struct LearnLater: View {
 
 /// A named tune, as a card: the answer and, below it, other close matches.
 struct AnswerSheet: View {
-    @Environment(ListenModel.self) private var listen
-
     var body: some View {
-        ScrollView {
-            if let tune = listen.leader {
-                VStack(spacing: 18) {
-                    FinderAnswer(tune: tune, sure: listen.leaderSure)
-                    FinderAlternatives(sure: listen.leaderSure)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 28)
-                .padding(.bottom, 24)
-            }
-        }
+        ScrollView { AnswerContent() }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.card)
+    }
+}
+
+/// The tune named, and the others it might be.
+struct AnswerContent: View {
+    @Environment(ListenModel.self) private var listen
+
+    var body: some View {
+        if let tune = listen.leader {
+            VStack(spacing: 18) {
+                FinderAnswer(tune: tune, sure: listen.leaderSure)
+                FinderAlternatives(sure: listen.leaderSure)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 28)
+            .padding(.bottom, 24)
+        }
     }
 }
 

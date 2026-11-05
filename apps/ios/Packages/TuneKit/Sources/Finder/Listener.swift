@@ -44,7 +44,9 @@ public final class Listener: @unchecked Sendable {
     public func start() throws {
         let audio = AVAudioSession.sharedInstance()
         // Measurement mode turns off voice processing (gain control, noise suppression), which would eat the music.
-        try audio.setCategory(.record, mode: .measurement, options: [.allowBluetoothHFP])
+        // Play-and-record, not record, so a score can still be played out loud mid-session: switching the category
+        // while the engine runs would stop it, and a record-only session plays everything silently.
+        try audio.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
         try audio.setActive(true)
 
         let input = engine.inputNode

@@ -11,10 +11,31 @@ struct TunesView: View {
     @State private var query = ""
     @State private var account = false
     @State private var reading: (pages: [ReaderPage], at: Int)?
-    @State private var path = NavigationPath()
+    @State private var path: [BookSummary] = []
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        NavigationStack(path: $path) {
+        // Unfolded (iPhone Duo, an iPad), the Tunes tab is the reader itself: your tunes down the side, each opening beside
+        // them. Folded, the list, each tune opening the full-screen reader. The sheet and reader hang outside, so a fold
+        // or unfold keeps them open.
+        Group {
+            if sizeClass == .regular, library.state == .ready, !library.tunes.isEmpty {
+                Reader(book: .yourTunes(library, groupedBy: groupBy), at: 0, embedded: true) { account = true }
+            } else {
+                list(path: $path)
+            }
+        }
+        .sheet(isPresented: $account) { AccountSheet() }
+        .onChange(of: library.openingBook) {
+            if let book = library.openingBook { path.append(book); library.openingBook = nil }
+        }
+        .fullScreenCover(item: Binding(get: { reading.map { ReaderAt(index: $0.at) } }, set: { if $0 == nil { reading = nil } })) { at in
+            if let reading { Reader(book: ReaderBook(id: nil, name: "Tunes", pages: reading.pages), at: at.index) }
+        }
+    }
+
+    private func list(path: Binding<[BookSummary]>) -> some View {
+        ListAndDetail(path: path, split: false) {
             content
                 .navigationTitle("Tunes")
                 .toolbar {
@@ -40,15 +61,25 @@ struct TunesView: View {
                         }
                     }
                 }
-                .sheet(isPresented: $account) { AccountSheet() }
-                .onChange(of: library.openingBook) {
-                    if let book = library.openingBook { path.append(book); library.openingBook = nil }
-                }
-                .navigationDestination(for: BookSummary.self) { BookView(summary: $0) }
-                .fullScreenCover(item: Binding(get: { reading.map { ReaderAt(index: $0.at) } }, set: { if $0 == nil { reading = nil } })) { at in
-                    if let reading { Reader(name: "Tunes", pages: reading.pages, at: at.index) }
-                }
+        } placeholder: {
+            EmptyView()
+        } destination: { book in
+            BookView(summary: book)
         }
+    }
+
+    private var groups: [TuneGroup] {
+        groupTunes(query.isEmpty ? library.tunes : library.tunes.filter { $0.matches(query) }, by: groupBy, books: library.books)
+    }
+
+    /// The reader turns through the tunes as they are listed, group after group.
+    private var pages: [ReaderPage] {
+        groups.flatMap { group in group.tunes.map { ReaderPage(tune: $0, set: nil, id: "\(group.id)-\($0.id)") } }
+    }
+
+    private func read(from id: String) {
+        let pages = pages
+        reading = (pages, pages.firstIndex { $0.id == id } ?? 0)
     }
 
     @ViewBuilder private var content: some View {
@@ -75,24 +106,19 @@ struct TunesView: View {
     }
 
     private var list: some View {
-        let shown = query.isEmpty ? library.tunes : library.tunes.filter { $0.matches(query) }
-        let groups = groupTunes(shown, by: groupBy, books: library.books)
-        // The reader turns through the tunes as they are listed, group after group.
-        let pages = groups.flatMap { group in group.tunes.map { ReaderPage(tune: $0, set: nil, id: "\(group.id)-\($0.id)") } }
+        let groups = groups
         return List {
             ForEach(groups) { group in
                 Section {
                     ForEach(group.tunes) { tune in
-                        Button { reading = (pages, pages.firstIndex { $0.id == "\(group.id)-\(tune.id)" } ?? 0) } label: {
-                            TuneRow(tune: tune, groupedBy: groupBy)
-                        }
-                        .buttonStyle(.plain)
+                        Button { read(from: "\(group.id)-\(tune.id)") } label: { TuneRow(tune: tune, groupedBy: groupBy) }
+                            .buttonStyle(.plain)
                     }
                 } header: {
                     if !group.label.isEmpty {
                         // Grouped by tunebook, each book's heading opens it.
                         if let book = group.book {
-                            NavigationLink(value: book) { groupHeading(group) }.buttonStyle(.plain)
+                            RouteLink(route: book, path: $path) { groupHeading(group) }.buttonStyle(.plain)
                         } else {
                             groupHeading(group)
                         }
@@ -102,7 +128,7 @@ struct TunesView: View {
             if query.isEmpty, !library.sharedBooks.isEmpty {
                 Section("Shared with you") {
                     ForEach(library.sharedBooks) { book in
-                        NavigationLink(value: book) { Label { Text(book.name) } icon: { Text(book.emoji ?? "📖") } }
+                        RouteLink(route: book, path: $path) { Label { Text(book.name) } icon: { Text(book.emoji ?? "📖") } }
                     }
                 }
             }

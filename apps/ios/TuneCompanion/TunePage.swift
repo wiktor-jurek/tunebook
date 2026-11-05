@@ -17,6 +17,8 @@ private struct TuneDetail: Decodable {
 struct ScorePage: View {
     @Environment(LibraryStore.self) private var library
     @Environment(ListenModel.self) private var listen
+    /// The reader's bars, when they stand up the side and carry the player instead of the island.
+    @Environment(PlayerRailSlot.self) private var rail: PlayerRailSlot?
     let page: ReaderPage
     let current: Bool
     /// Given by a tunebook; fetched here otherwise (your own tunes).
@@ -41,6 +43,8 @@ struct ScorePage: View {
     }
 
     var body: some View {
+        // With the player in the bars' column the score gets the page: a smaller title, no room kept for the island.
+        let railed = rail?.edge != nil
         // The island sits beside the scrolling score, not on it, so its gestures are its own.
         ZStack(alignment: .bottom) {
         ScrollView {
@@ -50,7 +54,7 @@ struct ScorePage: View {
                         .padding(.bottom, 4)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(tune.displayTitle).font(.system(size: 34, design: .serif)).tracking(-0.8)
+                    Text(tune.displayTitle).font(.system(size: railed ? 26 : 34, design: .serif)).tracking(railed ? -0.5 : -0.8)
                     if tune.oftenPlayed == true {
                         Image(systemName: "star.fill").font(.footnote).foregroundStyle(Palette.brandDot).accessibilityLabel("Often played")
                     }
@@ -66,18 +70,22 @@ struct ScorePage: View {
                 }
                 AbcView(abc: Abc.forScore(AbcTune(title: tune.title, kind: tune.kind, meter: tune.meter, mode: tune.mode, abc: tune.abc)),
                         style: .score, playback: playback)
-                    .padding(.top, 20)
+                    .padding(.top, railed ? 6 : 20)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 140)
+            .padding(.horizontal, railed ? 12 : 20)
+            .padding(.top, railed ? 4 : 0)
+            .padding(.bottom, railed ? 24 : 140)
         }
-            if current { PlayerIsland(playback: playback, playalongs: playalongs ?? fetched) }
+            if current, !railed { PlayerIsland(playback: playback, playalongs: playalongs ?? fetched) }
         }
+        .onChange(of: current, initial: true) { claimRail() }
+        .onChange(of: fetched.count) { claimRail() }
         .onChange(of: current) { if !current { playback.pause() } }
-        .onDisappear { playback.pause() }
+        .onDisappear { playback.pause(); rail?.release(page.id) }
         .task {
             playback.willPlay = { [listen] in
-                // A live session owns the audio session (it is recording); otherwise play through the speaker even in silent mode.
+                // A live session owns the audio session, already set to play as it records; otherwise play through the
+                // speaker even in silent mode.
                 guard !listen.isLive else { return }
                 try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
                 try? AVAudioSession.sharedInstance().setActive(true)
@@ -97,6 +105,13 @@ struct ScorePage: View {
                 }
             }
         }
+    }
+}
+
+extension ScorePage {
+    /// The tune on screen hands its player to the reader's bars (they show it when they stand up the side).
+    fileprivate func claimRail() {
+        if current { rail?.claim(page.id, playback: playback, playalongs: playalongs ?? fetched) } else { rail?.release(page.id) }
     }
 }
 

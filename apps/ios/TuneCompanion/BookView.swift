@@ -53,8 +53,7 @@ struct BookView: View {
         .refreshable { await load() }
         .fullScreenCover(item: Binding(get: { reading.map { ReaderAt(index: $0) } }, set: { reading = $0?.index })) { at in
             if let detail {
-                Reader(name: detail.book.name, pages: pages(detail), playalongs: playalongsBySetting(detail), defaultSound: detail.defaultSound,
-                       editable: detail.book.isOwner, at: at.index)
+                Reader(book: ReaderBook(detail: detail), at: at.index)
             }
         }
     }
@@ -121,10 +120,6 @@ struct BookView: View {
         }
     }
 
-    private func playalongsBySetting(_ detail: BookDetail) -> [Int: [PlayalongTrack]] {
-        Dictionary(uniqueKeysWithValues: detail.playalongs.compactMap { key, value in Int(key).map { ($0, value) } })
-    }
-
     private func load() async {
         do {
             detail = try await library.api.get("api/app/books/\(summary.id)")
@@ -141,3 +136,72 @@ struct BookView: View {
 }
 
 struct ReaderAt: Identifiable { let index: Int; var id: Int { index } }
+
+/// A list the reader turns through: a tunebook, or all your tunes.
+struct ReaderBook {
+    /// The tunebook's ID; nil for all your tunes.
+    let id: String?
+    let name: String
+    let pages: [ReaderPage]
+    /// Play-alongs by setting ID, when the list already has them (a tunebook); otherwise each page fetches its own.
+    var playalongs: [Int: [PlayalongTrack]]?
+    var defaultSound: Int?
+    /// Whether progress can be set: the tunes are yours.
+    var editable = true
+    /// The list's headings, in order, each over a run of pages: your tunes' groups, or a tunebook's sets. Empty: one run.
+    var sections: [Section] = []
+
+    struct Section: Identifiable {
+        let title: String?
+        let pages: Range<Int>
+        var id: Int { pages.lowerBound }
+    }
+
+    /// The headings, or the whole list under none.
+    var runs: [Section] { sections.isEmpty ? [Section(title: nil, pages: 0..<pages.count)] : sections }
+
+    /// A tunebook, fetched.
+    static func load(_ summary: BookSummary, api: APIClient) async throws -> ReaderBook {
+        ReaderBook(detail: try await api.get("api/app/books/\(summary.id)"))
+    }
+
+    /// All your tunes, in the order the Tunes list shows them, under its headings.
+    @MainActor static func yourTunes(_ library: LibraryStore, groupedBy groupBy: GroupBy) -> ReaderBook {
+        let groups = groupTunes(library.tunes, by: groupBy, books: library.books)
+        var pages: [ReaderPage] = []
+        var sections: [Section] = []
+        for group in groups {
+            let start = pages.count
+            pages += group.tunes.map { ReaderPage(tune: $0, set: nil, id: "\(group.id)-\($0.id)") }
+            sections.append(Section(title: group.label.isEmpty ? nil : group.label, pages: start..<pages.count))
+        }
+        return ReaderBook(id: nil, name: "Tunes", pages: pages, sections: sections)
+    }
+}
+
+extension ReaderBook {
+    /// A tunebook: its tunes in playing order, each set under its name.
+    fileprivate init(detail: BookDetail) {
+        var pages: [ReaderPage] = []
+        var sections: [Section] = []
+        for section in detail.sections {
+            let start = pages.count
+            switch section {
+            case let .tune(entryId, tune):
+                pages.append(ReaderPage(tune: tune, set: nil, id: "\(entryId)-\(tune.id)"))
+                // Single tunes in a row share one run without a heading.
+                if let last = sections.last, last.title == nil, last.pages.upperBound == start {
+                    sections[sections.count - 1] = Section(title: nil, pages: last.pages.lowerBound..<pages.count)
+                } else {
+                    sections.append(Section(title: nil, pages: start..<pages.count))
+                }
+            case let .set(entryId, name, tunes):
+                pages += tunes.map { ReaderPage(tune: $0, set: name, id: "\(entryId)-\($0.id)") }
+                sections.append(Section(title: name, pages: start..<pages.count))
+            }
+        }
+        self.init(id: detail.book.id, name: detail.book.name, pages: pages,
+                  playalongs: Dictionary(uniqueKeysWithValues: detail.playalongs.compactMap { key, value in Int(key).map { ($0, value) } }),
+                  defaultSound: detail.defaultSound, editable: detail.book.isOwner, sections: sections)
+    }
+}

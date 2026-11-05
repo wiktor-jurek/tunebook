@@ -24,6 +24,7 @@ struct TuneCompanionApp: App {
                     log.info("API healthy: \(healthy, privacy: .public)")
                     listen.signedIn = { [library] in library.signedIn }
                     listen.libraryChanged = { [library] in Task { await library.load() } }
+                    listen.reloadLibrary = { [library] in await library.load() }
                     await library.load()
                 }
         }

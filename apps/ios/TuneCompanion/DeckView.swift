@@ -6,71 +6,83 @@ import API
 import DesignSystem
 import SwiftUI
 
+/// The deck as a sheet, on a phone: its content under a title, folded away by the chevron.
 struct DeckView: View {
     @Environment(ListenModel.self) private var listen
-    @Environment(LibraryStore.self) private var library
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    recorder
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                }
-                if listen.isRecording {
-                    LiveSetlist()
-                } else {
-                    Section { FinderSearch() }.listRowBackground(Color.clear).listRowSeparator(.hidden)
-                    Section { FinderHeard() }.listRowBackground(Color.clear).listRowSeparator(.hidden)
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Palette.card)
+            DeckContent()
             .navigationTitle(listen.isRecording ? "Live session" : "Record a session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button { dismiss() } label: {
-                        ZStack {
-                            if listen.peeking { Countdown() }
-                            Image(systemName: "chevron.down")
-                        }
-                    }
-                    .accessibilityLabel(listen.peeking ? "Fold the deck down now (it folds by itself in a moment)" : "Fold the deck down")
+                    // Folds the deck sheet away (docked, `ListenDeck` has its own).
+                    Button("Fold the deck down", systemImage: "chevron.down") { listen.deckOpen = false }
                 }
             }
         }
-        // Any touch keeps a deck that opened for a new tune from folding itself away.
-        .simultaneousGesture(TapGesture().onEnded { listen.stopPeeking() })
-        .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in listen.stopPeeking() })
+    }
+}
+
+/// What the deck holds, as a sheet (phone) or docked (iPhone Duo): the record button, then quick search and tonight's
+/// tunes; while a session records, its clock and the live setlist.
+struct DeckContent: View {
+    @Environment(ListenModel.self) private var listen
+    @Environment(LibraryStore.self) private var library
+
+    var body: some View {
+        List {
+            Section {
+                recorder
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+            if listen.isRecording {
+                LiveSetlist()
+            } else {
+                Section { FinderSearch() }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+                Section { FinderHeard() }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Palette.card)
     }
 
+    /// The record button and what it does. On a phone it sits beside its words; with the bars up the side (iPhone Duo's
+    /// outer display, near square) it stands centred over them, the clock large, so the deck reads top to bottom.
     private var recorder: some View {
-        HStack(alignment: .center, spacing: 20) {
-            FinderDial(size: .record) {
-                if listen.isRecording { listen.stop() } else { listen.startSession() }
-            }
-            .padding(10)
-            if listen.isRecording, let start = listen.sessionStartedAt {
-                VStack(alignment: .leading, spacing: 6) {
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text(clock(Date.now.timeIntervalSince(start))).font(.system(size: 28, weight: .semibold)).monospacedDigit()
-                    }
-                    Text(listen.recording != nil ? "The screen stays on. Tap Stop to finish and upload." : "The screen stays on. Tap Stop to finish.")
-                        .font(.footnote).foregroundStyle(Palette.mutedForeground)
-                    Button("Dim the screen", systemImage: "moon") { dismiss(); listen.dimmed = true }
-                        .font(.footnote).buttonStyle(.borderless).tint(Palette.foreground)
+        BarEdgeReader { edge in
+            let stacked = edge != nil
+            let layout = stacked ? AnyLayout(VStackLayout(alignment: .center, spacing: 14)) : AnyLayout(HStackLayout(alignment: .center, spacing: 20))
+            layout {
+                FinderDial(size: .record) {
+                    if listen.isRecording { listen.stop() } else { listen.startSession() }
                 }
-            } else {
-                Text(library.signedIn ? "Records the whole session and names each tune as it goes. Tap any tune for its music."
-                     : "Names each tune as the session goes, into tonight's list. Sign in to keep the recording too.")
-                    .font(.footnote).foregroundStyle(Palette.mutedForeground)
+                .padding(stacked ? 18 : 10)
+                if listen.isRecording, let start = listen.sessionStartedAt {
+                    VStack(alignment: stacked ? .center : .leading, spacing: 6) {
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in
+                            Text(clock(Date.now.timeIntervalSince(start))).font(.system(size: stacked ? 40 : 28, weight: .semibold)).monospacedDigit()
+                        }
+                        Text(listen.recording != nil ? "The screen stays on. Tap Stop to finish and upload." : "The screen stays on. Tap Stop to finish.")
+                            .font(.footnote).foregroundStyle(Palette.mutedForeground)
+                        Button("Dim the screen", systemImage: "moon") { listen.deckOpen = false; listen.dimmed = true }
+                            .font(.footnote).buttonStyle(.borderless).tint(Palette.foreground)
+                    }
+                    .multilineTextAlignment(stacked ? .center : .leading)
+                } else {
+                    Text(library.signedIn ? "Records the whole session and names each tune as it goes. Tap any tune for its music."
+                         : "Names each tune as the session goes, into tonight's list. Sign in to keep the session too.")
+                        .font(stacked ? .subheadline : .footnote).foregroundStyle(Palette.mutedForeground)
+                        .multilineTextAlignment(stacked ? .center : .leading)
+                        .frame(maxWidth: stacked ? 300 : nil)
+                }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, stacked ? 16 : 8)
         }
-        .padding(.vertical, 8)
     }
 }
 
@@ -142,20 +154,6 @@ private struct SetlistItem: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint(open ? "Opens the full score" : "Shows its opening bars")
-    }
-}
-
-/// A ring that runs down to when a deck opened by a new tune folds itself away.
-private struct Countdown: View {
-    @State private var left = 1.0
-
-    var body: some View {
-        Circle()
-            .trim(from: 0, to: left)
-            .stroke(Palette.brandDot, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-            .rotationEffect(.degrees(-90))
-            .frame(width: 30, height: 30)
-            .onAppear { withAnimation(.linear(duration: 5)) { left = 0 } }
     }
 }
 

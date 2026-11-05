@@ -10,6 +10,7 @@ import Foundation
 import Haptics
 import ListenActivity
 import ListenCore
+import Notation
 import Observation
 import UIKit
 
@@ -58,10 +59,19 @@ final class ListenModel {
 
     // MARK: What is showing
 
-    var deckOpen = false
-    var answerOpen = false
+    /// The phone's deck and answer sheets. Docked (`docked`), each lifts the docked deck instead: the deck to full, an
+    /// answer to half.
+    var deckOpen = false { didSet { if docked, deckOpen, deckHeight != .full { deckHeight = .full } } }
+    var answerOpen = false { didSet { if docked, answerOpen, deckHeight == .head { deckHeight = .half } } }
+    /// Where the bars stand up the side or the screen is wide (iPhone Duo), listening is one deck docked by the bars'
+    /// column, at three heights, as Android's and the web's: down is standby, half names a tune, full is a session.
+    var docked = false
+    private(set) var deckHeight = DeckHeight.head
+    /// The reader is open over the tabs: it shows the docked deck itself (`ListenDeck`), not the tabs.
+    var readerOpen = false
     /// Opened by a newly named tune in a live session; any touch keeps it open.
-    var peeking = false
+    /// The tune a session just moved on to, popping up for a moment with its opening bars (`NewTunePopUp`).
+    private(set) var newTune: HeardTune?
     var scoreTune: FinderTune?
     var dimmed = false
 
@@ -86,6 +96,8 @@ final class ListenModel {
     var signedIn: () -> Bool = { false }
     /// Called when tunes are kept, so the library reloads.
     var libraryChanged: () -> Void = {}
+    /// Reloads the library and returns once it has: a tune just saved is then in your tunes, to open.
+    var reloadLibrary: () async -> Void = {}
     /// A tune being saved, by The Session tune ID.
     private(set) var saving: Int?
     /// Making a tunebook from tonight's tunes.
@@ -114,6 +126,10 @@ final class ListenModel {
 
     func start(_ mode: ListenActivityAttributes.Mode) {
         guard !isLive else { return }
+        // The microphone would hear the score playing.
+        ScorePlayback.pauseCurrent()
+        // Listening started from anywhere (the mic, Siri, the deck) lifts the docked deck to match.
+        if docked { deckHeight = mode == .recordSession ? .full : max(deckHeight, .half) }
         Haptics.shared.prepare()
         self.mode = mode
         isLive = true
@@ -175,23 +191,41 @@ final class ListenModel {
 
     func openScore(_ tune: FinderTune) { scoreTune = names[tune.tuneId] ?? tune }
 
-    /// A newly named tune in a live session opens the deck for a moment, then it folds away again.
+    /// A newly named tune in a live session pops up for a moment, with its opening bars, then goes (`NewTunePopUp`).
+    /// Not while the session's setlist is already in view (the deck open, or dimmed in a pocket).
     func peek() {
-        guard !deckOpen, !dimmed else { return }
-        peeking = true
-        deckOpen = true
+        guard !dimmed, let latest = heard.first else { return }
+        if docked ? deckHeight == .full : deckOpen { return }
+        newTune = latest
         peekTask?.cancel()
         peekTask = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled, peeking else { return }
-            peeking = false
-            deckOpen = false
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled else { return }
+            newTune = nil
         }
     }
 
-    func stopPeeking() {
-        peeking = false
+    /// The pop-up was touched: it stays until it is dismissed or opened.
+    func stopPeeking() { peekTask?.cancel() }
+
+    func dismissNewTune() {
         peekTask?.cancel()
+        newTune = nil
+    }
+
+    /// The new tune's full score: saved to your tunes first (as Learn later does), then opened, in the reader beside your
+    /// tunes when that is showing (it turns to a tune it has) or as a score of its own.
+    func openNewTune() async {
+        guard let heard = newTune else { return }
+        dismissNewTune()
+        var tune = names[heard.tune.tuneId] ?? heard.tune
+        if signedIn(), tune.savedId == nil, let saved = await keep(tune) {
+            tune = saved
+            await reloadLibrary()
+            // Let the reader take in the reloaded library before it is asked to turn to the tune.
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        scoreTune = tune
     }
 
     // MARK: Listening, inside
@@ -363,7 +397,13 @@ final class ListenModel {
 
     /// One tap in the pub: save the tune and mark it Want to learn. A level already set stays.
     func learnLater(_ tune: FinderTune) async {
-        guard signedIn(), let settingId = tune.settingId else { return }
+        guard signedIn() else { return }
+        if await keep(tune) != nil { libraryChanged() }
+    }
+
+    /// Saves a tune to your tunes, wanting to learn it unless you already had a standing for it; the kept tune, or nil.
+    private func keep(_ tune: FinderTune) async -> FinderTune? {
+        guard let settingId = tune.settingId else { return nil }
         saving = tune.tuneId
         defer { saving = nil }
         do {
@@ -375,10 +415,11 @@ final class ListenModel {
                 kept.level = .wanted
             }
             update(kept)
-            libraryChanged()
             Haptics.shared.confidenceTick(1)
+            return kept
         } catch {
-            log.error("Learn later failed: \(error.localizedDescription, privacy: .public)")
+            log.error("Saving a tune failed: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 
@@ -410,7 +451,7 @@ final class ListenModel {
         guard let tune = names[tuneId] else { return }
         refreshGuesses(sure: true)
         heard.insert(HeardTune(tune: tune, at: .now), at: 0)
-        if isRecording { phase = .named; publish(); deckOpen = true } else { answerOpen = true }
+        if isRecording { phase = .named; publish(); peek() } else { answerOpen = true }
     }
     #endif
 
@@ -420,5 +461,39 @@ final class ListenModel {
             for tune in tunes { names[tune.tuneId] = tune }
         }
         refreshGuesses(sure: leaderSure)
+    }
+}
+
+/// The docked deck's heights: standby, naming a tune, a session.
+enum DeckHeight: Int, Comparable {
+    case head, half, full
+    static func < (a: DeckHeight, b: DeckHeight) -> Bool { a.rawValue < b.rawValue }
+}
+
+extension ListenModel {
+    /// The docked deck comes to rest at a height, as Android's `onRest`, armed rather than listening: half is ready to
+    /// name a tune (its dial listens when pressed); full is ready for a session (Record starts it). Lowered to standby it
+    /// stops naming a tune; a session carries on, and only Stop ends it.
+    func settle(_ to: DeckHeight, byHand: Bool = true) {
+        let from = deckHeight
+        stopPeeking()
+        deckHeight = to
+        switch to {
+        case .half:
+            // Armed, not listening: the dial names the tune when pressed.
+            _ = from
+        case .head:
+            if isLive, !isRecording { stop() }
+            deckOpen = false
+            answerOpen = false
+        case .full:
+            break
+        }
+    }
+
+    /// The column's one mic button. Standby: arm the deck to name a tune (or, mid-session, show the session). Up: fold
+    /// it away, which stops naming a tune but never a session.
+    func pressDockedMic() {
+        if deckHeight == .head { settle(isRecording ? .full : .half) } else { settle(.head) }
     }
 }

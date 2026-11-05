@@ -1,5 +1,6 @@
-// The finder's microphone, as on the web: an orange disc whose soft halo breathes with the input,
-// ripples while it listens, and an arc that fills as the finder grows sure (green once named).
+// The finder's microphone, as on the web: a disc whose soft halo breathes with the input, ripples
+// while it listens, and an arc that fills as the finder grows sure. Its colour says the mode, across
+// the app: green (the brand's ink) names one tune, orange (its dot) is a session.
 // Small in the tray, it names a tune; large in the deck, it is the record button.
 
 import DesignSystem
@@ -15,20 +16,32 @@ struct FinderDial: View {
 
     @Environment(ListenModel.self) private var listen
     let size: Size
+    /// Whether this dial is the session's (orange) or names a tune (green). By default the record button is, and
+    /// any dial while a session records.
+    var forSession: Bool?
     let action: () -> Void
+
+    init(size: Size, forSession: Bool? = nil, action: @escaping () -> Void) {
+        self.size = size
+        self.forSession = forSession
+        self.action = action
+    }
+
+    private var session: Bool { forSession ?? (size == .record || listen.isRecording) }
+    private var disc: Color { session ? Palette.brandDot : Palette.brandInk }
 
     var body: some View {
         ZStack {
             // The halo grows with the input level.
             Circle()
-                .fill(Palette.brandDotSoft)
+                .fill(session ? Palette.brandDotSoft : Palette.brandInkSoft)
                 .scaleEffect(1 + listen.level * size.halo)
                 .animation(.linear(duration: 0.12), value: listen.level)
-            if listening { Ripples(diameter: size.diameter) }
+            if listening { Ripples(diameter: size.diameter, colour: disc) }
             arc
             Button(action: action) {
                 ZStack {
-                    Circle().fill(Palette.brandDot)
+                    Circle().fill(disc)
                     glyph
                 }
                 .frame(width: size.diameter, height: size.diameter)
@@ -50,10 +63,10 @@ struct FinderDial: View {
         let value = downloading ?? (listen.leader != nil && (listen.leaderSure || !listen.isLive) ? (listen.leaderSure ? 1 : listen.certainty) : listening ? listen.certainty : 0)
         let named = downloading == nil && listen.leaderSure && listen.leader != nil
         return ZStack {
-            Circle().stroke(Palette.brandDot.opacity(listening ? 0.25 : 0), lineWidth: 2.5)
+            Circle().stroke(disc.opacity(listening ? 0.25 : 0), lineWidth: 2.5)
             Circle()
                 .trim(from: 0, to: value)
-                .stroke(downloading != nil || named ? Palette.brandInk : Palette.brandDot, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(downloading != nil || named ? Palette.brandInk : disc, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .opacity(value > 0 ? 1 : 0)
                 .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.5), value: value)
@@ -63,32 +76,34 @@ struct FinderDial: View {
     }
 
     @ViewBuilder private var glyph: some View {
-        switch size {
-        case .mini:
+        // Naming a tune, the mic (stop while listening), whatever its size; the session's record button, the record dot.
+        if size == .mini || !session {
             Image(systemName: listen.denied ? "mic.slash.fill" : listen.isLive ? "stop.fill" : "mic.fill")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(Palette.onBrandDot)
+                .font(.system(size: size == .mini ? 19 : 32, weight: .semibold))
+                .foregroundStyle(session ? Palette.onBrandDot : Palette.onBrandInk)
                 .contentTransition(.symbolEffect(.replace))
-        case .record:
+        } else {
             // The record dot squares off into Stop while a session records.
             RoundedRectangle(cornerRadius: listen.isRecording ? 5 : 15)
-                .fill(Palette.onBrandDot)
+                .fill(session ? Palette.onBrandDot : Palette.onBrandInk)
                 .frame(width: listen.isRecording ? 26 : 30, height: listen.isRecording ? 26 : 30)
                 .animation(.spring(response: 0.35, dampingFraction: 0.7), value: listen.isRecording)
         }
     }
 
     private var label: String {
-        switch size {
-        case .mini: listen.isRecording ? "Live session: open it" : listen.isLive ? "Stop listening" : "Name the tune that's playing"
-        case .record: listen.isRecording ? "Stop recording" : "Start recording the session"
+        if size == .mini || !session {
+            return listen.isRecording ? "Live session: open it" : listen.isLive ? "Stop listening" : "Name the tune that's playing"
         }
+        return listen.isRecording ? "Stop recording" : "Start recording the session"
     }
+
 }
 
 /// Two rings spreading out from the dial while it listens, half a beat apart.
 private struct Ripples: View {
     let diameter: CGFloat
+    let colour: Color
     @State private var spread = false
 
     var body: some View {
@@ -102,7 +117,7 @@ private struct Ripples: View {
 
     private func ring(delay: Double) -> some View {
         Circle()
-            .stroke(Palette.brandDot, lineWidth: 2)
+            .stroke(colour, lineWidth: 2)
             .scaleEffect(spread ? 1.6 : 1)
             .opacity(spread ? 0 : 0.55)
             .animation(.timingCurve(0.15, 0.6, 0.3, 1, duration: 2.4).repeatForever(autoreverses: false).delay(delay), value: spread)
