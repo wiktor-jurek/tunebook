@@ -12,6 +12,9 @@ writes from the data home.
   jr-eval.cjs (benchmark.py). Its files are for benchmarking and labelling only and never ship.
 - folkfriend: FolkFriend's command-line build (benchmark.py), on 12 s windows every 4 s: it transcribes,
   so it needs longer stretches. It gives a ranking, not a score, so its windows have no cosine.
+- cadence: Cadence replayed offline by ~/cadence-bench/cadence-run.ts (kept outside this repo, like JigRipper's
+  harness): the tune its Viterbi segmenter settles on for each stretch, drawn as 10 s windows every 5 s. Like
+  JigRipper's, its lane is a guide for the labeller only: its answers never become labels.
 
 Where the engines name the same tune, the label is probably right; the labeller shows each engine's
 lane and how much of each tune they agree on. Existing files are kept, so a rerun only fills gaps.
@@ -44,7 +47,8 @@ from tune_names import Tunes  # noqa: E402
 from tunebook_ml import pitchclass, store  # noqa: E402
 
 REPO = c.ML.parent
-ENGINES = ("tunebook", "jigripper", "folkfriend")
+ENGINES = ("tunebook", "jigripper", "cadence", "folkfriend")
+SOUNDCLOUD = c.ML / "cache" / "soundcloud" / "full"  # eval/soundcloud.py
 CHUNK = 300  # seconds of audio featurised at once
 
 
@@ -105,6 +109,29 @@ def folkfriend(path: Path, binary: Path, home: Path, names: Tunes) -> dict:
     return {"model": "FolkFriend", "window": span, "hop": hop, "windows": windows}
 
 
+def cadence(videos: list[Path], folder: Path, names: Tunes) -> None:
+    """Runs Cadence's harness once over every recording still without its lane, then turns each result's final
+    segments ({tuneId, start, end}) into windows every 5 s, as the labeller draws the other engines."""
+    todo = [v for v in videos if not done(v, "cadence")]
+    if not todo:
+        return
+    raw = {v: v.with_suffix(".cadence-raw.json") for v in todo}
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as manifest:
+        manifest.write("".join(json.dumps({"path": str(v), "out": str(out)}) + "\n" for v, out in raw.items()))
+    subprocess.run(["npx", "-y", "tsx", "cadence-run.ts", manifest.name], check=True, cwd=folder)
+    os.unlink(manifest.name)
+    span, hop = 10, 5  # Cadence hears the last 10 s every 5 s
+    for video, out in raw.items():
+        if not out.exists():
+            continue
+        result = json.loads(out.read_text())
+        windows = [{"t": t, "tune": int(seg["tuneId"]), "name": names.info.get(int(seg["tuneId"]), {}).get("title", "?"), "cos": None}
+                   for seg in result["final"] for t in range(int(seg["start"]), int(seg["end"]) - span + 1, hop)]
+        output(video, "cadence").write_text(json.dumps({"model": f"Cadence {result.get('version', '')}".strip(), "window": span, "hop": hop,
+                                                        "windows": windows}))
+        print(f"{video.stem} cadence: {len(result['final'])} tunes, {len(windows)} windows", flush=True)
+
+
 MIN_WINDOWS = 3  # confident windows an engine needs to have "heard" a tune in a set
 
 
@@ -154,7 +181,8 @@ def resolve(rows: list[dict], names: Tunes) -> None:
 
 def publish(videos: list[Path], kind: str) -> None:
     """Puts each recording's prelabel files in the bucket beside its audio, and records their keys on the source."""
-    folder = {"youtube_full": "ml/audio/youtube/full/", "album": "ml/audio/album/", "album-track": "ml/audio/album-track/"}.get(kind, "ml/audio/youtube/source/")
+    folder = {"youtube_full": "ml/audio/youtube/full/", "soundcloud_full": "ml/audio/soundcloud/full/", "album": "ml/audio/album/",
+              "album-track": "ml/audio/album-track/"}.get(kind, "ml/audio/youtube/source/")
     kind = "album" if kind == "album-track" else kind  # a whole track is an album source named by its video
     for video in videos:
         keys = {engine: store.put_audio(output(video, engine), folder + output(video, engine).name) for engine in ENGINES if done(video, engine)}
@@ -181,7 +209,7 @@ def report(rows: list[dict]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--set", choices=("sessions", "youtube", "albums", "tracks"), default="sessions",
+    parser.add_argument("--set", choices=("sessions", "youtube", "albums", "tracks", "soundcloud"), default="sessions",
                         help="whole sessions, YouTube clips' sources, album sections (data/found/manifest.jsonl), "
                              "or whole album tracks (data/found/tracks/, store_tracks.py)")
     parser.add_argument("--no-publish", action="store_true", help="write the files beside the audio but leave the bucket and data home alone")
@@ -190,6 +218,7 @@ def main() -> None:
     parser.add_argument("--jigripper-harness", type=Path, help="jr-session.cjs, kept outside the repo")
     parser.add_argument("--jigripper-dir", type=Path, help="JigRipper's downloaded web files")
     parser.add_argument("--jigripper-modules", type=Path, help="node_modules with onnxruntime-node (default: beside the harness)")
+    parser.add_argument("--cadence-dir", type=Path, default=Path("~/cadence-bench").expanduser(), help="cadence-run.ts and its Cadence checkout")
     parser.add_argument("--folkfriend", type=Path, help="the folkfriend binary")
     parser.add_argument("--folkfriend-home", type=Path, help="HOME holding .folkfriend/folkfriend-non-user-data.json")
     parser.add_argument("--report", action="store_true", help="only summarise agreement with the descriptions")
@@ -211,6 +240,8 @@ def main() -> None:
         videos = [c.ML / "data" / "found" / a for a in dict.fromkeys(json.loads(line)["audio"] for line in manifest.open())]
     elif args.set == "tracks":
         videos = sorted((c.ML / "data" / "found" / "tracks").glob("*.ogg"))
+    elif args.set == "soundcloud":
+        videos = sorted(SOUNDCLOUD.glob("*.flac"))
     else:
         where = full_path if args.set == "sessions" else lambda youtube_id: source_path({"youtube_id": youtube_id})
         videos = [where(v) for v in dict.fromkeys(row["youtube_id"] for row in rows)]
@@ -227,10 +258,12 @@ def main() -> None:
             subprocess.run(["node", str(args.jigripper_harness), str(args.jigripper_dir), manifest.name], check=True,
                            env={**os.environ, "NODE_PATH": str(modules)})
             os.unlink(manifest.name)
+    if "cadence" in engines:
+        cadence(videos, args.cadence_dir, names)
     for video in videos:
         for engine in engines:
             target = output(video, engine)
-            if engine == "jigripper" or done(video, engine):
+            if engine in ("jigripper", "cadence") or done(video, engine):
                 continue
             if engine == "tunebook":
                 result = tunebook(video, args.model, names)
@@ -243,7 +276,8 @@ def main() -> None:
             target.write_text(json.dumps(result))
             print(f"{video.stem} {engine}: {len(result['windows'])} windows", flush=True)
     if not args.no_publish:
-        publish(videos, {"sessions": "youtube_full", "youtube": "youtube_video", "albums": "album", "tracks": "album-track"}[args.set])
+        publish(videos, {"sessions": "youtube_full", "youtube": "youtube_video", "albums": "album", "tracks": "album-track",
+                         "soundcloud": "soundcloud_full"}[args.set])
 
 
 if __name__ == "__main__":

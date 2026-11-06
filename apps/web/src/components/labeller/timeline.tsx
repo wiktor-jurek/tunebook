@@ -13,7 +13,7 @@ const RULER = 18, LANE = 20, GAP = 5, GUTTER = 96;
 // JigRipper's is its own abstention threshold; the finder's is where its wrong answers start to outnumber right ones.
 const UNSURE: Record<string, number> = { jigripper: 0.26, tunebook: 0.3 };
 const MUSIC_THRESHOLD = 0.6; // eval/music_activity.py suggest()
-const ENGINE_NAMES: Record<string, string> = { tunebook: "Tunebook", jigripper: "JigRipper", folkfriend: "FolkFriend" };
+const ENGINE_NAMES: Record<string, string> = { tunebook: "Tune Companion", jigripper: "JigRipper", cadence: "Cadence", folkfriend: "FolkFriend" };
 
 export type Peaks = { rate: number; low: Float32Array; high: Float32Array; start: number; duration: number };
 type Hover = { x: number; y: number; text: string } | null;
