@@ -51,16 +51,23 @@ const SEEN = "passport-stamps-seen";
 
 /** Passport stamps: earned ones inked (and pressed in, the first time they are seen), the rest ghosted with how far to go. */
 export function Stamps({ stamps }: { stamps: Stamp[] }) {
-  const [fresh, setFresh] = useState<string[]>([]);
+  // Marks the newly earned stamps straight on the page after hydration, so the server's HTML and the first render agree.
+  const list = useRef<HTMLUListElement>(null);
   useEffect(() => {
     const seen = new Set<string>(JSON.parse(localStorage.getItem(SEEN) ?? "[]"));
     const earned = stamps.filter((stamp) => stamp.earned).map((stamp) => stamp.id);
-    setFresh(earned.filter((id) => !seen.has(id)));
+    const fresh = earned.filter((id) => !seen.has(id));
+    for (const item of list.current?.querySelectorAll<HTMLElement>("[data-stamp]") ?? []) {
+      const at = fresh.indexOf(item.dataset.stamp ?? "");
+      if (at < 0) continue;
+      item.style.setProperty("--delay", `${at * 120}ms`);
+      item.dataset.fresh = "";
+    }
     localStorage.setItem(SEEN, JSON.stringify([...new Set([...seen, ...earned])]));
   }, [stamps]);
   const date = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  return <ul className="passport-stamps">{stamps.map((stamp, i) => <li key={stamp.id} className="passport-stamp" data-earned={stamp.earned ? "" : undefined}
-    data-fresh={fresh.includes(stamp.id) ? "" : undefined} style={{ "--tilt": `${[-7, 4, -3, 6, -5, 3][i % 6]}deg`, "--delay": `${fresh.indexOf(stamp.id) * 120}ms` } as React.CSSProperties}>
+  return <ul ref={list} className="passport-stamps">{stamps.map((stamp, i) => <li key={stamp.id} className="passport-stamp" data-stamp={stamp.id} data-earned={stamp.earned ? "" : undefined}
+    style={{ "--tilt": `${[-7, 4, -3, 6, -5, 3][i % 6]}deg` } as React.CSSProperties}>
     <span className="passport-stamp-ring"><span className="passport-stamp-title">{stamp.title}</span>
       <span className="passport-stamp-date">{stamp.at ? date.format(new Date(stamp.at)) : stamp.progress ? `${stamp.progress.have} of ${stamp.progress.need}` : "Not yet"}</span></span>
     <span className="passport-stamp-line">{stamp.line}</span>
