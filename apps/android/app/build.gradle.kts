@@ -11,8 +11,10 @@ android {
         applicationId = "com.tunecompanion.app"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        // release-please owns apps/android/version.txt. The version code follows from it (0.2.3 is 2003, 1.4.0 is 1004000),
+        // so every release Play sees is higher than the last; 0.1.0 went to Play by hand as version code 1.
+        versionName = rootProject.file("version.txt").readText().trim()
+        versionCode = versionName!!.split(".").map(String::toInt).let { (major, minor, patch) -> major * 1_000_000 + minor * 1_000 + patch }
         // Debug builds reach this Mac's dev server through `adb reverse tcp:3000 tcp:3000` (just android-run sets it up), the
         // same way on the emulator and on a phone over USB; release builds talk to production.
         buildConfigField("String", "API_BASE", "\"https://tunecompanion.com\"")
@@ -21,12 +23,23 @@ android {
         buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", "\"227010461268-2ak1chs98chq247ggsrso4nfl6ig59ed.apps.googleusercontent.com\"")
     }
 
+    // The Play upload key. Its path and passwords live in ~/.gradle/gradle.properties, never in the repo; without them a
+    // release build is left unsigned. Google re-signs what Play ships with the app signing key it holds.
+    val upload = providers.gradleProperty("TUNECOMPANION_UPLOAD_STORE_FILE").orNull
+    if (upload != null) signingConfigs.create("upload") {
+        storeFile = file(upload)
+        storePassword = providers.gradleProperty("TUNECOMPANION_UPLOAD_STORE_PASSWORD").get()
+        keyAlias = providers.gradleProperty("TUNECOMPANION_UPLOAD_KEY_ALIAS").get()
+        keyPassword = providers.gradleProperty("TUNECOMPANION_UPLOAD_KEY_PASSWORD").get()
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE", "\"http://localhost:3000\"")
         }
         release {
             isMinifyEnabled = true
+            signingConfigs.findByName("upload")?.let { signingConfig = it }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

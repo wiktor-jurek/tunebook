@@ -1,0 +1,82 @@
+name: Android release
+
+# Builds a signed bundle from an android-vX.Y.Z tag, uploads it to Google Play with the release's changelog as the
+# "What's new" text. The bundle is not attached to the GitHub release, since the repo is public. Release Please calls
+# this when it tags a release; run it by hand to retry one.
+#
+# Secrets: ANDROID_UPLOAD_KEYSTORE_BASE64 (base64 of the upload .jks), ANDROID_UPLOAD_KEYSTORE_PASSWORD (store and key),
+# PLAY_SERVICE_ACCOUNT_JSON (a service account with release rights on the app in Play Console).
+# Variables (optional): PLAY_TRACK (default internal), PLAY_RELEASE_STATUS (default completed; use draft until the app
+# has been published once), PLAY_LANGUAGE (default en-GB).
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, such as android-v0.2.0
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: ./.github/actions/android-setup
+
+      - name: Upload key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE" || { echo "::error::ANDROID_UPLOAD_KEYSTORE_BASE64 is not set"; exit 1; }
+          echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+
+      - name: Build the bundle
+        working-directory: apps/android
+        env:
+          ORG_GRADLE_PROJECT_TUNECOMPANION_UPLOAD_STORE_FILE: ${{ runner.temp }}/upload.jks
+          ORG_GRADLE_PROJECT_TUNECOMPANION_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_TUNECOMPANION_UPLOAD_KEY_ALIAS: upload
+          ORG_GRADLE_PROJECT_TUNECOMPANION_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+        run: ./gradlew bundleRelease
+
+      - name: What's new
+        id: notes
+        env:
+          LANGUAGE: ${{ vars.PLAY_LANGUAGE || 'en-GB' }}
+        run: |
+          mkdir -p whatsnew
+          gh release view "$TAG" --json body --jq .body > release-body.md
+          python3 .github/scripts/play_whatsnew.py < release-body.md > "whatsnew/whatsnew-$LANGUAGE"
+          cat "whatsnew/whatsnew-$LANGUAGE"
+          version=$(cat apps/android/version.txt)
+          IFS=. read -r major minor patch <<< "$version"
+          echo "name=$version ($((major * 1000000 + minor * 1000 + patch)))" >> "$GITHUB_OUTPUT"
+
+      - uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.tunecompanion.app
+          releaseFiles: apps/android/app/build/outputs/bundle/release/app-release.aab
+          releaseName: ${{ steps.notes.outputs.name }}
+          track: ${{ vars.PLAY_TRACK || 'internal' }}
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
+          whatsNewDirectory: whatsnew
+

@@ -13,7 +13,21 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      android_release: ${{ steps.release.outputs['apps/android--release_created'] }}
+      android_tag: ${{ steps.release.outputs['apps/android--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+  # Merging the Android release PR tags android-vX.Y.Z; build that tag and send it to Play. Called from here rather than
+  # on the release event, because releases made with GITHUB_TOKEN don't start other workflows.
+  android:
+    needs: release-please
+    if: needs.release-please.outputs.android_release == 'true'
+    uses: ./.github/workflows/android-release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.android_tag }}
+    secrets: inherit
