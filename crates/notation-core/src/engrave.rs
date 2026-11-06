@@ -9,7 +9,7 @@
 //! every line but a short last one is justified to the full width.
 
 use crate::frac::Frac;
-use crate::parse::{BarKind, Item, Key, Meter, MeterSymbol, Note, Pitch, Rest, Tune, Acc};
+use crate::parse::{Acc, BarKind, Item, Key, Meter, MeterSymbol, Note, Pitch, Rest, Tune};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayoutOptions {
@@ -216,7 +216,16 @@ pub fn engrave(tune: &Tune, options: &LayoutOptions) -> Engraving {
         };
         let mut painter = Painter::default();
         let continues = index + 1 < count;
-        draw_line(&mut painter, &measures[range.clone()], range.start == 0, width, natural, continues, tune, &mut carry);
+        draw_line(
+            &mut painter,
+            &measures[range.clone()],
+            range.start == 0,
+            width,
+            natural,
+            continues,
+            tune,
+            &mut carry,
+        );
         // Stack the lines: each sits below the lowest thing on the one before.
         let (min_y, max_y) = painter.bounds();
         let offset = top - min_y;
@@ -428,7 +437,9 @@ fn measures(tune: &Tune) -> Vec<Measure<'_>> {
 
 fn merge(a: BarKind, b: BarKind) -> BarKind {
     match (a, b) {
-        (BarKind::EndRepeat, BarKind::StartRepeat) | (BarKind::StartRepeat, BarKind::EndRepeat) => BarKind::DoubleRepeat,
+        (BarKind::EndRepeat, BarKind::StartRepeat) | (BarKind::StartRepeat, BarKind::EndRepeat) => {
+            BarKind::DoubleRepeat
+        }
         (BarKind::Single, other) => other,
         (other, _) => other,
     }
@@ -469,6 +480,7 @@ impl Painter {
         self.max_y = self.max_y.max(bottom);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn glyph(&mut self, code: u32, x: f32, y: f32, scale: f32, note: Option<u32>, top: f32, bottom: f32) {
         self.out.glyphs.push(Glyph { code, x, y, scale, note });
         self.extend(y + top * scale, y + bottom * scale);
@@ -528,7 +540,16 @@ struct Placed {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_line(p: &mut Painter, measures: &[Measure], opening: bool, width: f32, natural: f32, continues: bool, tune: &Tune, carry: &mut Carry) {
+fn draw_line(
+    p: &mut Painter,
+    measures: &[Measure],
+    opening: bool,
+    width: f32,
+    natural: f32,
+    continues: bool,
+    tune: &Tune,
+    carry: &mut Carry,
+) {
     for i in 0..5 {
         p.line(0.0, i as f32, width, i as f32, STAFF_LINE, None);
     }
@@ -614,9 +635,25 @@ fn draw_line(p: &mut Painter, measures: &[Measure], opening: bool, width: f32, n
         }
         // Endings close at a repeat or double bar, and are left open (no end hook) at a plain one at a line's end.
         if let Some((from, number, numbered)) = ending_from {
-            let closes = matches!(m.close, Some(BarKind::EndRepeat | BarKind::DoubleRepeat | BarKind::Double | BarKind::Final | BarKind::StartRepeat));
+            let closes = matches!(
+                m.close,
+                Some(
+                    BarKind::EndRepeat
+                        | BarKind::DoubleRepeat
+                        | BarKind::Double
+                        | BarKind::Final
+                        | BarKind::StartRepeat
+                )
+            );
             if closes {
-                ending(p, from, bar_x - 0.2, number, numbered, matches!(m.close, Some(BarKind::EndRepeat | BarKind::DoubleRepeat)));
+                ending(
+                    p,
+                    from,
+                    bar_x - 0.2,
+                    number,
+                    numbered,
+                    matches!(m.close, Some(BarKind::EndRepeat | BarKind::DoubleRepeat)),
+                );
                 ending_from = None;
             } else if last_on_line {
                 ending(p, from, bar_x, number, numbered, false);
@@ -702,7 +739,14 @@ fn ledger_lines(p: &mut Painter, step: i32, x: f32, scale: f32, note: Option<u32
 
 /// A note's heads, accidentals, dots, ledger lines and stem (flags and beams come later), its grace notes,
 /// roll and chord symbol, and the tie into it.
-fn draw_note(p: &mut Painter, note: &Note, x: f32, base: Frac, dots: u32, tie: &mut Option<(f32, f32, bool)>) -> Placed {
+fn draw_note(
+    p: &mut Painter,
+    note: &Note,
+    x: f32,
+    base: Frac,
+    dots: u32,
+    tie: &mut Option<(f32, f32, bool)>,
+) -> Placed {
     let id = Some(note.id);
     let head = if base.f64() >= 1.0 - 1e-9 {
         HEAD_WHOLE
@@ -745,7 +789,13 @@ fn draw_note(p: &mut Painter, note: &Note, x: f32, base: Frac, dots: u32, tie: &
             p.line(stem_x, top + 0.17, stem_x, tip, STEM, id);
         }
     }
-    p.out.notes.push(NoteBox { id: note.id, x: x - 0.3, y: top.min(tip) - 0.5, width: HEAD + 0.6, height: (bottom.max(tip) - top.min(tip)) + 1.0 });
+    p.out.notes.push(NoteBox {
+        id: note.id,
+        x: x - 0.3,
+        y: top.min(tip) - 0.5,
+        width: HEAD + 0.6,
+        height: (bottom.max(tip) - top.min(tip)) + 1.0,
+    });
     if let Some((tx, ty, below)) = tie.take() {
         let dir = if below { 0.5 } else { -0.5 };
         p.arc(tx, ty, x - 0.1, ty, dir);
@@ -872,7 +922,13 @@ fn flush_beams(p: &mut Painter, run: &mut Vec<Placed>) {
         p.line(sx, head, sx, beam_y(sx), STEM, Some(n.id));
     }
     // The main beam, then shorter ones where notes are shorter (or a stub for a note on its own).
-    p.out.beams.push(Beam { x1: x1 - STEM / 2.0, y1: beam_y(x1), x2: x2 + STEM / 2.0, y2: beam_y(x2), thickness: depth });
+    p.out.beams.push(Beam {
+        x1: x1 - STEM / 2.0,
+        y1: beam_y(x1),
+        x2: x2 + STEM / 2.0,
+        y2: beam_y(x2),
+        thickness: depth,
+    });
     p.extend(beam_y(x1).min(beam_y(x2)) - BEAM, beam_y(x1).max(beam_y(x2)) + BEAM);
     for level in 2..=most {
         let shift = (level as f32 - 1.0) * if up { BEAM_GAP } else { -BEAM_GAP };
@@ -893,7 +949,13 @@ fn flush_beams(p: &mut Painter, run: &mut Vec<Placed>) {
             } else {
                 (stem_x(&notes[i]) - 1.15, stem_x(&notes[i]) + STEM / 2.0)
             };
-            p.out.beams.push(Beam { x1: from, y1: beam_y(from) + shift, x2: to, y2: beam_y(to) + shift, thickness: depth });
+            p.out.beams.push(Beam {
+                x1: from,
+                y1: beam_y(from) + shift,
+                x2: to,
+                y2: beam_y(to) + shift,
+                thickness: depth,
+            });
             i = j + 1;
         }
     }
@@ -1004,7 +1066,13 @@ mod tests {
 
     #[test]
     fn wider_fits_more_bars_on_a_line() {
-        let staff_lines = |width| engrave(&parse(BUTTERFLY), &options(width)).lines.iter().filter(|l| l.y1 == l.y2 && l.thickness == STAFF_LINE && l.x1 == 0.0).count();
+        let staff_lines = |width| {
+            engrave(&parse(BUTTERFLY), &options(width))
+                .lines
+                .iter()
+                .filter(|l| l.y1 == l.y2 && l.thickness == STAFF_LINE && l.x1 == 0.0)
+                .count()
+        };
         assert!(staff_lines(60.0) > staff_lines(150.0));
     }
 

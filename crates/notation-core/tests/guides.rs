@@ -12,9 +12,15 @@ fn tunes() -> Vec<(String, String)> {
         .unwrap()
         .values()
         .map(|t| {
-            let text = |key: &str, fallback: &str| t[key].as_str().filter(|s| !s.is_empty()).unwrap_or(fallback).to_string();
+            let text =
+                |key: &str, fallback: &str| t[key].as_str().filter(|s| !s.is_empty()).unwrap_or(fallback).to_string();
             // As `Abc.forScore` builds it.
-            let abc = format!("X:1\nM:{}\nL:1/8\nQ:1/4=100\nK:{}\n{}", text("meter", "4/4"), text("mode", "D"), text("abc", ""));
+            let abc = format!(
+                "X:1\nM:{}\nL:1/8\nQ:1/4=100\nK:{}\n{}",
+                text("meter", "4/4"),
+                text("mode", "D"),
+                text("abc", "")
+            );
             (text("title", "?"), abc)
         })
         .collect()
@@ -34,7 +40,11 @@ fn every_guide_tune_reads_engraves_and_plays() {
             assert!(!e.notes.is_empty(), "{title}: no notes drawn");
             assert!(e.glyphs.iter().all(|g| g.x.is_finite() && g.y.is_finite()), "{title}: a glyph off the page");
             let widest = e.lines.iter().map(|l| l.x1.max(l.x2)).fold(0.0f32, f32::max);
-            assert!(widest <= e.width + 0.05, "{title}: a line reaches {widest} past the staff's {} at {width}", e.width);
+            assert!(
+                widest <= e.width + 0.05,
+                "{title}: a line reaches {widest} past the staff's {} at {width}",
+                e.width
+            );
         }
         let played: f64 = timeline(&tune).iter().map(|e| e.duration).sum();
         assert!(played >= tune.meter.bar().f64(), "{title}: plays only {played} whole notes");

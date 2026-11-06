@@ -38,7 +38,7 @@ impl Meter {
 
     /// 6/8, 9/8 and 12/8: three quavers to the beat.
     pub fn compound(self) -> bool {
-        self.den == 8 && self.num > 3 && self.num % 3 == 0
+        self.den == 8 && self.num > 3 && self.num.is_multiple_of(3)
     }
 }
 
@@ -199,7 +199,18 @@ pub fn parse(abc: &str) -> Tune {
     }
     // The unit note: an eighth, or a sixteenth in meters under 3/4 (the ABC standard's rule).
     let unit = unit.unwrap_or(if meter.bar().f64() < 0.75 { Frac::new(1, 16) } else { Frac::new(1, 8) });
-    let mut reader = Reader { chars: body.chars().collect(), at: 0, meter, unit, key, items: vec![], skipped: vec![], next_id: 0, bar_acc: vec![], pending: Pending::default() };
+    let mut reader = Reader {
+        chars: body.chars().collect(),
+        at: 0,
+        meter,
+        unit,
+        key,
+        items: vec![],
+        skipped: vec![],
+        next_id: 0,
+        bar_acc: vec![],
+        pending: Pending::default(),
+    };
     reader.read();
     Tune { meter, key, items: reader.items, skipped: reader.skipped }
 }
@@ -328,7 +339,8 @@ impl Reader {
         while let Some(c) = self.peek(0) {
             // A field on a line of its own, mid-tune: K:, M:, L: change things; the rest (w:, P:, T: …) are skipped.
             if line_start && c.is_ascii_alphabetic() && self.peek(1) == Some(':') {
-                let end = self.chars[self.at..].iter().position(|&c| c == '\n').map_or(self.chars.len(), |n| self.at + n);
+                let end =
+                    self.chars[self.at..].iter().position(|&c| c == '\n').map_or(self.chars.len(), |n| self.at + n);
                 let line: String = self.chars[self.at..end].iter().collect();
                 self.at = end;
                 self.inline_field(&line);
@@ -362,7 +374,8 @@ impl Reader {
                 '|' | ':' => self.bar(),
                 '-' => {
                     self.at += 1;
-                    if let Some(Item::Note(note)) = self.items.iter_mut().rev().find(|i| !matches!(i, Item::BeamBreak)) {
+                    if let Some(Item::Note(note)) = self.items.iter_mut().rev().find(|i| !matches!(i, Item::BeamBreak))
+                    {
                         note.tie = true;
                     }
                 }
@@ -442,9 +455,8 @@ impl Reader {
     /// `!trill!` or `+trill+`; a `!` that closes no such name (no space or bar before the next) is the old ABC
     /// line break The Session still writes (`|edef a4|! f2ed`), and means nothing to the music.
     fn decoration(&mut self, close: char) {
-        let name: String = (1..)
-            .map_while(|i| self.peek(i).filter(|&c| c != close && !c.is_whitespace() && c != '|'))
-            .collect();
+        let name: String =
+            (1..).map_while(|i| self.peek(i).filter(|&c| c != close && !c.is_whitespace() && c != '|')).collect();
         if self.peek(name.chars().count() + 1) != Some(close) || name.is_empty() {
             self.at += 1;
             if close == '+' {
@@ -530,7 +542,8 @@ impl Reader {
             }
             (Some(f), Some(':')) if f.is_ascii_alphabetic() => {
                 self.at += 1;
-                let end = self.chars[self.at..].iter().position(|&c| c == ']').map_or(self.chars.len(), |n| self.at + n);
+                let end =
+                    self.chars[self.at..].iter().position(|&c| c == ']').map_or(self.chars.len(), |n| self.at + n);
                 let text: String = self.chars[self.at..end].iter().collect();
                 self.at = (end + 1).min(self.chars.len());
                 self.inline_field(&text);
@@ -743,7 +756,9 @@ impl Reader {
                 self.bar_acc.push((step, acc.alter()));
                 acc.alter()
             }
-            None => self.bar_acc.iter().rev().find(|&&(s, _)| s == step).map_or_else(|| self.key.alter(index), |&(_, a)| a),
+            None => {
+                self.bar_acc.iter().rev().find(|&&(s, _)| s == step).map_or_else(|| self.key.alter(index), |&(_, a)| a)
+            }
         };
         Some(Pitch { step, acc, alter })
     }
@@ -805,7 +820,17 @@ mod tests {
         assert_eq!(tune.meter, Meter { num: 6, den: 8, symbol: None });
         assert_eq!(tune.key.fifths, 1); // A dorian: F sharp, as G major
         let lengths: Vec<Frac> = notes(&tune).iter().map(|n| n.dur).collect();
-        assert_eq!(lengths, vec![Frac::new(1, 4), Frac::new(1, 8), Frac::new(3, 16), Frac::new(1, 16), Frac::new(1, 16), Frac::new(1, 16)]);
+        assert_eq!(
+            lengths,
+            vec![
+                Frac::new(1, 4),
+                Frac::new(1, 8),
+                Frac::new(3, 16),
+                Frac::new(1, 16),
+                Frac::new(1, 16),
+                Frac::new(1, 16)
+            ]
+        );
     }
 
     #[test]
@@ -829,7 +854,8 @@ mod tests {
         assert_eq!(ns[1].tuplet, Some((3, 3)));
         assert_eq!(ns[1].dur, Frac::new(1, 12));
         assert_eq!(ns[1].shown, Frac::new(1, 8));
-        let bars: Vec<BarKind> = tune.items.iter().filter_map(|i| if let Item::Bar(b) = i { Some(b.kind) } else { None }).collect();
+        let bars: Vec<BarKind> =
+            tune.items.iter().filter_map(|i| if let Item::Bar(b) = i { Some(b.kind) } else { None }).collect();
         assert_eq!(bars, vec![BarKind::StartRepeat, BarKind::Single, BarKind::EndRepeat, BarKind::Final]);
         assert_eq!(tune.items.iter().filter(|i| matches!(i, Item::Ending(_))).count(), 2);
     }

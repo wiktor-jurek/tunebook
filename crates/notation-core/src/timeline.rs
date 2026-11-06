@@ -36,36 +36,34 @@ pub fn timeline(tune: &Tune) -> Vec<NoteEvent> {
             break; // Repeats that never settle: play what we have.
         }
         match &items[i] {
-            Item::Bar(bar) => {
-                match bar.kind {
-                    BarKind::EndRepeat | BarKind::DoubleRepeat if !taken.contains(&i) => {
-                        taken.push(i);
-                        pass = 2;
-                        skipping = false;
-                        i = repeat_from;
-                        continue;
-                    }
-                    BarKind::EndRepeat => {
-                        skipping = false;
-                    }
-                    BarKind::DoubleRepeat => {
-                        skipping = false;
-                        pass = 1;
-                        repeat_from = i + 1;
-                    }
-                    BarKind::StartRepeat => {
-                        skipping = false;
-                        pass = 1;
-                        repeat_from = i + 1;
-                    }
-                    BarKind::Double | BarKind::Final | BarKind::Start => {
-                        skipping = false;
-                        pass = 1;
-                        repeat_from = i + 1;
-                    }
-                    BarKind::Single => {}
+            Item::Bar(bar) => match bar.kind {
+                BarKind::EndRepeat | BarKind::DoubleRepeat if !taken.contains(&i) => {
+                    taken.push(i);
+                    pass = 2;
+                    skipping = false;
+                    i = repeat_from;
+                    continue;
                 }
-            }
+                BarKind::EndRepeat => {
+                    skipping = false;
+                }
+                BarKind::DoubleRepeat => {
+                    skipping = false;
+                    pass = 1;
+                    repeat_from = i + 1;
+                }
+                BarKind::StartRepeat => {
+                    skipping = false;
+                    pass = 1;
+                    repeat_from = i + 1;
+                }
+                BarKind::Double | BarKind::Final | BarKind::Start => {
+                    skipping = false;
+                    pass = 1;
+                    repeat_from = i + 1;
+                }
+                BarKind::Single => {}
+            },
             Item::Ending(n) => skipping = *n != pass,
             Item::Note(note) if !skipping => {
                 let midi: Vec<i32> = note.pitches.iter().map(|p| p.midi()).collect();

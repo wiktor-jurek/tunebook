@@ -103,10 +103,26 @@ pub fn engrave_score(abc: String, staff_width: f32, bars_per_line: u32, phrase_b
     ScoreEngraving {
         width: e.width,
         height: e.height,
-        glyphs: e.glyphs.iter().map(|g| ScoreGlyph { code: g.code, x: g.x, y: g.y, scale: g.scale, note: note(g.note) }).collect(),
-        lines: e.lines.iter().map(|l| ScoreLine { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, thickness: l.thickness, note: note(l.note) }).collect(),
-        beams: e.beams.iter().map(|b| ScoreBeam { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, thickness: b.thickness }).collect(),
-        arcs: e.arcs.iter().map(|a| ScoreArc { x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, bulge: a.bulge, thickness: a.thickness }).collect(),
+        glyphs: e
+            .glyphs
+            .iter()
+            .map(|g| ScoreGlyph { code: g.code, x: g.x, y: g.y, scale: g.scale, note: note(g.note) })
+            .collect(),
+        lines: e
+            .lines
+            .iter()
+            .map(|l| ScoreLine { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, thickness: l.thickness, note: note(l.note) })
+            .collect(),
+        beams: e
+            .beams
+            .iter()
+            .map(|b| ScoreBeam { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, thickness: b.thickness })
+            .collect(),
+        arcs: e
+            .arcs
+            .iter()
+            .map(|a| ScoreArc { x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, bulge: a.bulge, thickness: a.thickness })
+            .collect(),
         texts: e
             .texts
             .iter()
@@ -122,7 +138,11 @@ pub fn engrave_score(abc: String, staff_width: f32, bars_per_line: u32, phrase_b
                 },
             })
             .collect(),
-        notes: e.notes.iter().map(|n| ScoreNoteBox { id: n.id, x: n.x, y: n.y, width: n.width, height: n.height }).collect(),
+        notes: e
+            .notes
+            .iter()
+            .map(|n| ScoreNoteBox { id: n.id, x: n.x, y: n.y, width: n.width, height: n.height })
+            .collect(),
     }
 }
 
