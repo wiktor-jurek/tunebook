@@ -35,6 +35,9 @@ const APPS: App[] = [
   { name: "FolkFriend", key: "folkfriend", url: "https://folkfriend.app", price: "Free and open source (GPL-3.0)", platforms: "Web",
     how: "Transcribes the melody, then searches The Session's settings for it.",
     verdict: "Free and open, and good on a clear solo instrument. Backing and ensembles trip it up more." },
+  { name: "Cadence", key: "cadence", url: "https://batpapa.github.io/Cadence/TuneAnalyser/", price: "Free and open source (AGPL-3.0)", platforms: "Web, Android",
+    how: "A modified FolkFriend transcribes 10-second windows, and a Viterbi segmenter follows a whole session tune by tune.",
+    verdict: "Close behind on YouTube clips and the best on full band recordings. In whole sessions it names each new tune within about ten seconds, though it shows a few wrong names along the way." },
   { name: "Tunepal", key: "tunepal", url: "https://tunepal.org", price: "Free", platforms: "iPhone, Android",
     how: "Turns about 10 seconds of playing into note letters and finds the closest tune by edit distance.",
     verdict: "The original trad tune finder, from Bryan Duggan's research at DIT (now TU Dublin). Its note-matching method struggles with anything but one clean instrument." },
@@ -116,7 +119,7 @@ export default function BestTuneFinderApps() {
 
     <section className="guide-section guide-method">
       <h2>How we tested</h2>
-      <p>Every app heard exactly the same audio. JigRipper ran its own published web model and front end offline; FolkFriend ran its open-source command-line build; Tunepal ran its published search over its own tune index from its author&rsquo;s open-source rebuild. Tunepal&rsquo;s own pitch tracker isn&rsquo;t public, so a standard one stands in for it, which may make it look slightly better or worse than the app. Little Session will be added once we&rsquo;ve played the clips through the app itself.</p>
+      <p>Every app heard exactly the same audio. JigRipper ran its own published web model and front end offline; FolkFriend ran its open-source command-line build; Cadence ran its own FolkFriend build and session segmenter from its open-source code; Tunepal ran its published search over its own tune index from its author&rsquo;s open-source rebuild. Tunepal&rsquo;s own pitch tracker isn&rsquo;t public, so a standard one stands in for it, which may make it look slightly better or worse than the app. Little Session will be added once we&rsquo;ve played the clips through the app itself.</p>
       <p>The YouTube clips&rsquo; tunes were checked by ear. A tune an app doesn&rsquo;t know counts against it, as it would at a session. Numbers are rounded; the <Link href="/tunes/finder/benchmark">benchmark page</Link> has every clip, the answers, and splits by instrument and by how popular the tune is.</p>
     </section>
 

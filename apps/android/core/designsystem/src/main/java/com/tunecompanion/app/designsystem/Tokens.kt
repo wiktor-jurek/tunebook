@@ -14,6 +14,7 @@ object Palette {
     val seriesFolkfriend = ColorPair(Color(0xFFEB6834), Color(0xFFE0662C))
     val seriesJigripper = ColorPair(Color(0xFF2A78D6), Color(0xFF3F8DE8))
     val seriesTunepal = ColorPair(Color(0xFF8C4FB8), Color(0xFFB083E0))
+    val seriesCadence = ColorPair(Color(0xFF871B63), Color(0xFFAB2D7E))
     val background = ColorPair(Color(0xFFFAFAF8), Color(0xFF111110))
     val foreground = ColorPair(Color(0xFF171717), Color(0xFFECECE8))
     val card = ColorPair(Color(0xFFFFFFFF), Color(0xFF1C1C1B))

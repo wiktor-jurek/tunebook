@@ -666,6 +666,28 @@ was kept out of YuE2, while JigRipper's training data is unknown.
 JigRipper (a competitor) is only ever *benchmarked*, in `~/jr-bench` on mantis. Its weights
 never ship in Tunebook and its outputs are never used as training labels.
 
+### Cadence (`~/cadence-bench`, 2026-11-05)
+
+Cadence (github.com/Batpapa/Cadence, AGPL-3.0) is a modified FolkFriend in WebAssembly with a Viterbi segmenter for
+sessions. `~/cadence-bench/cadence-run.ts` (outside the repo, like JigRipper's harness) replays its `ffWorker.ts`
+offline: 48 kHz, the last 10 s every 5 s once 10 s are heard, FolkFriend's published index, the octave fallback, and
+Cadence's own `IncrementalViterbiSegmenter`. Benchmark only: its code never ships and its answers are never labels.
+`benchmark.py --cadence ~/cadence-bench` scores clips (the final detection covering most of a clip; the truth's rank
+follows it among candidates by summed window score; with `--timing`, the newest name shown by each prefix), and
+`session_decode.py cadence` scores whole sessions by the decoder replay's rules (a name counts when it first appears,
+provisional ones included; one shown during another labelled tune is wrong even if later withdrawn). Commit e1bb6e9:
+
+| Set | Tunebook | Cadence | JigRipper | FolkFriend |
+|---|---|---|---|---|
+| YouTube (202) | **84.2%** | 79.7% | 81.7% | 72.3% |
+| Holdout (166) | **75.9%** | 74.1% | 70.5% | 63.9% |
+| Bands (75) | 53.3% | **61.3%** | 56.0% | 53.3% |
+| Albums (96) | **78.1%** | 67.7% | 65.6% | 59.4% |
+
+Nothing before 10 s, then 58% of all clips. Sessions (halves a / b): median 10.4 / 10.0 s to name a tune, 83 / 87%
+within 15 s, 98.3 / 99.5% found, 5.5 / 2.2 wrong names an hour, against the switch-view decoder's 10.2 / 10.2 s,
+81 / 80%, 99.4 / 97.9% and 0.2 / 0.5. Its lead on bands (full ensembles) is the gap to study.
+
 ### Tunepal (`eval/tunepal.py`, 2026-10-31)
 
 Tunepal's search is published and open. The author's rebuild, github.com/skooter500/TunepalGodot,

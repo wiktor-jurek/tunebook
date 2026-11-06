@@ -7,7 +7,7 @@ import { BenchmarkTiming } from "@/components/benchmark-timing";
 import { BANDS, ENGINES, SETS, bandRange, scoreboard, type Benchmark, type BenchmarkClip, type EngineKey, type Scoreboard } from "@/lib/finder/benchmark";
 import data from "@/lib/finder/benchmark.json";
 
-export const metadata = { title: "Tune finder benchmark", description: "Tune Companion, FolkFriend, JigRipper and Tunepal on the same real recordings: which names the tune, and where." };
+export const metadata = { title: "Tune finder benchmark", description: "Tune Companion, FolkFriend, JigRipper, Cadence and Tunepal on the same real recordings: which names the tune, and where." };
 
 const benchmark = data as unknown as Benchmark; // written by ml/eval/benchmark.py
 const engines = ENGINES.filter((engine) => benchmark.engines[engine.key]);

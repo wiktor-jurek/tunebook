@@ -6,6 +6,7 @@ public enum Palette {
     public static let seriesFolkfriend = Color(light: 0xEB6834, dark: 0xE0662C)
     public static let seriesJigripper = Color(light: 0x2A78D6, dark: 0x3F8DE8)
     public static let seriesTunepal = Color(light: 0x8C4FB8, dark: 0xB083E0)
+    public static let seriesCadence = Color(light: 0x871B63, dark: 0xAB2D7E)
     public static let background = Color(light: 0xFAFAF8, dark: 0x111110)
     public static let foreground = Color(light: 0x171717, dark: 0xECECE8)
     public static let card = Color(light: 0xFFFFFF, dark: 0x1C1C1B)

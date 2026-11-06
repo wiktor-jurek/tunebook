@@ -5,6 +5,9 @@
   upsampled to the 48 kHz its frames are sized for.
 - JigRipper (jigripper.com): its public web model and front end, replayed offline by a harness kept outside
   this repo. Its files are for benchmarking only and never ship or get committed.
+- Cadence (github.com/Batpapa/Cadence, AGPL-3.0): its modified FolkFriend (WebAssembly) and its own Viterbi
+  segmenter, replayed by cadence-run.ts in a folder kept outside this repo (~/cadence-bench). Benchmark only: its code
+  never ships and its answers are never used as labels. It shows a name once 10 s have been heard, then every 5 s.
 - Tunepal (tunepal.org): its published method (eval/tunepal.py: note letters, substring edit distance) over
   tunepal.db from the author's open rebuild, with the loose YIN front end on every clip, the best of the
   three front ends overall. The shipping app's own pitch tracker is not public.
@@ -18,7 +21,7 @@ FolkFriend is a Linux build, so it runs in its build image (which also has the O
 
     docker run --rm -v $FF/src/rust:/src -v $FF/target:/src/target -w /src rust:1.82-bookworm cargo build --release --bin folkfriend
     python eval/benchmark.py --tunebook --folkfriend $FF/target/release/folkfriend --folkfriend-home $FF/home \\
-        --jigripper-harness $JR/tools/jr-eval.cjs --jigripper-dir $JR/jr --tunepal
+        --jigripper-harness $JR/tools/jr-eval.cjs --jigripper-dir $JR/jr --tunepal --cadence ~/cadence-bench
 """
 
 import argparse
@@ -39,7 +42,7 @@ import classifier as c  # noqa: E402
 from tunebook_ml import pitchclass  # noqa: E402
 
 REPO = c.ML.parent
-ENGINES = ("tunebook", "folkfriend", "jigripper", "tunepal")
+ENGINES = ("tunebook", "folkfriend", "jigripper", "cadence", "tunepal")
 PREFIXES = [2, 4, 6, 8, 10, 12, 15, 20, 25, 30]  # seconds heard, for --timing
 # Popularity bands by catalogue rank (most tunebooks first): 1 = top 100 ... 5 = beyond 8,000 or in no tunebook.
 BAND_RANKS = [100, 500, 2000, 8000]
@@ -219,6 +222,40 @@ def jigripper(rows: list[dict], harness: Path, folder: Path) -> dict:
     return {"name": "JigRipper", "detail": "web model #1006", "tunes": len(tunes), "missing": sorted({row["tuneId"] for row in rows} - known)}
 
 
+def cadence(rows: list[dict], folder: Path, timing: bool) -> dict:
+    """cadence-run.ts on each clip: what Cadence's detection list shows. The answer is the final detection covering most of
+    the clip; the truth's rank follows it in Cadence's candidates by summed window score. With timing, the newest name
+    shown once each of PREFIXES seconds has been heard (the list after the last 5 s step within it)."""
+    out = folder / "out" / "benchmark"
+    manifest = folder / "benchmark.jsonl"
+    manifest.write_text("".join(json.dumps({"path": str(row["path"]), "out": str(out / f"{i}.json")}) + "\n" for i, row in enumerate(rows)))
+    # Outputs are per clip index, so a changed clip list starts afresh.
+    stamp = out / "clips.json"
+    listing = json.dumps([str(row["path"]) for row in rows])
+    if not stamp.exists() or stamp.read_text() != listing:
+        for f in out.glob("*.json"):
+            f.unlink()
+        out.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(listing)
+    subprocess.run(["npx", "-y", "tsx", "cadence-run.ts", str(manifest)], check=True, cwd=folder)
+    version = ""
+    for i, row in enumerate(rows):
+        r = json.loads((out / f"{i}.json").read_text())
+        version = r["version"]
+        cover = lambda d: min(d["end"], r["duration"]) - max(d["start"], 0)  # noqa: E731
+        top = int(max(r["final"], key=cover)["tuneId"]) if r["final"] else None
+        order = ([top] if top is not None else []) + [int(t) for t in r["ranked"] if int(t) != top]
+        row["results"]["cadence"] = answer(top, order.index(row["tuneId"]) + 1 if row["tuneId"] in order else None)
+        if timing:
+            shown = [next((names for t, names in reversed(r["shown"]) if t <= p), []) for p in PREFIXES]
+            row["results"]["cadence"]["curve"] = curve([int(names[-1]) == row["tuneId"] if names else None for names in shown])
+    commit = subprocess.run(["git", "-C", str(folder / "Cadence"), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+    index = json.loads((folder / "folkfriend-non-user-data.json").read_text())
+    known = {int(s["tune_id"]) for s in index["settings"].values()}
+    return {"name": "Cadence", "detail": f"its FolkFriend build {version} and session segmenter, commit {commit}", "tunes": len(known),
+            "missing": sorted({row["tuneId"] for row in rows} - known)}
+
+
 def tunepal(rows: list[dict], db: Path, timing: bool) -> dict:
     """Tunepal's ranking on each whole clip and, with timing, on its first PREFIXES seconds.
     A clip it hears no notes in gets no answer (every score ties)."""
@@ -258,6 +295,7 @@ def main() -> None:
     parser.add_argument("--folkfriend-version", default="", help="commit the binary was built from")
     parser.add_argument("--jigripper-harness", type=Path, help="jr-eval.cjs, kept outside the repo")
     parser.add_argument("--jigripper-dir", type=Path, help="JigRipper's downloaded web files")
+    parser.add_argument("--cadence", type=Path, help="the folder holding cadence-run.ts and a Cadence checkout (kept outside the repo)")
     parser.add_argument("--tunepal", action="store_true", help="run Tunepal's method")
     parser.add_argument("--tunepal-db", type=Path, default=c.ML / "data" / "tunepal" / "tunepal.db")
     parser.add_argument("--timing", action="store_true", help="also score each engine run on the first 2 … 30 seconds")
@@ -279,6 +317,8 @@ def main() -> None:
         engines["folkfriend"] = folkfriend(rows, args.folkfriend, args.folkfriend_home, args.folkfriend_version)
     if args.jigripper_harness and not args.timing_only:
         engines["jigripper"] = jigripper(rows, args.jigripper_harness, args.jigripper_dir)
+    if args.cadence:
+        engines["cadence"] = cadence(rows, args.cadence.expanduser(), args.timing)
     if args.tunepal:
         engines["tunepal"] = tunepal(rows, args.tunepal_db, args.timing)
     # Engines not run this time keep their earlier answers (and timing, unless it is rerun).

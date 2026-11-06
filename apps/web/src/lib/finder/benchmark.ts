@@ -2,7 +2,7 @@
 // writes benchmark.json). A few hundred clips leave wide error bars, so every rate carries a 95%
 // interval, and a scenario only names a winner when a paired test says the lead is real.
 
-export type EngineKey = "tunebook" | "folkfriend" | "jigripper" | "tunepal";
+export type EngineKey = "tunebook" | "folkfriend" | "jigripper" | "cadence" | "tunepal";
 /** `curve`: right ("1"), wrong ("0") or no answer yet ("-") after each of Benchmark.prefixes seconds. */
 export type Answer = { top: number | null; rank: number | null; curve?: string };
 
@@ -33,6 +33,7 @@ export const ENGINES: { key: EngineKey; name: string; colour: string; url: strin
   { key: "tunebook", name: "Tune Companion", colour: "var(--series-tunebook)", url: "/" },
   { key: "folkfriend", name: "FolkFriend", colour: "var(--series-folkfriend)", url: "https://folkfriend.app" },
   { key: "jigripper", name: "JigRipper", colour: "var(--series-jigripper)", url: "https://www.jigripper.com" },
+  { key: "cadence", name: "Cadence", colour: "var(--series-cadence)", url: "https://batpapa.github.io/Cadence/TuneAnalyser/" },
   { key: "tunepal", name: "Tunepal", colour: "var(--series-tunepal)", url: "https://tunepal.org" },
 ];
 
