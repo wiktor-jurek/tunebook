@@ -8,7 +8,6 @@ import android.content.Context
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -84,7 +83,7 @@ private object Engravings {
 @Composable
 private fun ScoreCanvas(engraving: ScoreEngraving, playing: Set<UInt>, modifier: Modifier) {
     val context = LocalContext.current
-    val ink = if (isSystemInDarkTheme()) Color(0xFFECECE8) else Color(0xFF171717)
+    val ink = Palette.foreground.current()
     val lit = Palette.brandDot.current()
     val paints = remember(context) { Paints(context) }
     Canvas(modifier) {

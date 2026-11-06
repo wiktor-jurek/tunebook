@@ -5,10 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
 import com.tunecompanion.app.designsystem.TuneCompanionTheme
+import com.tunecompanion.app.designsystem.isAppInDarkTheme
 
 class MainActivity : ComponentActivity() {
     private var pending: Mode? = null
@@ -21,7 +24,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { TuneCompanionTheme { AppShell(onListen = ::listen) } }
+        setContent {
+            // The status and navigation bar icons follow the app's appearance, which can differ from the system's.
+            val dark = isAppInDarkTheme()
+            DisposableEffect(dark) {
+                val bars = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { dark }
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+                onDispose {}
+            }
+            TuneCompanionTheme(dark) { AppShell(onListen = ::listen) }
+        }
         handle(intent)
     }
 

@@ -1,13 +1,20 @@
-// Hand-written companions to the generated Tokens.kt: the Material theme in the web's colours
-// (following the system's dark mode) and the serif the web uses for tune titles.
+// Hand-written companions to the generated Tokens.kt: the Material theme in the web's colours (following the system's
+// dark mode unless the person picked light or dark in settings) and the serif the web uses for tune titles.
 package com.tunecompanion.app.designsystem
 
+import android.content.Context
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -36,15 +43,54 @@ private fun scheme(dark: Boolean) = with(Palette) {
     )
 }
 
+/** Light, dark, or whatever the phone is set to: the choice in Me's settings, kept on this phone. */
+enum class Appearance(val label: String) {
+    System("System"), Light("Light"), Dark("Dark");
+
+    companion object {
+        private const val KEY = "appearance"
+        private var prefs: android.content.SharedPreferences? = null
+
+        /** The current choice. Compose reads it as state, so changing it repaints the app at once. */
+        var chosen by mutableStateOf(System)
+            private set
+
+        fun load(context: Context) {
+            prefs = context.getSharedPreferences("ui", Context.MODE_PRIVATE)
+            chosen = prefs?.getString(KEY, null)?.let { saved -> entries.firstOrNull { it.name == saved } } ?: System
+        }
+
+        fun choose(appearance: Appearance) {
+            chosen = appearance
+            prefs?.edit()?.putString(KEY, appearance.name)?.apply()
+        }
+    }
+}
+
+/** Whether the app is dark right now: the setting, or the system's when the setting is System. */
 @Composable
-fun TuneCompanionTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme(dark), content = content)
+@ReadOnlyComposable
+fun isAppInDarkTheme(): Boolean = when (Appearance.chosen) {
+    Appearance.System -> isSystemInDarkTheme()
+    Appearance.Light -> false
+    Appearance.Dark -> true
+}
+
+private val LocalDark = staticCompositionLocalOf { false }
+
+@Composable
+fun TuneCompanionTheme(dark: Boolean = isAppInDarkTheme(), content: @Composable () -> Unit) {
+    val colors = scheme(dark)
+    MaterialTheme(colorScheme = colors) {
+        // Text outside a Surface takes LocalContentColor, which is black unless set: unreadable in dark mode.
+        CompositionLocalProvider(LocalDark provides dark, LocalContentColor provides colors.onBackground, content = content)
+    }
 }
 
 /** A token in the current appearance. */
 @Composable
 @ReadOnlyComposable
-fun ColorPair.current(): Color = pick(isSystemInDarkTheme())
+fun ColorPair.current(): Color = pick(LocalDark.current)
 
 /** Tune titles, as the web's --font-music. */
 object TuneType {

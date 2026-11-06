@@ -48,6 +48,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -85,6 +88,7 @@ import com.tunecompanion.app.api.Level
 import com.tunecompanion.app.api.Passport
 import com.tunecompanion.app.api.displayTitle
 import com.tunecompanion.app.api.keyName
+import com.tunecompanion.app.designsystem.Appearance
 import com.tunecompanion.app.designsystem.Palette
 import com.tunecompanion.app.designsystem.TuneType
 import com.tunecompanion.app.designsystem.current
@@ -476,7 +480,7 @@ private fun GhostPassport(bottomPadding: Dp, onSignIn: () -> Unit) {
     }
 }
 
-/** Account, behind the cover's gear: who is signed in, and signing out. */
+/** Account and settings, behind the cover's gear: who is signed in, light or dark, and signing out. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AccountSheet(me: Passport, onDismiss: () -> Unit) {
@@ -488,6 +492,13 @@ private fun AccountSheet(me: Passport, onDismiss: () -> Unit) {
             Text("${me.repertoire.tunes} tunes saved, in ${me.repertoire.tunebooks} ${if (me.repertoire.tunebooks == 1) "tunebook" else "tunebooks"}",
                 style = MaterialTheme.typography.bodySmall, color = Palette.text3.current())
             if (Services.api.base != "https://tunecompanion.com") Text("Connected to ${Services.api.base}", style = MaterialTheme.typography.labelSmall, color = Palette.text4.current())
+            Text("Appearance", style = MaterialTheme.typography.labelLarge, color = Palette.text3.current(), modifier = Modifier.padding(top = 18.dp))
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                Appearance.entries.forEachIndexed { i, appearance ->
+                    SegmentedButton(Appearance.chosen == appearance, { Appearance.choose(appearance) },
+                        SegmentedButtonDefaults.itemShape(i, Appearance.entries.size)) { Text(appearance.label) }
+                }
+            }
             TextButton({ scope.launch { onDismiss(); Library.signOut() } }, Modifier.padding(top = 8.dp)) { Text("Sign out", color = MaterialTheme.colorScheme.error) }
             Text("Listen engine ${com.tunecompanion.app.listen.ListenEngine.version}", style = MaterialTheme.typography.labelSmall, color = Palette.text4.current())
         }
