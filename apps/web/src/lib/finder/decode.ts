@@ -27,6 +27,11 @@ export const POPULARITY_WEIGHT = 0.006;
 // one tune in 180 more went unnamed. The first answer, and so single clips, are unchanged.
 export const SWITCH_WINDOW = 8;
 export const SWITCH_MARGIN = MATCH_MARGIN + 0.06;
+// A floor on the leader's score (mean cosine plus prior): below it nothing is named, however far ahead it is. Wrong
+// names on phone recordings in a pub sit at low scores (Chromatic #23777 named at 0.24 on 5 November; Cadence's author
+// found the same on hand-labelled sessions, and that 0.35 cut his wrong names from 17% to 5% and named nothing in bar
+// noise). On the labelled session videos it costs little: 0 to 1 tune in 180 found, a few named a second or two later.
+export const MIN_SCORE = 0.35;
 
 /** Each tune's prior, in cosine units, from how many The Session member tunebooks hold it. */
 export function popularityPrior(tunebooks: number[]): Float32Array {
@@ -57,7 +62,7 @@ export class Decoder {
       this.recentLeaders.push(leader);
       if (this.recentLeaders.length > STABLE_UPDATES) this.recentLeaders.shift();
       const held = this.recentLeaders.length === STABLE_UPDATES && this.recentLeaders.every((l) => l === leader);
-      if (leader !== this.named && margin >= SWITCH_MARGIN && held) {
+      if (leader !== this.named && margin >= SWITCH_MARGIN && candidates[0].cosine >= MIN_SCORE && held) {
         this.windows = this.windows.slice(-SWITCH_WINDOW);
         this.leaders = Array(STABLE_UPDATES).fill(leader);
         this.named = leader;
@@ -71,7 +76,7 @@ export class Decoder {
     this.leaders.push(candidates[0]?.index ?? -1);
     if (this.leaders.length > STABLE_UPDATES) this.leaders.shift();
     const stable = this.leaders.length === STABLE_UPDATES && this.leaders.every((leader) => leader === this.leaders[0]);
-    const status = this.windows.length < MIN_WINDOWS ? "listening" : margin >= MATCH_MARGIN && stable ? "match" : "unsure";
+    const status = this.windows.length < MIN_WINDOWS ? "listening" : margin >= MATCH_MARGIN && stable && candidates[0].cosine >= MIN_SCORE ? "match" : "unsure";
     if (status === "match") this.named = candidates[0].index;
     return { status, candidates, margin };
   }

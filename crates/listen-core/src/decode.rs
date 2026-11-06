@@ -23,6 +23,9 @@ pub const POPULARITY_WEIGHT: f64 = 0.006;
 /// wrong names (decode.ts, ml/eval/session_decode.py).
 pub const SWITCH_WINDOW: usize = 8;
 pub const SWITCH_MARGIN: f64 = MATCH_MARGIN + 0.06;
+/// A floor on the leader's score (mean cosine plus prior): below it nothing is named, however far ahead it is. Wrong
+/// names on phone recordings in a pub sit at low scores; see decode.ts for the measurements.
+pub const MIN_SCORE: f64 = 0.35;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -103,7 +106,9 @@ impl Decoder {
                 self.recent_leaders.pop_front();
             }
             let held = self.recent_leaders.len() == STABLE_UPDATES && self.recent_leaders.iter().all(|l| *l == leader);
-            if let Some(next) = leader.filter(|&l| l != named && margin >= SWITCH_MARGIN && held) {
+            if let Some(next) = leader
+                .filter(|&l| l != named && margin >= SWITCH_MARGIN && held && candidates[0].cosine as f64 >= MIN_SCORE)
+            {
                 while self.windows.len() > SWITCH_WINDOW {
                     self.windows.pop_front();
                 }
@@ -120,7 +125,7 @@ impl Decoder {
         let stable = self.leaders.len() == STABLE_UPDATES && self.leaders.iter().all(|l| *l == self.leaders[0]);
         let status = if self.windows.len() < MIN_WINDOWS {
             Status::Listening
-        } else if margin >= MATCH_MARGIN && stable {
+        } else if margin >= MATCH_MARGIN && stable && candidates.first().is_some_and(|c| c.cosine as f64 >= MIN_SCORE) {
             Status::Match
         } else {
             Status::Unsure
@@ -225,6 +230,15 @@ mod tests {
             decoder.push(&tune(2));
         }
         assert_eq!(decoder.push(&tune(0)).candidates[0].index, 0);
+    }
+
+    #[test]
+    fn names_nothing_while_the_leader_scores_low() {
+        // Far ahead of the rest, but at the low scores pub noise gives every tune.
+        let mut decoder = Decoder::new(None);
+        for _ in 0..HISTORY {
+            assert_ne!(decoder.push(&[0.05, 0.3, 0.05]).status, Status::Match);
+        }
     }
 
     #[test]

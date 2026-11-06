@@ -31,6 +31,11 @@ describe("Decoder", () => {
     expect(verdict.candidates[0].index).toBe(0);
   });
 
+  it("names nothing while the leader scores low, however far ahead", () => {
+    const decoder = new Decoder();
+    for (let i = 0; i < HISTORY; i++) expect(decoder.push(Float32Array.from([0.05, 0.3, 0.05])).status).not.toBe("match");
+  });
+
   it("forgets the named tune on reset", () => {
     const decoder = new Decoder();
     for (let i = 0; i < 5; i++) decoder.push(tune(0));

@@ -962,6 +962,20 @@ audio included: private storage, never served or redistributed.
   0.2 / 0.5 an hour, one tune per half more never named; single clips unchanged (the first answer uses the long
   history). Not tried yet: The Session's set transitions (`data/sets.csv`, `data/transitions.json`) as a prior on
   the next tune, and Cadence's Viterbi segmenter (below).
+- **A floor on the leader's score: shipped (2026-11-06, `MIN_SCORE` 0.35 in `decode.ts` and `listen-core`).** Nothing is
+  named while the leader's score (mean cosine plus prior) is under 0.35, however far ahead it is. From Cadence's author,
+  who replayed the 4 November finder on his hand-labelled pub sessions (sung parts and bar noise included): 95.6% of
+  tunes found against Cadence's 93.3%, but 17% of names wrong against 5%, and names given on pure bar noise. Most
+  wrong names sat at low scores, the repeat offenders chromatic "hub" tunes (Flight of the Bumblebee #8426, Chromatic
+  #23777); a 0.35 floor brought him to about 5% wrong and nothing on noise, at 94.4% found. On our session videos
+  (`session_decode.py compare --variant '{"floor": 0.35}'`) wrong names are already rare (0.6 / 1.6% of names, halves
+  a / b) and the floor changes little: with the switch view, nothing at all up to 0.40; without it, one tune of 177
+  fewer found on half a and a few named a second later. These videos are clean (the model gets 99% of their clips), so
+  they hold none of the noise the floor is for, and only 0.7 h falls outside their labelled tunes. On two phone
+  recordings from a pub (5 November, web front end and branch decoder) the floor removed every name that looked wrong:
+  Chromatic at a score of 0.24 on a 3-minute set, and the first of three names in 24 s of one tune (#11003, 0.35 →
+  kept #17264 and #23477). 0.40 named nothing on either, so it is too high for phone audio. Still to measure: what the
+  floor costs on noisy recordings with labels (label a few pub sessions, or ask Cadence's author to replay his set).
 - **Bigger model:** JigRipper has about 1.7× our parameters (9 × 768 transformer layers against our 6 × 384), and a model that large needs a rented GPU. Also raise the low end of the range to G4, as JigRipper does; that needs a full feature rebuild.
 - **More real audio:** use album tracks with weak labels (multiple-instance learning). `found_train.pt` is now built by `classifier.py found-cache`.
 - **Popularity prior:** in the finder since 2026-10-31 (§11). Measured without gain: key test-time augmentation, an absolute-key prior on top of it, tune-type agreement, window weighting and model ensembles (§9). Re-test hard negatives on their own.
