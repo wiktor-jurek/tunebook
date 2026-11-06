@@ -9,7 +9,7 @@ import type { FinderTune } from "@/lib/library";
 const DB = "tunebook-recordings";
 const CHUNK_MS = 10_000;
 // The finder names a tune a few seconds after it starts; its setlist entry starts this much earlier.
-const NAMING_DELAY_MS = 8_000;
+export const NAMING_DELAY_MS = 8_000;
 const TYPES = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"];
 
 // A rejected entry is one the person swiped away as wrong; it uploads anyway, as a labelled mistake.
@@ -105,6 +105,19 @@ async function sendRecording(recording: LocalRecording) {
     step("failed", 0, cause instanceof Error ? cause.message : "Upload failed");
   }
   announce();
+}
+
+/**
+ * Keeps an audio file picked on the Sessions screen as a finished recording on this device, then uploads it as one that
+ * just stopped: if the upload fails it waits in "On this device" to try again, like any other.
+ */
+export async function addRecordingFile(file: Blob, recording: LocalRecording) {
+  await run(["chunks", "recordings"], "readwrite", (tx) => {
+    tx.objectStore("chunks").put({ id: recording.id, seq: 0, data: file });
+    tx.objectStore("recordings").put(recording);
+  });
+  announce();
+  await sendRecording(recording);
 }
 
 /**

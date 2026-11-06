@@ -27,8 +27,11 @@ import java.nio.ByteOrder
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** Encodes microphone audio to an .m4a file on a thread of its own, so the listener never waits on it. */
-class SessionRecorder(file: File) {
+/**
+ * Encodes mono audio at [rate] (the microphone's, or an uploaded file's) to an .m4a file on a thread of its own, so the
+ * listener never waits on it.
+ */
+class SessionRecorder(file: File, private val rate: Int = Listener.RATE) {
     private val thread = Executors.newSingleThreadExecutor()
     private val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
     private val muxer = MediaMuxer(file.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
@@ -37,10 +40,10 @@ class SessionRecorder(file: File) {
     @Volatile private var frames = 0L
 
     /** How far into the recording it is. */
-    val elapsedMs: Long get() = frames * 1000 / Listener.RATE
+    val elapsedMs: Long get() = frames * 1000 / rate
 
     init {
-        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, Listener.RATE, 1).apply {
+        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, rate, 1).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             setInteger(MediaFormat.KEY_BIT_RATE, 64_000)
             setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16 * 1024)
@@ -54,8 +57,8 @@ class SessionRecorder(file: File) {
         thread.execute { runCatching { encode(samples) }.onFailure { Log.e(TAG, "Recording write failed", it) } }
     }
 
-    /** Finishes the file and returns its length in ms. */
-    fun end(): Long {
+    /** Finishes the file and returns its length in ms, waiting up to [waitSeconds] for audio still being encoded. */
+    fun end(waitSeconds: Long = 10): Long {
         thread.execute {
             runCatching {
                 val index = encoder.dequeueInputBuffer(TIMEOUT_US)
@@ -67,7 +70,7 @@ class SessionRecorder(file: File) {
             muxer.release()
         }
         thread.shutdown()
-        thread.awaitTermination(10, TimeUnit.SECONDS)
+        thread.awaitTermination(waitSeconds, TimeUnit.SECONDS)
         return elapsedMs
     }
 
@@ -91,7 +94,7 @@ class SessionRecorder(file: File) {
         }
     }
 
-    private fun presentationUs() = frames * 1_000_000 / Listener.RATE
+    private fun presentationUs() = frames * 1_000_000 / rate
 
     private fun drain(untilEnd: Boolean) {
         var waits = 0

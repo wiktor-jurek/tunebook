@@ -4,6 +4,7 @@ import { catalogSettings, recordingTunes, recordings } from "@/db/schema";
 import { deleteBlob, signedBlobUploadUrl, signedBlobUrl } from "@/lib/blob";
 import { withTunePractice } from "@/lib/tune-practice";
 import { libraryStatus } from "@/lib/library-status";
+import { RECORDING_EXTENSIONS, recordingType } from "@/lib/recording-types";
 export type { BookMembership } from "@/lib/library-status";
 
 // Recordings are titled by their day, in English like the rest of the app. Stored names carry the phone's locale.
@@ -15,19 +16,18 @@ export class RecordingError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-const EXTENSIONS: Record<string, string> = { "audio/webm": "webm", "audio/mp4": "m4a", "audio/ogg": "ogg" };
-export const RECORDING_TYPES = Object.keys(EXTENSIONS);
 
 /** Starts a recording's upload: the row stays hidden until finishRecording, and the browser PUTs the audio to uploadUrl. */
 export async function createRecording(userId: string, input: { name: string; mime: string; recordedAt: Date }) {
-  const base = input.mime.split(";")[0];
-  if (!EXTENSIONS[base]) throw new RecordingError("This audio format cannot be stored", 400);
+  const base = recordingType(input.mime);
+  if (!base) throw new RecordingError("This audio format cannot be stored", 400);
   const id = crypto.randomUUID();
-  const storageKey = `recordings/${userId}/${id}.${EXTENSIONS[base]}`;
+  const storageKey = `recordings/${userId}/${id}.${RECORDING_EXTENSIONS[base]}`;
   const uploadUrl = signedBlobUploadUrl(storageKey);
   if (!uploadUrl) throw new RecordingError("Recording storage is not set up", 503);
   await db.insert(recordings).values({ id, userId, name: input.name, storageKey, mime: base, recordedAt: input.recordedAt });
-  return { id, uploadUrl };
+  // The stored type, so a client PUTs the audio as what it will be served as.
+  return { id, uploadUrl, mime: base };
 }
 
 /** Marks an uploaded recording finished and stores its setlist. */

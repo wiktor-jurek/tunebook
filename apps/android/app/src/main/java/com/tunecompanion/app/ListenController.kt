@@ -7,6 +7,8 @@ package com.tunecompanion.app
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import com.tunecompanion.app.api.FinderTune
 import com.tunecompanion.app.api.Level
@@ -14,6 +16,7 @@ import com.tunecompanion.app.api.LocalRecording
 import com.tunecompanion.app.api.SetlistEntry
 import com.tunecompanion.app.designsystem.Haptics
 import com.tunecompanion.app.listen.FinderAssets
+import com.tunecompanion.app.listen.FileListener
 import com.tunecompanion.app.listen.FinderModel
 import com.tunecompanion.app.listen.Listener
 import com.tunecompanion.app.listen.ListenerEvent
@@ -333,6 +336,86 @@ object ListenController {
         _named.value++
         if (s.mode == Mode.NameTune) stop()
     }
+
+    // Uploading a recording made another way
+
+    /** Upload recording, on the Sessions tab: getting the model, listening through the file (0 to 1), then the setlist. */
+    sealed interface ImportStep {
+        data object Loading : ImportStep
+        data class Listening(val progress: Float) : ImportStep
+        data object Setlist : ImportStep
+    }
+    private val _importing = MutableStateFlow<ImportStep?>(null)
+    val importing: StateFlow<ImportStep?> = _importing
+    private val _importProblem = MutableStateFlow<String?>(null)
+    val importProblem: StateFlow<String?> = _importProblem
+
+    /**
+     * A recording picked on the phone becomes a session: the finder names its tunes here, as it would have at the
+     * session, while it is copied to AAC as a session recorded with the deck is kept; then it uploads like one.
+     */
+    fun uploadRecording(context: Context, uri: Uri) {
+        if (_importing.value != null) return
+        if (!::app.isInitialized) app = context.applicationContext
+        _importProblem.value = null
+        _importing.value = ImportStep.Loading
+        scope.launch {
+            val id = java.util.UUID.randomUUID().toString()
+            val file = RecordingUploads.audio(LocalRecording(id, "", ""))
+            try {
+                val (runner, model) = prepare()
+                _importing.value = ImportStep.Listening(0f)
+                val result = withContext(Dispatchers.Default) {
+                    val job = coroutineContext[Job]
+                    var recorder: SessionRecorder? = null
+                    try {
+                        FileListener.nameTunes(app, uri, runner, model,
+                            onRate = { rate -> recorder = SessionRecorder(file, rate) },
+                            onAudio = { samples -> recorder?.write(samples) },
+                            progress = { p -> _importing.value = ImportStep.Listening(p) },
+                            isActive = { job?.isActive != false })
+                    } finally {
+                        // Encoding keeps pace with the model, so little is left to finish; allow a long file's tail.
+                        recorder?.end(waitSeconds = 120)
+                    }
+                }
+                _importing.value = ImportStep.Setlist
+                val tunes = result.named.map { it.tuneId }.distinct().chunked(20).flatMap { Services.api.finderTunes(it) }.associateBy { it.tuneId }
+                val entries = result.named.mapNotNull { named ->
+                    val tune = tunes[named.tuneId] ?: return@mapNotNull null
+                    val settingId = tune.settingId ?: return@mapNotNull null
+                    SetlistEntry(tune.tuneId, settingId, tune.title, maxOf(0L, named.atMs - NAMING_DELAY_MS))
+                }
+                val setlist = entries.mapIndexed { i, entry -> entry.copy(endMs = entries.getOrNull(i + 1)?.startMs ?: result.durationMs) }
+                // A recorder stamps its file when it stops, so the session began its length earlier.
+                val stopped = withContext(Dispatchers.IO) { lastModified(uri) } ?: System.currentTimeMillis()
+                val start = stopped - result.durationMs
+                val local = LocalRecording(id,
+                    "Session, " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(start)),
+                    java.time.Instant.ofEpochMilli(start).toString(), result.durationMs, setlist, finished = true)
+                RecordingUploads.save(local)
+                _importing.value = null
+                RecordingUploads.upload(local)
+            } catch (cause: Exception) {
+                withContext(Dispatchers.IO) { file.delete() }
+                if (cause is CancellationException) throw cause
+                Log.w(TAG, "Could not upload a recording", cause)
+                _importProblem.value = when (cause) {
+                    is FileListener.Unreadable -> cause.message
+                    is java.io.IOException -> "No connection. Try again when you're online."
+                    else -> "Couldn't read that recording"
+                }
+            } finally {
+                _importing.value = null
+            }
+        }
+    }
+
+    private fun lastModified(uri: Uri): Long? = runCatching {
+        app.contentResolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { row ->
+            if (row.moveToFirst() && !row.isNull(0)) row.getLong(0).takeIf { it > 0 } else null
+        }
+    }.getOrNull()
 
     /** Debug builds' `--es showTune <id>`: a tune shown as if just named, with a few others as close matches. */
     fun debugShow(tuneId: Int) = scope.launch {

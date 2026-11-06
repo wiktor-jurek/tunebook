@@ -8,6 +8,7 @@ import AVFoundation
 import DesignSystem
 import Notation
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RecordingsView: View {
     @Environment(LibraryStore.self) private var library
@@ -15,6 +16,7 @@ struct RecordingsView: View {
     @State private var recordings: [RecordingSummary]?
     @State private var problem: String?
     @State private var path: [RecordingSummary] = []
+    @State private var picking = false
 
     var body: some View {
         ListAndDetail(path: $path, split: library.signedIn && !(recordings ?? []).isEmpty) {
@@ -22,9 +24,14 @@ struct RecordingsView: View {
                 if !library.signedIn {
                     ContentUnavailableView("Sign in to keep your sessions", systemImage: "waveform",
                                            description: Text("Record a night at the pub and every tune is named as it's played. Sign in and the setlist is here afterwards, to play back and practise at home."))
-                } else if let recordings, recordings.isEmpty, listen.uploads.pending.isEmpty {
-                    ContentUnavailableView("No sessions yet", systemImage: "waveform",
-                                           description: Text("Next time the tunes start, open the tray below and tap record. Every tune is named as it's played, and the setlist waits for you here."))
+                } else if let recordings, recordings.isEmpty, listen.uploads.pending.isEmpty, listen.importing == nil, listen.importProblem == nil {
+                    ContentUnavailableView {
+                        Label("No sessions yet", systemImage: "waveform")
+                    } description: {
+                        Text("Next time the tunes start, open the tray below and tap record. Every tune is named as it's played, and the setlist waits for you here. Recorded it another way? Upload the recording and the tunes are named from it.")
+                    } actions: {
+                        Button("Upload recording", systemImage: "square.and.arrow.up") { picking = true }
+                    }
                 } else if recordings == nil, problem == nil {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -33,6 +40,18 @@ struct RecordingsView: View {
             }
             .navigationTitle("Sessions")
             .refreshable { await load() }
+            .toolbar {
+                if library.signedIn {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Upload recording", systemImage: "square.and.arrow.up") { picking = true }
+                            .disabled(listen.importing != nil)
+                    }
+                }
+            }
+            // A recording from the phone's own recorder, or anything in Files: the finder names its tunes, then it uploads.
+            .fileImporter(isPresented: $picking, allowedContentTypes: [.audio]) { result in
+                if case let .success(url) = result { Task { await listen.uploadRecording(from: url) } }
+            }
         } placeholder: {
             ContentUnavailableView("Choose a session", systemImage: "waveform", description: Text("Its tunes and player open here."))
         } destination: { recording in
@@ -44,6 +63,9 @@ struct RecordingsView: View {
 
     private var list: some View {
         List {
+            if listen.importing != nil || listen.importProblem != nil {
+                Section("Uploading a recording") { ImportRow() }
+            }
             if !listen.uploads.pending.isEmpty {
                 Section("On this phone") {
                     ForEach(listen.uploads.pending) { PendingRow(recording: $0) }
@@ -149,6 +171,29 @@ func recordingLength(_ ms: Int) -> String {
 func displayTitle(_ title: String) -> String {
     guard let match = title.wholeMatch(of: /(.+), (The|A|An)/) else { return title }
     return "\(match.2) \(match.1)"
+}
+
+/// A recording from Files while the finder listens through it, or why it couldn't.
+private struct ImportRow: View {
+    @Environment(ListenModel.self) private var listen
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch listen.importing {
+            case .loading:
+                ProgressView().tint(Palette.brandInk)
+                Text("Getting the tune finder ready").font(.caption).foregroundStyle(Palette.text3)
+            case let .listening(progress):
+                ProgressView(value: progress).tint(Palette.brandInk)
+                Text("Naming the tunes, \(Int(progress * 100))%").font(.caption).foregroundStyle(Palette.text3)
+            case .setlist:
+                Text("Writing the setlist").font(.caption).foregroundStyle(Palette.text3)
+            case nil:
+                Text(listen.importProblem ?? "").font(.caption).foregroundStyle(Palette.danger)
+            }
+        }
+        .padding(.vertical, 4)
+    }
 }
 
 /// A recording still on this phone: uploading, or waiting to be tried again or discarded.

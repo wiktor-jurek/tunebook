@@ -393,6 +393,63 @@ final class ListenModel {
         Task { await uploads.upload(local, api: api) }
     }
 
+    // MARK: Uploading a recording made another way
+
+    /// Upload recording, on the Sessions tab: getting the model, listening through the file (0 to 1), then the setlist.
+    enum ImportStep: Equatable { case loading, listening(Double), setlist }
+    private(set) var importing: ImportStep?
+    private(set) var importProblem: String?
+
+    /// A recording from Files becomes a session: the finder names its tunes on the phone, as it would have at the session,
+    /// then it joins "On this phone" and uploads like one recorded with the deck.
+    func uploadRecording(from url: URL) async {
+        guard importing == nil, signedIn() else { return }
+        importProblem = nil
+        importing = .loading
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer {
+            if scoped { url.stopAccessingSecurityScopedResource() }
+            importing = nil
+        }
+        let id = UUID().uuidString
+        let copy = SessionRecorder.folder.appending(path: "\(id).m4a")
+        do {
+            let (runner, model) = try await prepare()
+            importing = .listening(0)
+            try FileManager.default.createDirectory(at: SessionRecorder.folder, withIntermediateDirectories: true)
+            let report: @Sendable (Double) -> Void = { [weak self] progress in
+                Task { @MainActor in if self?.importing != nil { self?.importing = .listening(progress) } }
+            }
+            let result = try await Task.detached(priority: .userInitiated) {
+                try FileListener.nameTunes(in: url, copyingTo: copy, runner: runner, model: model, progress: report)
+            }.value
+            importing = .setlist
+            var tunes: [Int: FinderTune] = [:]
+            let ids = Array(Set(result.named.map(\.tuneId)))
+            for start in stride(from: 0, to: ids.count, by: 20) {
+                for tune in try await api.finderTunes(ids: Array(ids[start..<min(start + 20, ids.count)])) { tunes[tune.tuneId] = tune }
+            }
+            var setlist: [SetlistEntry] = result.named.compactMap { named in
+                guard let tune = tunes[named.tuneId], let settingId = tune.settingId else { return nil }
+                return SetlistEntry(tuneId: tune.tuneId, settingId: settingId, title: tune.title,
+                                    startMs: max(0, named.atMs - SessionRecorder.namingDelayMs), endMs: 0)
+            }
+            for i in setlist.indices { setlist[i].endMs = i + 1 < setlist.count ? setlist[i + 1].startMs : result.durationMs }
+            // A recorder stamps its file when it stops, so the session began its length earlier.
+            let stopped = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .now
+            let recordedAt = stopped.addingTimeInterval(-Double(result.durationMs) / 1000)
+            let local = LocalRecording(id: id, name: "Session, \(recordedAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))",
+                                       recordedAt: recordedAt, durationMs: result.durationMs, tunes: setlist, finished: true)
+            uploads.save(local)
+            importing = nil
+            await uploads.upload(local, api: api)
+        } catch {
+            try? FileManager.default.removeItem(at: copy)
+            log.error("Could not upload a recording: \(error.localizedDescription, privacy: .public)")
+            importProblem = (error as? LocalizedError)?.errorDescription ?? "Couldn't read that recording"
+        }
+    }
+
     // MARK: Keeping tunes
 
     /// One tap in the pub: save the tune and mark it Want to learn. A level already set stays.

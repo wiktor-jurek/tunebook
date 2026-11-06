@@ -8,6 +8,7 @@ import { LocalTime, SessionName } from "@/components/local-time";
 import { RecordingsList } from "@/components/recordings-list";
 import { displayTitle } from "@/lib/titles";
 import { AccountButton } from "@/components/session-shell";
+import { UploadRecording } from "@/components/upload-recording";
 
 // "The Kesh, Out On The Ocean and 2 more"
 const tunePreview = (titles: string[], count: number) => titles.map(displayTitle).join(", ") + (count > titles.length ? ` and ${count - titles.length} more` : "");
@@ -24,11 +25,13 @@ export default async function Sessions() {
   const empty = <div className="sessions-welcome">
     <h2>No sessions yet</h2>
     <p>{session ? "Next time the tunes start, open the tray below and tap record. Every tune is named as it's played, and the setlist waits for you here."
-      : "Next time the tunes start, open the tune finder in the bottom corner and tap record, or record on your phone. Every tune is named as it's played, and the setlist waits for you here, ready to practise."}</p>
+      : "Next time the tunes start, open the tune finder in the bottom corner and tap record, or record on your phone. Every tune is named as it's played, and the setlist waits for you here, ready to practise."}
+      {" "}Recorded it another way? Upload the recording and the tunes are named from it.</p>
   </div>;
   const months = Map.groupBy(recordings, (r) => sessionMonth(r.recordedAt));
   return <div className={session ? "session-screen" : "page-wrap"}>
-    <header className={session ? "session-title-row" : "page-head"}><h1 className={session ? "session-title" : undefined}>Sessions{!session && <span className="heading-count">{recordings.length}</span>}</h1>{session && <AccountButton />}</header>
+    <header className={session ? "session-title-row" : "page-head"}><h1 className={session ? "session-title" : undefined}>Sessions{!session && <span className="heading-count">{recordings.length}</span>}</h1>
+      {session ? <span className="session-title-actions"><UploadRecording /><AccountButton /></span> : <UploadRecording />}</header>
     {recordings.length > 0 && <p className="sessions-lede">Every tune you heard, ready to play back and practise.</p>}
     <RecordingsList hasUploaded={recordings.length > 0} empty={empty}>{[...months].map(([month, rows]) => <section key={month}>
       <h2 className="session-group-title">{month}</h2>

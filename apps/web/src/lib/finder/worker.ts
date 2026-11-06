@@ -83,18 +83,42 @@ async function inputChannels(ort: Ort, session: Session): Promise<number> {
   throw new Error("The tune model takes neither 12 nor 24 channels");
 }
 
-async function score(samples: Float32Array, rate: number) {
-  if (!ort || !session) return;
-  const started = performance.now();
+/** The decoder's verdict on the last 8 s of `samples`, or null when the room is quiet and nothing is scored. */
+async function judge(samples: Float32Array, rate: number) {
+  if (!ort || !session) return null;
   const audio = resample(samples, rate, SAMPLE_RATE).subarray(-WINDOW_SAMPLES);
   let energy = 0;
   for (const s of audio) energy += s * s;
-  if (Math.sqrt(energy / audio.length) < SILENCE) { post({ type: "quiet" }); return; }
+  if (Math.sqrt(energy / audio.length) < SILENCE) return null;
   const input = new ort.Tensor("float32", windowFeatures(audio, channels), [1, channels, FRAMES]);
   const output = await session.run({ windows: input });
-  const verdict = decoder.push(output.cosines.data as Float32Array);
+  return decoder.push(output.cosines.data as Float32Array);
+}
+
+async function score(samples: Float32Array, rate: number) {
+  if (!ort || !session) return;
+  const started = performance.now();
+  const verdict = await judge(samples, rate);
+  if (!verdict) { post({ type: "quiet" }); return; }
   post({ type: "verdict", status: verdict.status, margin: verdict.margin, ms: Math.round(performance.now() - started),
     candidates: verdict.candidates.map(({ index, cosine }) => ({ tuneId: tunes[index], cosine })) });
+}
+
+/**
+ * A whole recording, listened to as the live finder hears a session: from 3 s in, once a second, the last 8 s
+ * (fewer at the start) go to the decoder, and each confident answer that differs from the one before is a new tune.
+ */
+async function scoreFile(samples: Float32Array, rate: number) {
+  decoder.reset();
+  const seconds = Math.floor(samples.length / rate), named: { tuneId: number; atMs: number }[] = [];
+  for (let t = 3; t <= seconds; t++) {
+    const verdict = await judge(samples.subarray(Math.max(0, (t - 8) * rate), t * rate), rate);
+    const leader = verdict?.status === "match" ? tunes[verdict.candidates[0].index] : undefined;
+    if (leader !== undefined && named[named.length - 1]?.tuneId !== leader) named.push({ tuneId: leader, atMs: t * 1000 });
+    if (t % 10 === 0 || t === seconds) post({ type: "fileProgress", done: t, total: seconds });
+  }
+  decoder.reset();
+  post({ type: "fileDone", named });
 }
 
 let busy = false;
@@ -103,6 +127,7 @@ self.onmessage = async (event: MessageEvent<FinderRequest>) => {
   try {
     if (message.type === "init") await init(message.modelUrl, message.tunesUrl);
     else if (message.type === "reset") decoder.reset();
+    else if (message.type === "file") await scoreFile(message.samples, message.rate);
     else if (message.type === "audio" && !busy) {
       // Drop audio that arrives while a window is still being scored rather than queue it.
       busy = true;

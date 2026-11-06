@@ -8,6 +8,11 @@ import androidx.compose.foundation.Canvas
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -127,6 +132,11 @@ fun RecordingsLayer(bottomPadding: Dp, onRead: (Reading) -> Unit) {
     var recordings by remember { mutableStateOf<List<RecordingSummary>?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val importing by ListenController.importing.collectAsStateWithLifecycle()
+    val importProblem by ListenController.importProblem.collectAsStateWithLifecycle()
+    // A recording from the phone's own recorder, or any audio file: the finder names its tunes, then it uploads.
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) ListenController.uploadRecording(context, uri) }
     suspend fun load() { if (library.user != null) recordings = runCatching { Services.api.recordings() }.getOrNull() ?: recordings ?: emptyList() }
     LaunchedEffect(library.user, landed) { load() }
 
@@ -138,17 +148,42 @@ fun RecordingsLayer(bottomPadding: Dp, onRead: (Reading) -> Unit) {
                     else "Every tune you heard, ready to play back and practise.",
                     style = MaterialTheme.typography.bodyMedium, color = Palette.text3.current(), modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp))
             }
+            if (library.user != null) item { UploadRecording(importing, importProblem) { pick.launch(arrayOf("audio/*")) } }
             if (pending.isNotEmpty()) item { MonthHeading("On this phone") }
             items(pending, key = { "local-${it.id}" }) { local -> PendingRow(local, status[local.id], signedIn = library.user != null) }
             when {
                 library.user == null -> item { Welcome("Sign in to keep your sessions", "Record a night at the pub and every tune is named as it's played. Sign in and the setlist is here afterwards, to play back and practise at home.") }
                 recordings == null -> item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-                recordings!!.isEmpty() && pending.isEmpty() -> item { Welcome("No sessions yet", "Next time the tunes start, pull the deck all the way up and tap record. Every tune is named as it's played, and the setlist waits for you here.") }
+                recordings!!.isEmpty() && pending.isEmpty() -> item { Welcome("No sessions yet", "Next time the tunes start, pull the deck all the way up and tap record. Every tune is named as it's played, and the setlist waits for you here. Recorded it another way? Upload the recording and the tunes are named from it.") }
                 else -> recordings!!.groupBy { monthOf(it.recordedAt) }.forEach { (month, inMonth) ->
                     item("month-$month") { MonthHeading(month) }
                     items(inMonth, key = { it.id }) { r -> SessionCard(r) { opened = r } }
                 }
             }
+        }
+    }
+}
+
+/** Upload recording, and while one is read: getting the finder ready, naming its tunes, writing the setlist, or why it couldn't. */
+@Composable
+private fun UploadRecording(step: ListenController.ImportStep?, problem: String?, onPick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onPick, enabled = step == null) {
+            Icon(painterResource(R.drawable.ic_upload), contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Upload recording")
+        }
+        when (step) {
+            ListenController.ImportStep.Loading -> {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text("Getting the tune finder ready", style = MaterialTheme.typography.bodySmall, color = Palette.text3.current())
+            }
+            is ListenController.ImportStep.Listening -> {
+                LinearProgressIndicator(progress = { step.progress }, modifier = Modifier.fillMaxWidth())
+                Text("Naming the tunes, ${(step.progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall, color = Palette.text3.current())
+            }
+            ListenController.ImportStep.Setlist -> Text("Writing the setlist", style = MaterialTheme.typography.bodySmall, color = Palette.text3.current())
+            null -> if (problem != null) Text(problem, style = MaterialTheme.typography.bodySmall, color = Palette.danger.current())
         }
     }
 }

@@ -7,8 +7,8 @@ import type { FinderTune } from "@/lib/library";
 import type { FinderCandidate, FinderRequest, FinderResponse } from "@/lib/finder/protocol";
 import { makeTunebook } from "@/lib/finder/make-book";
 
-const MODEL_URL = process.env.NEXT_PUBLIC_FINDER_MODEL_URL || "/finder/model.onnx";
-const TUNES_URL = process.env.NEXT_PUBLIC_FINDER_TUNES_URL || "/finder/tunes.json";
+export const MODEL_URL = process.env.NEXT_PUBLIC_FINDER_MODEL_URL || "/finder/model.onnx";
+export const TUNES_URL = process.env.NEXT_PUBLIC_FINDER_TUNES_URL || "/finder/tunes.json";
 const BUFFER_SECONDS = 8;
 const HOP_MS = 1000;
 // Tunes heard tonight survive a reload in the pub, until the tab is closed.

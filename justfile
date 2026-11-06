@@ -94,6 +94,11 @@ ios-recognise clip tune:
     cd {{ios_kit}} && TEST_RUNNER_FINDER_DIR="{{justfile_directory()}}/apps/web/public/finder" TEST_RUNNER_FINDER_CLIP="{{clip}}" TEST_RUNNER_FINDER_TUNE="{{tune}}" \
         xcodebuild test -scheme TuneKit-Package -destination "platform=iOS Simulator,name={{simulator}}" -only-testing:FinderTests 2>&1 | grep -E "model loaded|second|named|passed|failed|error:"
 
+# Name the tunes in a real recording file as Upload recording does, on the simulator: just ios-recognise-file <file.m4a> <first tune id>
+ios-recognise-file file tune:
+    cd {{ios_kit}} && TEST_RUNNER_FINDER_DIR="{{justfile_directory()}}/apps/web/public/finder" TEST_RUNNER_FINDER_FILE="{{file}}" TEST_RUNNER_FINDER_FILE_TUNE="{{tune}}" \
+        xcodebuild test -scheme TuneKit-Package -destination "platform=iOS Simulator,name={{simulator}}" -derivedDataPath ../../build/tunekit -only-testing:FinderTests 2>&1 | grep -E "named|passed|failed|error:"
+
 # Build the listen engine for Android: .so files into jniLibs plus Kotlin bindings.
 android-core:
     cargo build --release -p listen-ffi
@@ -112,6 +117,18 @@ android-recognise clip tune:
         -Pandroid.testInstrumentationRunnerArguments.clip=/data/local/tmp/clip.f32 \
         -Pandroid.testInstrumentationRunnerArguments.tune={{tune}} || true
     adb logcat -d -s Recognition:I | grep -E "model loaded|second|named"
+
+# Name the tunes in a real recording file as Upload recording does, on a running emulator: just android-recognise-file <file> <first tune id>
+android-recognise-file file tune:
+    adb shell mkdir -p /data/local/tmp/finder
+    adb push apps/web/public/finder/model.onnx apps/web/public/finder/tunes.json apps/web/public/finder/popularity.json /data/local/tmp/finder/ > /dev/null
+    adb push "{{file}}" /data/local/tmp/recording > /dev/null
+    adb logcat -c
+    cd apps/android && ./gradlew --quiet :core:listen:connectedDebugAndroidTest \
+        -Pandroid.testInstrumentationRunnerArguments.finderDir=/data/local/tmp/finder \
+        -Pandroid.testInstrumentationRunnerArguments.file=/data/local/tmp/recording \
+        -Pandroid.testInstrumentationRunnerArguments.fileTune={{tune}} || true
+    adb logcat -d -s Recognition:I | grep -E "named"
 
 # Build the Android debug APK.
 android-build:
