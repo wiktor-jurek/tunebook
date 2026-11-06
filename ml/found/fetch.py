@@ -1,45 +1,40 @@
-"""Downloads each found section as 16 kHz mono Opus (48 kbit/s, about 190 KB) under data/found/audio.
+"""Fetches each found track whole, as 16 kHz mono Opus (48 kbit/s), and puts it in the private bucket.
 
-Only the labelled sections are fetched, never whole videos. The audio stays on our own
-machines for research; it is never committed or redistributed.
+The download goes through data/found/tracks/ (store_tracks.py's folder, which keeps a copy for exports to cut from);
+the bucket and the data home are where it lives. The audio stays on our own machines and in the private bucket for
+research; it is never committed or redistributed.
 """
 
-import subprocess
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 
-from found.db import DATA, connect
+from psycopg.types.json import Jsonb
 
-AUDIO = DATA / "audio"
-
-
-def fetch_one(row: dict, cookies: list[str]) -> str | None:
-    name = f"{row['video_id']}.{row['start_s']:g}-{row['end_s']:g}.ogg"
-    target = AUDIO / name
-    if target.exists():
-        return name
-    raw = target.with_suffix(".download")
-    result = subprocess.run([
-        "yt-dlp", "-q", *cookies, "--no-playlist", "-f", "bestaudio", "--download-sections", f"*{row['start_s']}-{row['end_s']}",
-        "--force-overwrites", "-o", str(raw), f"https://www.youtube.com/watch?v={row['video_id']}",
-    ], capture_output=True, text=True, timeout=300)
-    if result.returncode or not raw.exists():
-        print(f"{row['video_id']}: {result.stderr.strip().splitlines()[-1] if result.stderr.strip() else 'no output'}")
-        return None
-    converted = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(raw), "-ac", "1", "-ar", "16000",
-                                "-t", str(row["end_s"] - row["start_s"]), "-c:a", "libopus", "-b:a", "48k", str(target)], capture_output=True, text=True)
-    raw.unlink(missing_ok=True)
-    return name if not converted.returncode else None
+import store_tracks
+from tunebook_ml import store
 
 
 def fetch(limit: int, workers: int, cookies: str | None) -> None:
-    AUDIO.mkdir(parents=True, exist_ok=True)
-    db = connect()
-    rows = [dict(row) for row in db.execute(
-        "select id, video_id, start_s, end_s from found where audio is null and coalesce(verified, '') != 'no' order by confidence desc, id limit ?", (limit,))]
+    """Every found track still without audio: download, upload, and mark the source ok (or unavailable)."""
+    store_tracks.TRACKS.mkdir(parents=True, exist_ok=True)
+    rows = store.db().execute(
+        "select id, external_id from ml.sources where kind = 'album' and storage_key is null and external_id = meta->>'video' "
+        "and coalesce(status, '') <> 'unavailable' order by id limit %s", (limit,)).fetchall()
     flags = ["--cookies-from-browser", cookies] if cookies else []
     with ThreadPoolExecutor(workers) as pool:
-        for row, name in zip(rows, pool.map(lambda row: fetch_one(row, flags), rows)):
-            if name:
-                db.execute("update found set audio = ? where id = ?", (f"audio/{name}", row["id"]))
-                db.commit()
-    print(f"{sum(1 for _ in AUDIO.glob('*.ogg'))} sections on disk")
+        for row, error in zip(rows, pool.map(lambda r: store_tracks.fetch_one(r["external_id"], flags), rows)):
+            audio = store_tracks.TRACKS / f"{row['external_id']}.ogg"
+            if error or not audio.exists():
+                print(f"{row['external_id']}: {error or 'no audio'}")
+                if error and ("unavailable" in error.lower() or "private" in error.lower()):
+                    store.db().execute("update ml.sources set status = 'unavailable', meta = meta || %s, updated_at = now() where id = %s",
+                                       (Jsonb({"fetch_error": error}), row["id"]))
+                continue
+            key = store_tracks.PREFIX + audio.name
+            store.put_audio(audio, key)
+            local = store.CACHE / key  # exports cut from this copy instead of fetching it back
+            local.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(audio, local)
+            store.db().execute("update ml.sources set storage_key = %s, duration_s = %s, status = 'ok', updated_at = now() where id = %s",
+                               (key, store_tracks.duration(audio), row["id"]))
+    print(f"{len(rows)} tracks tried")

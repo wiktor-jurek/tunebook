@@ -13,6 +13,9 @@ Measures, over checked tunes in fully checked sets (a tune that repeats the one 
   found     the tune was added while it played, and `in 10 s` / `in 15 s` of its start
   latency   median seconds from its start to being added
   wrong     tunes added while another, labelled tune played: per labelled hour. Each is a wrong line in the setlist.
+  wrong %   those as a share of every tune added while a labelled tune played
+  outside   tunes added while no labelled tune played, per hour of that time: talk, gaps and tuning up, but also any
+            set not fully checked, so only a rough stand-in for naming tunes in noise
 Variants are tuned on half the videos (`--half a`) and checked on the other half (`--half b`).
 """
 
@@ -34,6 +37,7 @@ from tunebook_ml import pitchclass, store  # noqa: E402
 ML = Path(__file__).resolve().parents[1]
 REPO = ML.parent
 FULL = ML / "cache" / "youtube" / "full"
+SOUNDCLOUD = ML / "cache" / "soundcloud" / "full"  # eval/soundcloud.py
 OUT = ML / "cache" / "decode"
 MODEL = REPO / "apps" / "web" / "public" / "finder" / "model.onnx"
 TOP = 256
@@ -64,16 +68,24 @@ def popularity() -> dict[int, int]:
         return {int(row["tune_id"]): int(row["tunebooks"]) for row in csv.DictReader(handle)}
 
 
-def score(args) -> None:
+def model_session(model: Path):
     import onnxruntime as ort
-    OUT.mkdir(parents=True, exist_ok=True)
     providers = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in ort.get_available_providers()]
-    session = ort.InferenceSession(str(args.model), providers=providers)
+    return ort.InferenceSession(str(model), providers=providers)
+
+
+def score(args) -> None:
+    session = model_session(args.model)
+    for video in sorted([*FULL.glob("*.flac"), *SOUNDCLOUD.glob("*.flac")]):
+        score_file(video, session)
+
+
+def score_file(video: Path, session) -> Path:
+    """One recording's windows (cache/decode/{stem}.npz), unless already there."""
+    OUT.mkdir(parents=True, exist_ok=True)
     channels = session.get_inputs()[0].shape[1]
-    for video in sorted(FULL.glob("*.flac")):
-        target = OUT / f"{video.stem}.npz"
-        if target.exists():
-            continue
+    target = OUT / f"{video.stem}.npz"
+    if not target.exists():
         idx, val, quiet = [], [], []
         start = 0
         while True:
@@ -94,6 +106,7 @@ def score(args) -> None:
             print(f"{video.stem}: {start // 60} min", end="\r", flush=True)
         np.savez(target, idx=np.concatenate(idx), val=np.concatenate(val), quiet=np.concatenate(quiet))
         print(f"{video.stem}: {sum(len(i) for i in idx)} windows")
+    return target
 
 
 @dataclass(frozen=True)
@@ -114,6 +127,9 @@ class Settings:
     # moved on (its leader ahead by margin + switch_extra for `stable` updates); the history is then cut to those windows.
     # Naming the first tune, and staying on it, keep the long history.
     switch_window: int = 0
+    # A floor on the leader's score (mean cosine plus the popularity prior): below it nothing is named, however far ahead
+    # the leader is. Suggested by Cadence's author: most wrong names sit at low absolute scores, and on bar noise.
+    floor: float = 0.0
 
     def label(self) -> str:
         base = Settings()
@@ -153,7 +169,7 @@ class Decoder:
             r2 = np.argpartition(-recent, 2)[:2]
             ra, rb = (r2 if recent[r2[0]] >= recent[r2[1]] else r2[::-1])
             self.recent_leaders.append(int(ra))
-            if (ra != self.last_added and recent[ra] - recent[rb] >= s.margin + s.switch_extra
+            if (ra != self.last_added and recent[ra] - recent[rb] >= s.margin + s.switch_extra and recent[ra] >= s.floor
                     and len(self.recent_leaders) == s.stable and len(set(self.recent_leaders)) == 1):
                 while len(self.windows) > s.switch_window:
                     self.total -= self.windows.popleft()
@@ -168,16 +184,16 @@ class Decoder:
         self.leaders.append(int(a))
         stable = len(self.leaders) == s.stable and len(set(self.leaders)) == 1
         need = s.margin + (s.switch_extra if self.last_added >= 0 and a != self.last_added else 0)
-        if len(self.windows) >= s.min_windows and margin >= need and stable and a != self.last_added:
+        if len(self.windows) >= s.min_windows and margin >= need and scores[a] >= s.floor and stable and a != self.last_added:
             self.last_added = int(a)
             return int(a)
         return None
 
 
-def recordings() -> dict[str, dict]:
-    """Each session video's windows and its fully checked sets: [(start, end, tune)] in video seconds."""
+def recordings(kinds: tuple[str, ...] = ("youtube_full",)) -> dict[str, dict]:
+    """Each session recording's windows and its fully checked sets: [(start, end, tune)] in recording seconds."""
     tunes = json.loads((MODEL.parent / "tunes.json").read_text())
-    rows = store.segments(kind="youtube_full")
+    rows = [r for kind in kinds for r in store.segments(kind=kind)]
     sets: dict[tuple[str, str], list[dict]] = {}
     for r in rows:
         if r["set_id"]:
@@ -208,16 +224,21 @@ def replay(rec: dict, s: Settings, prior: np.ndarray) -> list[tuple[float, int]]
     return added
 
 
-def measure(recs: dict[str, dict], s: Settings, prior: np.ndarray) -> dict:
-    found = in10 = in15 = total = wrong = 0
-    latencies, hours = [], 0.0
-    for rec in recs.values():
+def measure(recs: dict[str, dict], s: Settings | None, prior: np.ndarray | None, shown: dict[str, list] | None = None) -> dict:
+    """`shown`: instead of replaying the decoder, each video's (seconds, tune id) as another app added them."""
+    found = in10 = in15 = total = wrong = named = outside = 0
+    latencies, hours, unlabelled = [], 0.0, 0.0
+    for video, rec in recs.items():
         ids = rec["tunes"]
-        added = [(t, ids[i]) for t, i in replay(rec, s, prior)]
+        added = shown[video] if shown is not None else [(t, ids[i]) for t, i in replay(rec, s, prior)]
+        # Names given while no labelled tune plays: talk, gaps between sets, tuning up (and any set not fully checked).
+        outside += sum(1 for t, _ in added if not any(start <= t < end for start, end, _ in rec["spans"]))
+        unlabelled += max(0.0, len(rec["idx"]) - sum(end - start for start, end, _ in rec["spans"])) / 3600
         previous = None
         for start, end, tune in rec["spans"]:
             hours += (end - start) / 3600
             wrong += sum(1 for t, a in added if start <= t < end and a != tune)
+            named += sum(1 for t, a in added if start <= t < end)
             if tune == previous:
                 continue
             previous = tune
@@ -229,7 +250,8 @@ def measure(recs: dict[str, dict], s: Settings, prior: np.ndarray) -> dict:
                 in10 += hit <= 10
                 in15 += hit <= 15
     return {"tunes": total, "found": found / total, "in10": in10 / total, "in15": in15 / total,
-            "latency": float(np.median(latencies)) if latencies else None, "wrong_per_hour": wrong / hours, "wrong": wrong, "hours": hours}
+            "latency": float(np.median(latencies)) if latencies else None, "wrong_per_hour": wrong / hours, "wrong": wrong, "hours": hours,
+            "wrong_share": wrong / max(named, 1), "outside_per_hour": outside / max(unlabelled, 1e-9), "unlabelled_hours": unlabelled}
 
 
 VARIANTS = [Settings()] + [Settings(history=h) for h in (10, 15, 20)] + [
@@ -238,8 +260,11 @@ VARIANTS = [Settings()] + [Settings(history=h) for h in (10, 15, 20)] + [
     Settings(short=8, short_margin=m, short_stable=k, switch_extra=e) for m in (0.03, 0.05) for k in (2, 4) for e in (0.01, 0.02)]
 
 
+KINDS = {"youtube": ("youtube_full",), "soundcloud": ("soundcloud_full",), "all": ("youtube_full", "soundcloud_full")}
+
+
 def compare(args) -> None:
-    recs = recordings()
+    recs = recordings(KINDS[args.kind])
     videos = sorted(recs)
     if args.half:
         videos = videos[0::2] if args.half == "a" else videos[1::2]
@@ -248,11 +273,12 @@ def compare(args) -> None:
     counts = popularity()
     prior = (PRIOR * np.log(np.array([counts.get(t, 0) for t in any_rec["tunes"]], dtype=np.float32) + 1)).astype(np.float32)
     variants = [Settings(**json.loads(v)) for v in args.variant] if args.variant else VARIANTS
-    print(f"{len(videos)} videos, {sum(len(r['spans']) for r in recs.values())} checked tunes")
-    print(f"{'variant':58} {'found':>6} {'≤10 s':>6} {'≤15 s':>6} {'median':>7} {'wrong/h':>8}")
+    print(f"{len(videos)} videos, {sum(len(r['spans']) for r in recs.values())} checked tunes, "
+          f"{measure(recs, Settings(), prior)['unlabelled_hours']:.1f} h outside them")
+    print(f"{'variant':58} {'found':>6} {'≤10 s':>6} {'≤15 s':>6} {'median':>7} {'wrong/h':>8} {'wrong %':>8} {'outside/h':>10}")
     for s in variants:
         m = measure(recs, s, prior)
-        print(f"{s.label():58} {m['found']:6.1%} {m['in10']:6.1%} {m['in15']:6.1%} {m['latency'] or 0:6.1f}s {m['wrong_per_hour']:8.1f}", flush=True)
+        print(f"{s.label():58} {m['found']:6.1%} {m['in10']:6.1%} {m['in15']:6.1%} {m['latency'] or 0:6.1f}s {m['wrong_per_hour']:8.1f} {m['wrong_share']:8.1%} {m['outside_per_hour']:10.1f}", flush=True)
 
 
 def clips(args) -> None:
@@ -288,6 +314,31 @@ def clips(args) -> None:
         print(f"{s.label():58} " + " ".join(f"{c:>26}" for c in cells), flush=True)
 
 
+def cadence(args) -> None:
+    """Cadence (benchmark.py's cadence-run.ts harness, kept outside the repo) on the same recordings and rules: a tune
+    counts as added when its name first appears in Cadence's detection list (provisional ones included), and a name
+    that appears while another labelled tune plays counts as wrong even if Cadence later takes it back."""
+    import subprocess
+    folder = args.folder.expanduser()
+    recs = recordings()
+    out = folder / "out" / "sessions"
+    manifest = folder / "sessions.jsonl"
+    manifest.write_text("".join(json.dumps({"path": str(FULL / f"{v}.flac"), "out": str(out / f"{v}.json")}) + "\n" for v in sorted(recs)))
+    subprocess.run(["npx", "-y", "tsx", "cadence-run.ts", str(manifest)], check=True, cwd=folder)
+    shown = {}
+    for video in recs:
+        log, before = [], set()
+        for t, names in json.loads((out / f"{video}.json").read_text())["shown"]:
+            log += [(float(t), int(n)) for n in names if n not in before]
+            before = set(names)
+        shown[video] = log
+    for half in ("a", "b"):
+        videos = sorted(recs)[0::2] if half == "a" else sorted(recs)[1::2]
+        m = measure({v: recs[v] for v in videos}, None, None, shown)
+        print(f"half {half}: Cadence {m['found']:6.1%} found, {m['in10']:6.1%} ≤10 s, {m['in15']:6.1%} ≤15 s, median {m['latency'] or 0:.1f}s, "
+              f"{m['wrong_per_hour']:.1f} wrong/h ({m['tunes']} tunes)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -296,11 +347,15 @@ def main() -> None:
     v = sub.add_parser("clips")
     v.add_argument("--model", type=Path, default=MODEL)
     v.add_argument("--variant", action="append", help="JSON settings; repeatable")
+    a = sub.add_parser("cadence")
+    a.add_argument("--folder", type=Path, default=Path("~/cadence-bench"), help="cadence-run.ts and its Cadence checkout")
     k = sub.add_parser("compare")
     k.add_argument("--half", choices=("a", "b"), help="every other video: tune on a, check on b")
+    k.add_argument("--kind", choices=tuple(KINDS), default="youtube",
+                   help="the YouTube session videos (clean, the numbers so far), SoundCloud pub recordings, or both")
     k.add_argument("--variant", action="append", help='JSON settings, e.g. {"history": 15}; repeatable (default: the built-in grid)')
     args = parser.parse_args()
-    {"score": score, "clips": clips, "compare": compare}[args.command](args)
+    {"score": score, "clips": clips, "compare": compare, "cadence": cadence}[args.command](args)
 
 
 if __name__ == "__main__":

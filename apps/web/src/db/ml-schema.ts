@@ -11,8 +11,9 @@ const timestamps = () => ({
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// youtube_video: a benchmark clip's video (its opening minutes or whole recording); youtube_full: a whole pub session.
-export const SOURCE_KINDS = ["youtube_video", "youtube_full", "album", "yue", "app_recording"] as const;
+// youtube_video: a benchmark clip's video (its opening minutes or whole recording); youtube_full: a whole pub session;
+// soundcloud_full: a whole pub session from SoundCloud, used with its uploader's permission (ml/eval/soundcloud.py).
+export const SOURCE_KINDS = ["youtube_video", "youtube_full", "soundcloud_full", "album", "yue", "app_recording"] as const;
 
 // One recording: a YouTube clip or whole video, an album track section, a YuE2 performance.
 export const mlSources = ml.table("sources", {

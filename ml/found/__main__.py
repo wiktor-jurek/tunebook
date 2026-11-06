@@ -1,50 +1,52 @@
 """Found songs: real recordings of catalog tunes for training and evaluation.
 
-    uv run python -m found albums --searches 200      # The Session album tracks → YouTube
-    uv run python -m found titles --searches 200      # popular tunes by name
-    uv run python -m found fetch                      # download labelled sections
-    uv run python -m found stats
-    uv run --group store python -m found export       # into the data home, then data/found/manifest.jsonl
+Everything is written to the data home and the private bucket as it is found (found/db.py): each recording is a
+whole album track, its tunes labelled where they are known and named in the labeller (/admin/label) after that.
+
+    uv run --group store python -m found albums --searches 200      # The Session album tracks → YouTube
+    uv run --group store python -m found titles --searches 200      # popular tunes by name
+    uv run --group store python -m found fetch                      # whole tracks into the bucket
+    uv run --group store python -m found stats
+    uv run --group store python -m found export                     # data/found/manifest.jsonl for training
 
 Add --cookies-from-browser chrome when YouTube asks to confirm you are not a bot.
 """
 
 import argparse
 
-from found.db import connect
-from tunebook_ml.splits import benchmark_tunes as split_benchmark, split_of
+from tunebook_ml import store
+from tunebook_ml.splits import split_of
 
-
-def benchmark_tunes() -> set[int]:
-    """Eval tunes only: the benchmark's train half (eval/benchmark_split.json) is training data like any other tune."""
-    return split_benchmark()[0]
+ALBUMS = "s.kind = 'album' and coalesce(s.status, '') <> 'merged'"  # sections merged into their track count with it
 
 
 def stats() -> None:
-    db = connect()
-    print(db.execute("select count(*) || ' searches' from searches").fetchone()[0])
-    print(db.execute("select count(*) || ' videos (' || sum(status = 'ok') || ' available)' from videos").fetchone()[0])
-    total = db.execute("select count(*), count(distinct tune_id), count(distinct video_id), count(audio), sum(verified = 'yes'), sum(verified = 'no') from found").fetchone()
-    print(f"{total[0]} found sections of {total[1]} tunes in {total[2]} videos; {total[3]} downloaded; {total[4] or 0} verified, {total[5] or 0} rejected")
-    for row in db.execute("select label_source, count(*), round(avg(confidence), 2) from found group by 1 order by 2 desc"):
-        print(f"  {row[0]:12} {row[1]:6d}  prior {row[2]}")
-    licences = db.execute("select coalesce(licence, 'unstated'), count(*) from videos v join found f on f.video_id = v.id group by 1 order by 2 desc").fetchall()
-    print("licences: " + ", ".join(f"{name} {count}" for name, count in licences))
-    bench = benchmark_tunes()
+    db = store.db()
+    print(f"{db.execute('select count(*) n from ml.searches').fetchone()['n']} searches")
+    sources = db.execute(f"select count(*) n, count(storage_key) stored, count(*) filter (where external_id = meta->>'video') tracks "
+                         f"from ml.sources s where {ALBUMS}").fetchone()
+    print(f"{sources['n']} recordings ({sources['tracks']} whole tracks, the rest 30 s sections); {sources['stored']} with audio in the bucket")
+    total = db.execute(f"select count(*) n, count(distinct g.tune_id) tunes, count(*) filter (where g.verified = 'yes') yes, "
+                       f"count(*) filter (where g.verified = 'no') no, count(*) filter (where g.tune_id is null) gaps "
+                       f"from ml.segments g join ml.sources s on s.id = g.source_id where {ALBUMS}").fetchone()
+    print(f"{total['n'] - total['gaps']} labelled stretches of {total['tunes']} tunes, {total['gaps']} unnamed; "
+          f"{total['yes']} verified, {total['no']} rejected")
+    for row in db.execute(f"select g.label_source, count(*) n, round(avg(g.confidence)::numeric, 2) prior from ml.segments g "
+                          f"join ml.sources s on s.id = g.source_id where {ALBUMS} and g.tune_id is not null group by 1 order by 2 desc"):
+        print(f"  {row['label_source']:12} {row['n']:6d}  prior {row['prior']}")
+    licences = db.execute(f"select coalesce(licence, 'unstated') licence, count(*) n from ml.sources s where {ALBUMS} group by 1 order by 2 desc")
+    print("licences: " + ", ".join(f"{row['licence']} {row['n']}" for row in licences))
+    roles = store.roles()
     splits: dict[str, int] = {}
-    for (tune_id,) in db.execute("select tune_id from found"):
-        name = "benchmark" if tune_id in bench else split_of(tune_id)
+    for row in db.execute(f"select g.tune_id from ml.segments g join ml.sources s on s.id = g.source_id where {ALBUMS} and g.tune_id is not null"):
+        name = "benchmark" if roles.get(row["tune_id"]) == "eval" else split_of(row["tune_id"])
         splits[name] = splits.get(name, 0) + 1
     print("splits: " + ", ".join(f"{name} {count}" for name, count in sorted(splits.items())))
 
 
 def export() -> None:
-    """Brings the collected sections into the data home (tunebook_ml/store.py), uploading new audio to the
-    bucket, then writes data/found/manifest.jsonl from it (store_export.py) for training and evaluation."""
+    """data/found/manifest.jsonl from the data home (store_export.py), for training and evaluation."""
     import store_export
-    import store_import
-    sections, searches = store_import.found()
-    print(f"{sections} sections and {searches} searches in the data home")
     print(f"{store_export.albums()} sections → data/found/manifest.jsonl")
 
 

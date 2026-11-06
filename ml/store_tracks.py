@@ -17,9 +17,7 @@ bucket for research, like the sections were.
 """
 
 import argparse
-import csv
 import json
-import re
 import shutil
 import subprocess
 import time
@@ -37,8 +35,9 @@ GAP = 1.0  # seconds between two labels that become an unnamed segment
 
 
 def album_sources() -> list[dict]:
+    # 30 s sections only: a whole track (named by its video, as this script and found/ make them) is never merged again.
     return store.db().execute("select * from ml.sources where kind = 'album' and coalesce(status, '') <> 'merged' "
-                              "and meta ? 'video' and meta ? 'video_start_s' order by id").fetchall()
+                              "and meta ? 'video' and meta ? 'video_start_s' and external_id <> meta->>'video' order by id").fetchall()
 
 
 def fetch_one(video: str, cookies: list[str]) -> str | None:
@@ -81,19 +80,6 @@ def duration(path: Path) -> float:
     return float(out.stdout)
 
 
-def fixes() -> dict[str, int]:
-    """eval/found_fixes.csv by section: the tune each wrongly labelled section really holds. The CSV leaves tune_id
-    blank when the right tune may not be in that eval set; the segment still gets it (its role then decides its set)."""
-    out = {}
-    with (ML / "eval" / "found_fixes.csv").open() as handle:
-        for row in csv.DictReader(handle):
-            named = re.search(r"#(\d+)", row["evidence"])
-            tune = int(row["tune_id"]) if row["tune_id"] else int(named.group(1)) if named else None
-            if tune:
-                out[Path(row["audio"]).stem] = tune
-    return out
-
-
 def plan(sources: list[dict], length: float) -> list[dict] | str:
     """The track's segments in order, in track seconds: each section's segments moved by its start in the video,
     overlaps trimmed, and an unnamed segment wherever two labels leave a gap. A string when it can't be done."""
@@ -120,7 +106,6 @@ def merge(args) -> None:
     by_video: dict[str, list[dict]] = {}
     for s in album_sources():
         by_video.setdefault(s["meta"]["video"], []).append(s)
-    fixed = fixes()
     if args.apply:
         snapshot = ML / "scratch" / f"album-before-tracks-{time.strftime('%Y%m%d-%H%M%S')}.json"
         ids = [s["id"] for group in by_video.values() for s in group]
@@ -128,7 +113,7 @@ def merge(args) -> None:
                 "segments": store.db().execute("select * from ml.segments where source_id = any(%s)", (ids,)).fetchall()}
         snapshot.write_text(json.dumps(rows, default=str))
         print(f"snapshot: {snapshot} ({len(rows['sources'])} sources, {len(rows['segments'])} segments)")
-    merged = gaps = moved = refixed = 0
+    merged = gaps = moved = 0
     skipped: dict[str, list[str]] = {}
     for video, sections in by_video.items():
         audio = TRACKS / f"{video}.ogg"
@@ -143,7 +128,6 @@ def merge(args) -> None:
         merged += 1
         gaps += sum(1 for s in segments if s["id"] is None)
         moved += sum(1 for s in segments if s["id"] is not None)
-        refixed += sum(1 for s in segments if s.get("section") in fixed and s["tune"] != fixed[s["section"]])
         if not args.apply:
             continue
         first = sections[0]
@@ -164,15 +148,13 @@ def merge(args) -> None:
                         "insert into ml.segments (source_id, start_s, end_s, tune_id, set_id, position, label_source, confidence, origin) "
                         "values (%s, %s, %s, null, %s, %s, 'gap', 0, 'store_tracks.py')", (track, round(s["start"], 1), round(s["end"], 1), video, position))
                 else:
-                    tune = fixed.get(s["section"], s["tune"])
                     store.db().execute(
                         "update ml.segments set source_id = %s, start_s = %s, end_s = %s, tune_id = %s, set_id = %s, position = %s, updated_at = now() "
-                        "where id = %s", (track, round(s["start"], 1), round(s["end"], 1), tune, video, position, s["id"]))
+                        "where id = %s", (track, round(s["start"], 1), round(s["end"], 1), s["tune"], video, position, s["id"]))
             for s in sections:
                 store.db().execute("update ml.sources set status = 'merged', meta = meta || %s, updated_at = now() where id = %s",
                                    (Jsonb({"merged_into": track}), s["id"]))
-    print(f"{'merged' if args.apply else 'would merge'} {merged} tracks: {moved} segments moved, {gaps} unnamed gaps added, "
-          f"{refixed} labels corrected from eval/found_fixes.csv")
+    print(f"{'merged' if args.apply else 'would merge'} {merged} tracks: {moved} segments moved, {gaps} unnamed gaps added")
     for reason, videos in skipped.items():
         print(f"  skipped, {reason}: {len(videos)} ({', '.join(videos[:5])}{'…' if len(videos) > 5 else ''})")
 

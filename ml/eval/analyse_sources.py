@@ -23,7 +23,10 @@ from music_activity import analyse  # noqa: E402
 from tunebook_ml import store  # noqa: E402
 
 ML = Path(__file__).resolve().parents[1]
-LOCAL = {"album": ML / "data" / "found" / "audio", "youtube_full": ML / "cache" / "youtube" / "full"}
+LOCAL = {"album": ML / "data" / "found" / "audio", "youtube_full": ML / "cache" / "youtube" / "full",
+         "soundcloud_full": ML / "cache" / "soundcloud" / "full"}
+# Where each kind of session's set windows are cut to, locally and in the bucket.
+WINDOWS = {"youtube_full": "youtube/source", "soundcloud_full": "soundcloud/source"}
 MARGIN = 10  # seconds either side of a set, as review.py showed it
 
 
@@ -38,25 +41,27 @@ def lane(audio: Path, key: str) -> str:
 
 
 def windows() -> None:
-    sessions = store.db().execute("select id, storage_key, meta from ml.sources where kind = 'youtube_full' and storage_key is not null").fetchall()
+    sessions = store.db().execute("select id, kind, storage_key, meta from ml.sources where kind = any(%s) and storage_key is not null",
+                                  (list(WINDOWS),)).fetchall()
     for source in sessions:
         spans = defaultdict(list)
         for row in store.db().execute("select set_id, meta from ml.segments where source_id = %s and set_id is not null", (source["id"],)):
             meta = row["meta"] or {}
             if "set_start_s" in meta:
                 spans[row["set_id"]].append((meta["set_start_s"], meta["set_end_s"]))
-        full = LOCAL["youtube_full"] / source["storage_key"].rsplit("/", 1)[1]
+        full = LOCAL[source["kind"]] / source["storage_key"].rsplit("/", 1)[1]
         video = (source["meta"] or {}).get("video") or full.stem
         result = dict((source["meta"] or {}).get("windows") or {})
         for set_id, pairs in spans.items():
             if set_id in result:
                 continue
             start, end = max(0.0, min(a for a, _ in pairs) - MARGIN), max(b for _, b in pairs) + MARGIN
-            path = ML / "cache" / "youtube" / "source" / f"{video}.{start:g}-{end:g}.flac"
+            path = ML / "cache" / WINDOWS[source["kind"]] / f"{video}.{start:g}-{end:g}.flac"
+            path.parent.mkdir(parents=True, exist_ok=True)
             if not path.exists():
                 audio, rate = soundfile.read(full, dtype="float32", start=int(start * 16000), frames=int((end - start) * 16000))
                 soundfile.write(path, audio, rate)
-            key = f"ml/audio/youtube/source/{path.name}"
+            key = f"ml/audio/{WINDOWS[source['kind']]}/{path.name}"
             store.put_audio(path, key)
             result[set_id] = {"key": key, "start_s": start, "end_s": end, "analysis_key": lane(path, key)}
         store.db().execute("update ml.sources set meta = coalesce(meta, '{}'::jsonb) || %s, updated_at = now() where id = %s",

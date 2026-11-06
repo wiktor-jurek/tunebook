@@ -554,7 +554,8 @@ Twelve clips qualified:
   - Last Night's Fun is the slip jig #5909, not the reel #63.
   - Sonny Brogan's is the mazurka Sonny's #5476.
   - Both Paddy Fahey's rows are labelled as reels for a video titled "(Jig)", and which jig is unknown.
-- **Bands and albums** (`eval/found_fixes.csv`, applied by `classifier.py prepare`):
+- **Bands and albums** (written into `ml.segments` on 2026-11-06 with label source `alignment` and the evidence in
+  `notes`; until then `eval/found_fixes.csv`, applied on the fly by `classifier.py prepare`):
   - Seven album sections and both Eddie Kelly's band sections are another tune of the same track:
     The Meelick Team, Up Sligo, Fanny Power, The Hag's Purse, The Roaring Barmaid, Da Full Rigged Ship,
     and the other Pipe On The Hob.

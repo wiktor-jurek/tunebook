@@ -109,16 +109,6 @@ def windows(audio: np.ndarray, hop_seconds: float = 1.0) -> torch.Tensor:
     return pitchclass.features(pitchclass.semitones(batch)[:, :, :FRAMES], canon=False).half()
 
 
-def found_fixes() -> dict[tuple[str, int], int | None]:
-    """eval/found_fixes.csv: found sections whose label is wrong, (audio, label) → the right tune, or None
-    to leave the section out (when the right tune is not one that eval set may hold)."""
-    path = ML / "eval" / "found_fixes.csv"
-    if not path.exists():
-        return {}
-    with path.open() as handle:
-        return {(r["audio"], int(r["label"])): int(r["tune_id"]) if r["tune_id"] else None for r in csv.DictReader(handle)}
-
-
 def prepare(destination: Path = CLIPS) -> None:
     """Features of every evaluation clip, so evaluation during training costs a forward pass."""
     sets: dict[str, list[dict]] = {"youtube": [], "sessions": [], "bands": [], "albums": []}
@@ -138,13 +128,12 @@ def prepare(destination: Path = CLIPS) -> None:
                 if row["verified"] == "yes" and path.exists() and int(row["tune_id"]) not in trained:
                     sets["sessions"].append({"tune_id": int(row["tune_id"]), "path": path, "group": row["set_id"], "verified": True})
     found = ML / "data" / "found" / "manifest.jsonl"
-    fixes = found_fixes()
+    # Labels found wrong are fixed in the data home (ml.segments), so the export already holds the right tune and its split.
     for row in map(json.loads, found.open()):
         # valid/test tunes are the earlier "bands" set; benchmark tunes' album recordings are extra real clips.
         name = "bands" if row["split"] in ("valid", "test") else "albums" if row["split"] == "benchmark" else None
-        tune = fixes.get((row["audio"], int(row["tune_id"])), int(row["tune_id"]))
-        if name and tune is not None:
-            sets[name].append({"tune_id": tune, "path": found.parent / row["audio"], "group": name, "verified": False})
+        if name:
+            sets[name].append({"tune_id": int(row["tune_id"]), "path": found.parent / row["audio"], "group": name, "verified": False})
     out: dict[str, list[dict]] = {}
     for name, rows in sets.items():
         out[name] = []

@@ -8,7 +8,7 @@ export const metadata = { title: "Training data" };
 export const dynamic = "force-dynamic";
 
 const KINDS: Record<string, string> = {
-  youtube_video: "YouTube clips", youtube_full: "Whole sessions", album: "Album sections", yue: "YuE2 performances",
+  youtube_video: "YouTube clips", youtube_full: "Whole sessions", soundcloud_full: "SoundCloud sessions", album: "Album sections", yue: "YuE2 performances",
   app_recording: "App recordings",
 };
 const LABELS: Record<string, string> = {
@@ -16,7 +16,7 @@ const LABELS: Record<string, string> = {
   title: "Video title", prelabel: "Engine prelabel", generated: "Generated",
 };
 // Where each kind of source is labelled (/admin/label).
-const QUEUE_OF: Record<string, string> = { album: "album", youtube_video: "youtube", youtube_full: "sessions" };
+const QUEUE_OF: Record<string, string> = { album: "album", youtube_video: "youtube", youtube_full: "sessions", soundcloud_full: "sessions" };
 const n = (x: number) => x.toLocaleString("en-GB");
 const pct = (part: number, whole: number) => (whole ? `${Math.round((100 * part) / whole)}%` : "–");
 

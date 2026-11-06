@@ -1,6 +1,6 @@
 """One-time (rerunnable) import of the tune finder's scattered data into the ml schema (tunebook_ml/store.py).
 
-    uv run --group store python store_import.py                 # album sections and searches (found/), tune roles
+    uv run --group store python store_import.py                 # tune roles
     uv run --group store python store_import.py --yue FILE      # also YuE2: a JSON list from yue/inventory.py (on mantis)
 
 Since 2026-10-30 the YouTube and session labels are edited in the app (/admin/label), and eval/youtube.csv and
@@ -11,16 +11,14 @@ Sources it reads, and what each becomes:
   eval/benchmark_split.json   tune_roles (with data/found/manifest.jsonl's valid/test tunes, the bands set)
   eval/youtube.csv            youtube_video sources (one per video) with a segment per clip, in video seconds
   eval/sessions.csv           youtube_full sources (one per video) with a segment per tune, in set order
-  data/found.sqlite           album sources (one per downloaded section) with their segments; searches
-Reels50's map (eval/reels50_map.csv) names tunes in a text dataset, not audio, so it stays a CSV.
+The found songs (found/) were a local SQLite file until 2026-11-06, imported here; the harvester now writes the data
+home itself (found/db.py). Reels50's map (eval/reels50_map.csv) names tunes in a text dataset, not audio, so it stays a CSV.
 Segment times are seconds into the source's own audio file. Upserts throughout: a rerun changes nothing.
 """
 
 import argparse
 import csv
 import json
-import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 
 from psycopg.types.json import Jsonb
@@ -128,41 +126,6 @@ def sessions() -> int:
     return len(rows)
 
 
-def found() -> tuple[int, int]:
-    db = sqlite3.connect(ML / "data" / "found.sqlite")
-    db.row_factory = sqlite3.Row
-    videos = {row["id"]: dict(row) for row in db.execute("select * from videos")}
-    stored = {r["external_id"] for r in store.db().execute("select external_id from ml.sources where kind = 'album' and storage_key is not null")}
-    # Sections whose segments moved onto their whole track (store_tracks.py merge) must not get them back.
-    merged = {r["external_id"] for r in store.db().execute("select external_id from ml.sources where kind = 'album' and status = 'merged'")}
-    count = 0
-    for row in db.execute("select * from found order by id"):
-        video = videos[row["video_id"]]
-        external = f"{row['video_id']}.{row['start_s']:g}-{row['end_s']:g}"
-        if (Path(row["audio"]).stem if row["audio"] else external) in merged:
-            continue
-        audio = row["audio"] and ML / "data" / "found" / row["audio"]
-        if audio and audio.exists() and audio.stem not in stored:  # downloaded since the last import: into the bucket
-            store.put_audio(audio, f"ml/audio/album/{audio.name}")
-        source = store.upsert_source(
-            "album", Path(row["audio"]).stem if row["audio"] else external,
-            key_if(audio, f"ml/audio/album/{audio.name}") if audio else None,
-            title=video["title"], channel=video["channel"], duration_s=row["end_s"] - row["start_s"], licence=video["licence"],
-            status="ok" if row["audio"] else "missing", created_at=datetime.fromisoformat(row["added_at"]).replace(tzinfo=timezone.utc),
-            meta=Jsonb({"video": row["video_id"], "video_start_s": row["start_s"], "album": video["album"], "artist": video["artist"],
-                             "recording_id": row["recording_id"], "track": row["track"], "set_size": row["set_size"], "name": row["name"]}))
-        store.upsert_segment(
-            source, 0.0, row["tune_id"], end_s=row["end_s"] - row["start_s"], position=row["position"],
-            label_source=row["label_source"], confidence=row["confidence"], verified=row["verified"],
-            notes=row["notes"], origin="data/found.sqlite")
-        count += 1
-    searches = [(r["query"], r["harvester"], r["results"], datetime.fromisoformat(r["searched_at"]).replace(tzinfo=timezone.utc))
-                for r in db.execute("select * from searches")]
-    with store.db().cursor() as cursor:
-        cursor.executemany("insert into ml.searches values (%s, %s, %s, %s) on conflict do nothing", searches)
-    return count, len(searches)
-
-
 def yue(path: Path) -> int:
     """YuE2 performances: [{"name", "box", "tune_id", "setting_id", "seconds", "seed", "bpm", "key"}], made on mantis
     by yue_inventory.py (the audio lives there and on B2 under yue/train/, the full requests under yue/requests/)."""
@@ -198,8 +161,6 @@ def main() -> None:
     if args.from_label_csvs:
         print(f"youtube.csv: {youtube()} clips")
         print(f"sessions.csv: {sessions()} segments")
-    sections, searches = found()
-    print(f"found.sqlite: {sections} sections, {searches} searches")
     if args.yue:
         print(f"yue: {yue(args.yue)} performances")
     for row in store.db().execute("select s.kind, count(distinct s.id) sources, count(g.id) segments, "

@@ -11,7 +11,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import fluidsynth
 import numpy as np
 import soundfile
 from scipy import signal
@@ -32,6 +31,7 @@ def bend_value(semitones: float) -> int:
 def synth_for(soundfont: Path):
     """One resident synthesiser per SoundFont and process: loading a font is the slow part."""
     if soundfont not in _synths:
+        import fluidsynth  # here, so importing the trainer does not need the FluidSynth library unless it renders
         synth = fluidsynth.Synth(gain=0.6, samplerate=float(SAMPLE_RATE))
         synth.setting("synth.reverb.active", 0)
         synth.setting("synth.chorus.active", 0)

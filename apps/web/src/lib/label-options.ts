@@ -3,7 +3,7 @@
 export const QUEUES = {
   album: { label: "Album sections", kinds: ["album"] },
   youtube: { label: "YouTube clips", kinds: ["youtube_video"] },
-  sessions: { label: "Sessions", kinds: ["youtube_full"] },
+  sessions: { label: "Sessions", kinds: ["youtube_full", "soundcloud_full"] },
 } as const;
 export type Queue = keyof typeof QUEUES;
 /** What the labeller shows: one queue, or "next", every queue's open items ranked by what helps the test sets most. */

@@ -7,10 +7,11 @@ import json
 import re
 import unicodedata
 from functools import cache
+from pathlib import Path
 
 import requests
 
-from found.db import ROOT
+ROOT = Path(__file__).resolve().parent.parent
 
 THESESSION_DATA = "https://raw.githubusercontent.com/adactio/TheSession-data/main/csv"
 CATALOG = ROOT / "data" / "catalog.jsonl.gz"

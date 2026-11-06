@@ -42,7 +42,7 @@ never served or redistributed). PIPELINE.md §13 has the details.
 
 ```sh
 uv sync --all-groups                                   # the store group: psycopg and boto3 (sync every group, or uv removes the others)
-uv run python store_import.py [--yue FILE]            # CSVs, found.sqlite and the YuE2 inventory → ml (rerunnable)
+uv run python store_import.py [--yue FILE]            # tune roles and the YuE2 inventory → ml (rerunnable)
 uv run python eval/analyse_sources.py                 # music-activity lanes and session set windows for the labeller
 ```
 
@@ -56,8 +56,10 @@ training half's labelled YouTube and session clips. A tune listed later follows 
 
 ## Found songs (real training audio)
 
-`python -m found` collects real recordings of catalog tunes into `data/found.sqlite`, with
-the labelled 30 s sections as Opus files in `data/found/audio/` (neither is committed):
+`python -m found` collects real recordings of catalog tunes straight into the data home (`ml.sources`,
+`ml.segments`, `ml.searches`) and the private bucket; nothing stays only on local disk. Each recording is a whole
+album track: one `album` source named by its YouTube id, with a segment per labelled stretch and an unnamed
+segment for each gap, to name in the labeller.
 
 - `albums` searches YouTube for The Session's album track listings (artist + first tune).
   It accepts a result only when both the artist and the opening tune match. Then it labels
@@ -65,8 +67,11 @@ the labelled 30 s sections as Opus files in `data/found/audio/` (neither is comm
 - `titles` searches popular tunes by name and labels them from video titles (lower prior confidence).
 - Both also label every tune named in chapters or a timestamped description, and skip
   benchmark videos and tunes, unless given `--include-benchmark`.
-- `fetch` downloads only the labelled sections. `stats` summarises. `export` writes
-  `data/found/manifest.jsonl` with each section's split (benchmark tunes are marked).
+- `fetch` downloads each track whole into the bucket. `stats` summarises. `export` writes
+  `data/found/manifest.jsonl` from the data home, with each section's split (benchmark tunes are marked).
+
+The first 2,341 recordings were collected as 30 s sections (until 2026-11-06, in `data/found.sqlite`);
+`store_tracks.py` turns those into whole tracks.
 
 Labels carry a prior `confidence` by source. `verified` is for manual review.
 YouTube audio is for research on our own machines only, never redistributed. Licences are

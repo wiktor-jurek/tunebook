@@ -6,7 +6,7 @@ import { db } from "@/db";
 
 const rows = async <T>(query: ReturnType<typeof sql>) => (await db.execute(query)).rows as T[];
 // Real recordings, as opposed to generated (YuE2) audio.
-const REAL = sql`s.kind in ('youtube_video', 'youtube_full', 'album', 'app_recording')`;
+const REAL = sql`s.kind in ('youtube_video', 'youtube_full', 'soundcloud_full', 'album', 'app_recording')`;
 // Catalogue-rank edges between popularity bands, as on the benchmark page (ml/eval/benchmark.py BAND_RANKS).
 export const BAND_EDGES = [100, 500, 2000, 8000];
 
