@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- MainActivity is a ComponentActivity, not a FragmentActivity, and fragment resolves to 1.5.7 through Play services;
+         the check reads an older declared version and fails release builds for nothing. -->
+    <issue id="InvalidFragmentVersionForActivityResult" severity="ignore" />
+</lint>
