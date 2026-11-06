@@ -21,10 +21,12 @@ type Hover = { x: number; y: number; text: string } | null;
 const tuneColour = (tune: number, dark: boolean) => `hsl(${(tune * 137.5) % 360} 55% ${dark ? 62 : 40}%)`;
 const clock = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 
-export function Timeline({ peaks, lane, guesses, others, bounds, tunes, names, playhead, view, limits, onSeek, onBounds, onView }: {
+export function Timeline({ peaks, lane, guesses, others, bounds, tunes, names, playhead, view, limits, onSeek, onBounds, onView, onCreate }: {
   peaks: Peaks | null; lane: GroupDetail["lane"]; guesses: EngineGuesses[]; others: OtherLabel[]; bounds: number[]; tunes: (number | null)[];
   names: string[]; playhead: number | null; view: [number, number]; limits: [number, number];
   onSeek: (t: number) => void; onBounds: (bounds: number[]) => void; onView: (view: [number, number]) => void;
+  /** Right-click: a new, unnamed tune starting (or, past the end, ending) at this time. */
+  onCreate: (t: number) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -204,7 +206,7 @@ export function Timeline({ peaks, lane, guesses, others, bounds, tunes, names, p
   };
   function down(event: React.PointerEvent<HTMLCanvasElement>) {
     const { px } = point(event);
-    if (px < GUTTER) return;
+    if (px < GUTTER || event.button !== 0) return; // the right button makes a new tune (onContextMenu)
     const near = bounds.map((b, i) => [Math.abs(x(b) - px), i]).sort((a, b) => a[0] - b[0])[0];
     if (near && near[0] <= 7) { drag.current = near[1]; event.currentTarget.setPointerCapture(event.pointerId); return; }
     onSeek(t(px));
@@ -249,8 +251,14 @@ export function Timeline({ peaks, lane, guesses, others, bounds, tunes, names, p
   const summary = `${tunes.length} ${tunes.length === 1 ? "tune" : "tunes"}, from ${bounds[0].toFixed(1)} to ${bounds[bounds.length - 1].toFixed(1)} seconds`;
   return <div className="label-timeline" ref={box}>
     <canvas ref={canvas} style={{ width, height }} role="img"
-      aria-label={`Waveform of the recording with music, engine and label lanes: ${summary}. Click to move the playhead, drag a boundary, scroll to zoom.`}
+      aria-label={`Waveform of the recording with music, engine and label lanes: ${summary}. Click to move the playhead, drag a boundary, right-click to start a new tune, scroll to zoom.`}
       onPointerDown={down} onPointerMove={move} onPointerLeave={() => setHover(null)}
+      onContextMenu={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect(), px = event.clientX - rect.left;
+        if (px < GUTTER) return;
+        event.preventDefault();
+        onCreate(t(px));
+      }}
       onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} />
     {hover && <div className="label-hover" style={{ left: Math.min(hover.x + 12, width - 260), top: hover.y + 14 }}>{hover.text}</div>}
     <p className="label-key">

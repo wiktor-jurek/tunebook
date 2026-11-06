@@ -15,7 +15,7 @@ import { TagPicker } from "@/components/labeller/tags";
 const BLOCKS_PER_SECOND = 1000; // waveform min/max blocks: sharp down to a second or two across the screen
 const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 const SHORTCUTS: [string, string][] = [["Space", "Play or pause"], ["Y", "Correct"], ["N", "Wrong or unusable"], ["S", "A set: label its tunes later (YouTube)"],
-  ["T", "Split at the playhead"], ["U", "Use the suggested start and end"], ["Z", "Zoom to the tunes, or out to the whole recording"],
+  ["T", "Split at the playhead"], ["Right-click", "Start a new tune there (outside the label, it grows to reach it)"], ["U", "Use the suggested start and end"], ["Z", "Zoom to the tunes, or out to the whole recording"],
   ["[ and ]", "Move the start or end to the playhead"], ["Left and Right", "Nudge the start by 0.1 s (with Shift, the end)"], ["J and K", "Next or previous"],
   ["Scroll", "Zoom around the pointer (sideways or with Shift, pan)"]];
 
@@ -195,12 +195,29 @@ function LabelItem({ itemKey: key, queue, why, onSaved, onNext, onPrevious }: { 
   }
   function split() {
     if (playhead === null) { setStatus("Move the playhead to where the next tune starts, then split."); return; }
-    const i = bounds.findIndex((b, j) => j < bounds.length - 1 && playhead > b + 1 && playhead < bounds[j + 1] - 1);
-    if (i < 0) { setStatus("Split inside a tune, at least a second from its ends."); return; }
-    const at = Math.round(playhead * 10) / 10;
+    create(playhead, false);
+  }
+  /** A new, unnamed tune at `t`: inside the label it splits the tune there; before or after it (right-click only), the
+   *  label grows to `t` with a new tune covering the added stretch. */
+  function create(t: number, grow = true) {
+    const at = Math.round(Math.min(limits[1], Math.max(limits[0], t)) * 10) / 10;
+    const first = bounds[0], last = bounds[bounds.length - 1];
+    if (grow && at < first - 1) {
+      setBounds([at, ...bounds]); setTunes([null, ...tunes]); setMeta([null, ...meta]);
+      setStatus(`New tune from ${clock(at)} to ${clock(first)}: name it below.`);
+      return;
+    }
+    if (grow && at > last + 1) {
+      setBounds([...bounds, at]); setTunes([...tunes, null]); setMeta([...meta, null]);
+      setStatus(`New tune from ${clock(last)} to ${clock(at)}: name it below.`);
+      return;
+    }
+    const i = bounds.findIndex((b, j) => j < bounds.length - 1 && at > b + 1 && at < bounds[j + 1] - 1);
+    if (i < 0) { setStatus(grow ? "Too close to a boundary: start a new tune at least a second from one." : "Split inside a tune, at least a second from its ends."); return; }
     setBounds([...bounds.slice(0, i + 1), at, ...bounds.slice(i + 1)]);
     setTunes([...tunes.slice(0, i + 1), null, ...tunes.slice(i + 1)]);
     setMeta([...meta.slice(0, i + 1), null, ...meta.slice(i + 1)]);
+    setStatus(`New tune from ${clock(at)}: name it below.`);
   }
   function remove(i: number) {
     // The removed tune's time joins its neighbour.
@@ -278,7 +295,7 @@ function LabelItem({ itemKey: key, queue, why, onSaved, onNext, onPrevious }: { 
 
     <audio ref={audio} src={detail.audio.url} preload="auto" onEnded={() => setPlaying(false)} />
     <Timeline peaks={peaks} lane={detail.lane} guesses={detail.guesses} others={detail.others} bounds={bounds} tunes={tunes.map((t) => t?.tuneId ?? null)} names={names}
-      playhead={playhead} view={view} limits={limits} onSeek={seek} onBounds={setBounds} onView={setView} />
+      playhead={playhead} view={view} limits={limits} onSeek={seek} onBounds={setBounds} onView={setView} onCreate={create} />
 
     <div className="label-tools">
       <Button variant="outline" onClick={toggle} aria-keyshortcuts="Space">{playing ? <Pause size={15} /> : <Play size={15} />} {playing ? "Pause" : "Play"}</Button>
